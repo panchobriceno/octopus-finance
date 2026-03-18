@@ -13,9 +13,10 @@ function parseBalances(raw: string | null): MonthlyBalanceMap {
 
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return Object.fromEntries(
-      Object.entries(parsed).filter(([, value]) => typeof value === "number" && Number.isFinite(value)),
+    const validEntries = Object.entries(parsed).filter(
+      (entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]),
     );
+    return Object.fromEntries(validEntries);
   } catch {
     return {};
   }

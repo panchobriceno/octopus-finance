@@ -3,6 +3,7 @@
  * No longer depends on drizzle-orm — these are plain TypeScript types
  * matching the Firestore document structure.
  */
+import { z } from "zod";
 
 // ── Transactions ────────────────────────────────────────────────
 export interface Transaction {
@@ -129,3 +130,58 @@ export interface OpeningBalance {
   month: number;
   amount: number;
 }
+
+// ── Runtime schemas for legacy Express routes ──────────────────
+export const insertTransactionSchema = z.object({
+  name: z.string().min(1),
+  category: z.string().min(1),
+  amount: z.number(),
+  type: z.string().min(1),
+  date: z.string().min(1),
+  notes: z.string().nullable().optional(),
+  subtype: z.string().optional(),
+  status: z.string().optional(),
+  itemId: z.string().nullable().optional(),
+  workspace: z.string().optional(),
+  movementType: z.string().optional(),
+  paymentMethod: z.string().optional(),
+  destinationWorkspace: z.string().nullable().optional(),
+  creditCardName: z.string().nullable().optional(),
+});
+
+export const insertCategorySchema = z.object({
+  name: z.string().min(1),
+  type: z.string().min(1),
+  color: z.string().nullable().optional(),
+});
+
+export const insertItemSchema = z.object({
+  name: z.string().min(1),
+  categoryId: z.string().nullable().optional(),
+});
+
+export const insertBudgetSchema = z.object({
+  year: z.number().int(),
+  month: z.number().int(),
+  categoryGroup: z.string().min(1),
+  amount: z.number(),
+});
+
+export const insertClientPaymentSchema = z.object({
+  clientName: z.string().min(1),
+  rut: z.string().nullable().optional(),
+  contactName: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  accountManager: z.string().nullable().optional(),
+  serviceItem: z.string().nullable().optional(),
+  serviceMonth: z.string().nullable().optional(),
+  issueDate: z.string().nullable().optional(),
+  dueDate: z.string().nullable().optional(),
+  paymentDate: z.string().nullable().optional(),
+  netAmount: z.number(),
+  vatAmount: z.number(),
+  totalAmount: z.number(),
+  status: z.string().min(1),
+  notes: z.string().nullable().optional(),
+  workspace: z.string().optional(),
+});

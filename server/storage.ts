@@ -57,7 +57,7 @@ export class MemStorage implements IStorage {
 
   /** Helper: find a category by name and return its id */
   private getCategoryIdByName(name: string): string | null {
-    for (const cat of this.categories.values()) {
+    for (const cat of Array.from(this.categories.values())) {
       if (cat.name === name) return cat.id;
     }
     return null;
@@ -82,7 +82,7 @@ export class MemStorage implements IStorage {
 
     for (const cat of defaultCategories) {
       const id = randomUUID();
-      this.categories.set(id, { ...cat, id });
+      this.categories.set(id, { ...cat, id, color: cat.color ?? null });
     }
 
     // Seed items — now use categoryId (resolved from category name)
@@ -145,7 +145,14 @@ export class MemStorage implements IStorage {
 
     for (const tx of sampleTransactions) {
       const id = randomUUID();
-      this.transactions.set(id, { ...tx, id, subtype: "actual", status: "paid", itemId: null });
+      this.transactions.set(id, {
+        ...tx,
+        id,
+        notes: tx.notes ?? null,
+        subtype: "actual",
+        status: "paid",
+        itemId: null,
+      });
     }
 
     // Seed budgets (Marzo 2026 to match seed transactions)
@@ -191,6 +198,7 @@ export class MemStorage implements IStorage {
       ...tx,
       id,
       category: resolvedCategory,
+      notes: tx.notes ?? null,
       subtype: tx.subtype ?? "actual",
       status: tx.status ?? "paid",
       itemId: tx.itemId ?? null,
@@ -243,7 +251,7 @@ export class MemStorage implements IStorage {
 
   async createCategory(cat: InsertCategory): Promise<Category> {
     const id = randomUUID();
-    const category: Category = { ...cat, id };
+    const category: Category = { ...cat, id, color: cat.color ?? null };
     this.categories.set(id, category);
     return category;
   }
@@ -271,7 +279,7 @@ export class MemStorage implements IStorage {
 
   async createItem(item: InsertItem): Promise<Item> {
     const id = randomUUID();
-    const newItem: Item = { ...item, id };
+    const newItem: Item = { ...item, id, categoryId: item.categoryId ?? null };
     this.items.set(id, newItem);
     return newItem;
   }
