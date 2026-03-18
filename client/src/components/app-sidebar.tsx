@@ -1,4 +1,4 @@
-import { LayoutDashboard, ArrowUpDown, FileText, Upload, Settings, Tags, Target } from "lucide-react";
+import { LayoutDashboard, ArrowUpDown, FileText, Upload, Settings, Tags, Target, BriefcaseBusiness } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -17,6 +17,7 @@ const mainNav = [
   { title: "Resumen", url: "/", icon: LayoutDashboard },
   { title: "Flujo de Caja", url: "/cash-flow", icon: ArrowUpDown },
   { title: "Estado de Resultados", url: "/pnl", icon: FileText },
+  { title: "Ingresos Clientes", url: "/client-payments", icon: BriefcaseBusiness },
   { title: "Importar Datos", url: "/import", icon: Upload },
   { title: "Presupuesto", url: "/budget", icon: Target },
 ];

@@ -1,7 +1,14 @@
 import { useMemo, useState } from "react";
-import { useTransactions } from "@/lib/hooks";
+import { useClientPayments, useTransactions } from "@/lib/hooks";
 import { formatCLP } from "@/lib/utils";
-import { buildDailyProjectionData, buildMonthlySummaries, getCurrentMonthKey } from "@/lib/finance";
+import {
+  buildDailyProjectionData,
+  buildMonthlySummaries,
+  combineFinancialTransactions,
+  getCurrentMonthKey,
+  summarizeWorkspaceTransactions,
+  type WorkspaceFilter,
+} from "@/lib/finance";
 import { getMonthlyBalances, useOpeningBalance } from "@/lib/monthly-balances";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -24,17 +31,28 @@ import { ArrowUpDown } from "lucide-react";
 
 export default function CashFlowPage() {
   const { data: transactions = [], isLoading } = useTransactions();
+  const { data: clientPayments = [] } = useClientPayments();
   const currentMonthKey = getCurrentMonthKey();
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
+  const [workspace, setWorkspace] = useState<WorkspaceFilter>("all");
   const { amount: openingBalance, update: updateOpeningBalance } = useOpeningBalance(selectedMonth);
+  const financialTransactions = useMemo(
+    () => combineFinancialTransactions(transactions, clientPayments),
+    [transactions, clientPayments],
+  );
 
   const monthlySummaries = useMemo(() => {
     const openingBalances = {
       ...getMonthlyBalances(),
       [selectedMonth]: openingBalance,
     };
-    return buildMonthlySummaries(transactions, openingBalances);
-  }, [transactions, selectedMonth, openingBalance]);
+    return buildMonthlySummaries(financialTransactions, openingBalances, workspace);
+  }, [financialTransactions, selectedMonth, openingBalance, workspace]);
+
+  const workspaceMetrics = useMemo(
+    () => summarizeWorkspaceTransactions(financialTransactions, workspace),
+    [financialTransactions, workspace],
+  );
 
   const availableMonths = useMemo(() => {
     const keys = new Set(monthlySummaries.map((summary) => summary.monthKey));
@@ -58,8 +76,8 @@ export default function CashFlowPage() {
   };
 
   const chartData = useMemo(
-    () => buildDailyProjectionData(transactions, selectedMonth, openingBalance),
-    [transactions, selectedMonth, openingBalance],
+    () => buildDailyProjectionData(financialTransactions, selectedMonth, openingBalance, workspace),
+    [financialTransactions, selectedMonth, openingBalance, workspace],
   );
 
   if (isLoading) {
@@ -87,6 +105,19 @@ export default function CashFlowPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[220px_220px_1fr]">
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">Ámbito</p>
+            <Select value={workspace} onValueChange={(value) => setWorkspace(value as WorkspaceFilter)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Consolidado</SelectItem>
+                <SelectItem value="business">Empresa</SelectItem>
+                <SelectItem value="family">Familia</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div>
             <p className="text-sm text-muted-foreground mb-2">Mes</p>
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
@@ -183,6 +214,25 @@ export default function CashFlowPage() {
           </CardContent>
         </Card>
       </div>
+
+      {workspace !== "family" && (
+        <Card>
+          <CardContent className="pt-5 grid gap-3 sm:grid-cols-3">
+            <div>
+              <p className="text-sm text-muted-foreground">Deuda tarjeta</p>
+              <p className="text-lg font-semibold tabular-nums mt-1">{formatCLP(workspaceMetrics.creditCardDebt)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Transferencias recibidas</p>
+              <p className="text-lg font-semibold tabular-nums mt-1">{formatCLP(workspaceMetrics.transfersIn)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Transferencias enviadas</p>
+              <p className="text-lg font-semibold tabular-nums mt-1">{formatCLP(workspaceMetrics.transfersOut)}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-2">

@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { formatCLP, formatDate } from "@/lib/utils";
 import {
   useTransactions,
+  useClientPayments,
   useCategories,
   useItems,
   useCreateTransaction,
@@ -30,10 +31,18 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import {
-  DollarSign, TrendingUp, TrendingDown, Wallet, Plus, Trash2, Pencil, X,
+  DollarSign, TrendingUp, TrendingDown, Wallet, Plus, Trash2, Pencil, X, CreditCard,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { buildMonthlySummaries, getCurrentMonthKey } from "@/lib/finance";
+import {
+  buildMonthlySummaries,
+  combineFinancialTransactions,
+  getCurrentMonthKey,
+  getTransactionExpenseImpact,
+  getTransactionIncomeImpact,
+  normalizeTransaction,
+  summarizeWorkspaceTransactions,
+} from "@/lib/finance";
 import { getMonthlyBalances, useOpeningBalance } from "@/lib/monthly-balances";
 
 // ── KPI Card ────────────────────────────────────────────────────
@@ -86,6 +95,11 @@ interface TransactionFormProps {
     date: string;
     subtype: "actual" | "planned";
     status: "pending" | "paid" | "cancelled";
+    workspace: "business" | "family";
+    movementType: "income" | "expense" | "transfer" | "credit_card_payment";
+    paymentMethod: "cash" | "bank_account" | "credit_card";
+    destinationWorkspace: "business" | "family";
+    creditCardName: string;
     notes: string;
   };
   isPending: boolean;
@@ -97,6 +111,11 @@ interface TransactionFormProps {
     date: string;
     subtype: "actual" | "planned";
     status: "pending" | "paid" | "cancelled";
+    workspace: "business" | "family";
+    movementType: "income" | "expense" | "transfer" | "credit_card_payment";
+    paymentMethod: "cash" | "bank_account" | "credit_card";
+    destinationWorkspace: "business" | "family";
+    creditCardName: string;
     notes: string;
   }) => void;
   onCancel?: () => void;
@@ -119,32 +138,48 @@ function TransactionForm({
     date: new Date().toISOString().split("T")[0],
     subtype: "actual" as const,
     status: "paid" as const,
+    workspace: "business" as const,
+    movementType: "income" as const,
+    paymentMethod: "bank_account" as const,
+    destinationWorkspace: "family" as const,
+    creditCardName: "",
     notes: "",
   };
 
-  const [formType, setFormType] = useState(defaults.type);
   const [formCategoryId, setFormCategoryId] = useState(defaults.categoryId);
   const [formItemId, setFormItemId] = useState(defaults.itemId);
   const [formAmount, setFormAmount] = useState(defaults.amount);
   const [formDate, setFormDate] = useState(defaults.date);
   const [formSubtype, setFormSubtype] = useState(defaults.subtype);
   const [formStatus, setFormStatus] = useState(defaults.status);
+  const [formWorkspace, setFormWorkspace] = useState(defaults.workspace);
+  const [formMovementType, setFormMovementType] = useState(defaults.movementType);
+  const [formPaymentMethod, setFormPaymentMethod] = useState(defaults.paymentMethod);
+  const [formDestinationWorkspace, setFormDestinationWorkspace] = useState(defaults.destinationWorkspace);
+  const [formCreditCardName, setFormCreditCardName] = useState(defaults.creditCardName);
   const [formNotes, setFormNotes] = useState(defaults.notes);
 
-  const filteredCategories = categories.filter((c) => c.type === formType);
+  const effectiveType = formMovementType === "income" ? "income" : "expense";
+  const filteredCategories = categories.filter((c) => c.type === effectiveType);
   const filteredItems = items.filter((i) => i.categoryId === formCategoryId);
+  const categoryRequired = formMovementType === "income" || formMovementType === "expense";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formCategoryId || !formAmount) return;
+    if ((!formCategoryId && categoryRequired) || !formAmount) return;
     onSubmit({
-      type: formType,
+      type: effectiveType,
       categoryId: formCategoryId,
       itemId: formItemId,
       amount: formAmount,
       date: formDate,
       subtype: formSubtype,
       status: formStatus,
+      workspace: formWorkspace,
+      movementType: formMovementType,
+      paymentMethod: formPaymentMethod,
+      destinationWorkspace: formDestinationWorkspace,
+      creditCardName: formCreditCardName,
       notes: formNotes,
     });
   };
@@ -153,13 +188,54 @@ function TransactionForm({
     <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {/* Row 1 */}
       <div>
+        <Select value={formWorkspace} onValueChange={(v) => setFormWorkspace(v as "business" | "family")}>
+          <SelectTrigger data-testid="select-workspace">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="business">Empresa</SelectItem>
+            <SelectItem value="family">Familia</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
         <Select
-          value={formType}
+          value={formMovementType}
           onValueChange={(v) => {
-            setFormType(v as "income" | "expense");
+            const movementType = v as "income" | "expense" | "transfer" | "credit_card_payment";
+            setFormMovementType(movementType);
+            setFormCategoryId("");
+            setFormItemId("");
+            if (movementType === "income") {
+              setFormPaymentMethod("bank_account");
+            } else if (movementType === "expense") {
+            } else {
+              setFormPaymentMethod("bank_account");
+            }
+          }}
+        >
+          <SelectTrigger data-testid="select-movement-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="income">Ingreso</SelectItem>
+            <SelectItem value="expense">Gasto</SelectItem>
+            <SelectItem value="credit_card_payment">Pago tarjeta</SelectItem>
+            <SelectItem value="transfer">Transferencia</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Select
+          value={effectiveType}
+          onValueChange={(v) => {
+            setFormMovementType(v as "income" | "expense");
             setFormCategoryId("");
             setFormItemId("");
           }}
+          disabled={formMovementType !== "income" && formMovementType !== "expense"}
         >
           <SelectTrigger data-testid="select-type">
             <SelectValue />
@@ -178,9 +254,10 @@ function TransactionForm({
             setFormCategoryId(v);
             setFormItemId("");
           }}
+          disabled={!categoryRequired}
         >
           <SelectTrigger data-testid="select-category">
-            <SelectValue placeholder="Categoría" />
+            <SelectValue placeholder={categoryRequired ? "Categoría" : "No aplica"} />
           </SelectTrigger>
           <SelectContent>
             {filteredCategories.map((cat) => (
@@ -196,7 +273,7 @@ function TransactionForm({
         <Select
           value={formItemId}
           onValueChange={setFormItemId}
-          disabled={!formCategoryId}
+          disabled={!formCategoryId || !categoryRequired}
         >
           <SelectTrigger data-testid="select-subcategory">
             <SelectValue placeholder={formCategoryId ? "Subcategoría (opcional)" : "Elegir categoría primero"} />
@@ -226,7 +303,6 @@ function TransactionForm({
         />
       </div>
 
-      {/* Row 2 */}
       <div>
         <Input
           type="date"
@@ -234,6 +310,23 @@ function TransactionForm({
           onChange={(e) => setFormDate(e.target.value)}
           data-testid="input-date"
         />
+      </div>
+
+      <div>
+        <Select
+          value={formPaymentMethod}
+          onValueChange={(v) => setFormPaymentMethod(v as "cash" | "bank_account" | "credit_card")}
+          disabled={formMovementType === "income" || formMovementType === "transfer" || formMovementType === "credit_card_payment"}
+        >
+          <SelectTrigger data-testid="select-payment-method">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cash">Efectivo</SelectItem>
+            <SelectItem value="bank_account">Cuenta bancaria</SelectItem>
+            <SelectItem value="credit_card">Tarjeta de crédito</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div>
@@ -246,6 +339,39 @@ function TransactionForm({
             <SelectItem value="planned">Presupuestado</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      <div>
+        {formMovementType === "transfer" ? (
+          <Select value={formDestinationWorkspace} onValueChange={(v) => setFormDestinationWorkspace(v as "business" | "family")}>
+            <SelectTrigger data-testid="select-destination-workspace">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={formWorkspace === "business" ? "family" : "business"}>
+                {formWorkspace === "business" ? "Hacia Familia" : "Hacia Empresa"}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        ) : formMovementType === "credit_card_payment" || formPaymentMethod === "credit_card" ? (
+          <Input
+            placeholder="Nombre tarjeta"
+            value={formCreditCardName}
+            onChange={(e) => setFormCreditCardName(e.target.value)}
+            data-testid="input-credit-card-name"
+          />
+        ) : (
+          <Select value={formStatus} onValueChange={(v) => setFormStatus(v as "pending" | "paid" | "cancelled")}>
+            <SelectTrigger data-testid="select-status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">Pendiente</SelectItem>
+              <SelectItem value="paid">Pagado</SelectItem>
+              <SelectItem value="cancelled">Cancelado</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <div>
@@ -313,6 +439,7 @@ export default function OverviewPage() {
   const { toast } = useToast();
 
   const { data: transactions = [], isLoading: txLoading } = useTransactions();
+  const { data: clientPayments = [] } = useClientPayments();
   const { data: categories = [] } = useCategories();
   const { data: items = [] } = useItems();
   const currentMonthKey = getCurrentMonthKey();
@@ -339,12 +466,20 @@ export default function OverviewPage() {
   const bulkDeleteMutation = useBulkDeleteTransactions();
 
   // ── KPI calculations ──
-  const totalIncome = transactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
-  const totalExpenses = transactions
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
+  const financialTransactions = useMemo(
+    () => combineFinancialTransactions(transactions, clientPayments),
+    [transactions, clientPayments],
+  );
+  const businessMetrics = useMemo(
+    () => summarizeWorkspaceTransactions(financialTransactions, "business"),
+    [financialTransactions],
+  );
+  const familyMetrics = useMemo(
+    () => summarizeWorkspaceTransactions(financialTransactions, "family"),
+    [financialTransactions],
+  );
+  const totalIncome = financialTransactions.reduce((sum, tx) => sum + getTransactionIncomeImpact(tx, "all"), 0);
+  const totalExpenses = financialTransactions.reduce((sum, tx) => sum + getTransactionExpenseImpact(tx, "all"), 0);
   const balance = totalIncome - totalExpenses;
   const currentMonthSummary = useMemo(() => {
     const openingBalances = {
@@ -352,7 +487,7 @@ export default function OverviewPage() {
       [currentMonthKey]: openingBalance,
     };
 
-    return buildMonthlySummaries(transactions, openingBalances).find(
+    return buildMonthlySummaries(financialTransactions, openingBalances).find(
       (summary) => summary.monthKey === currentMonthKey,
     ) ?? {
       monthKey: currentMonthKey,
@@ -367,12 +502,12 @@ export default function OverviewPage() {
       hasRealData: false,
       hasPlannedData: false,
     };
-  }, [transactions, currentMonthKey, openingBalance]);
+  }, [financialTransactions, currentMonthKey, openingBalance]);
 
   // Monthly chart data
   const chartData = useMemo(() => {
     const monthlyData: Record<string, { month: string; ingresos: number; gastos: number }> = {};
-    for (const tx of transactions) {
+    for (const tx of financialTransactions) {
       const month = tx.date.substring(0, 7);
       if (!monthlyData[month]) {
         const [y, m] = month.split("-");
@@ -386,16 +521,13 @@ export default function OverviewPage() {
           gastos: 0,
         };
       }
-      if (tx.type === "income") {
-        monthlyData[month].ingresos += tx.amount;
-      } else {
-        monthlyData[month].gastos += tx.amount;
-      }
+      monthlyData[month].ingresos += getTransactionIncomeImpact(tx, "all");
+      monthlyData[month].gastos += getTransactionExpenseImpact(tx, "all");
     }
     return Object.entries(monthlyData)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, v]) => v);
-  }, [transactions]);
+  }, [financialTransactions]);
 
   // ── Selection logic ──
   const visibleIds = visibleTransactions.map((t) => t.id);
@@ -431,14 +563,31 @@ export default function OverviewPage() {
     date: string;
     subtype: "actual" | "planned";
     status: "pending" | "paid" | "cancelled";
+    workspace: "business" | "family";
+    movementType: "income" | "expense" | "transfer" | "credit_card_payment";
+    paymentMethod: "cash" | "bank_account" | "credit_card";
+    destinationWorkspace: "business" | "family";
+    creditCardName: string;
     notes: string;
   }) => {
-    const selectedCategory = categoryMap[formData.categoryId];
+    const selectedCategory = formData.categoryId ? categoryMap[formData.categoryId] : null;
     const selectedItem = formData.itemId ? itemMap[formData.itemId] : null;
+    const derivedName =
+      formData.movementType === "transfer"
+        ? `Transferencia ${formData.workspace === "business" ? "Empresa" : "Familia"} -> ${formData.destinationWorkspace === "business" ? "Empresa" : "Familia"}`
+        : formData.movementType === "credit_card_payment"
+        ? `Pago ${formData.creditCardName || "Tarjeta"}`
+        : selectedItem?.name ?? selectedCategory?.name ?? "";
+    const derivedCategory =
+      formData.movementType === "transfer"
+        ? "Transferencias"
+        : formData.movementType === "credit_card_payment"
+        ? "Pago Tarjeta"
+        : selectedCategory?.name ?? "";
     createMutation.mutate(
       {
-        name: selectedItem?.name ?? selectedCategory?.name ?? "",
-        category: selectedCategory?.name ?? "",
+        name: derivedName,
+        category: derivedCategory,
         amount: parseFloat(formData.amount),
         type: formData.type,
         date: formData.date,
@@ -446,6 +595,13 @@ export default function OverviewPage() {
         subtype: formData.subtype,
         status: formData.status,
         itemId: formData.itemId || null,
+        workspace: formData.workspace,
+        movementType: formData.movementType,
+        paymentMethod: formData.paymentMethod,
+        destinationWorkspace: formData.movementType === "transfer" ? formData.destinationWorkspace : null,
+        creditCardName: formData.paymentMethod === "credit_card" || formData.movementType === "credit_card_payment"
+          ? formData.creditCardName || null
+          : null,
       },
       {
         onSuccess: () => toast({ title: "Transacción creada" }),
@@ -461,17 +617,34 @@ export default function OverviewPage() {
     date: string;
     subtype: "actual" | "planned";
     status: "pending" | "paid" | "cancelled";
+    workspace: "business" | "family";
+    movementType: "income" | "expense" | "transfer" | "credit_card_payment";
+    paymentMethod: "cash" | "bank_account" | "credit_card";
+    destinationWorkspace: "business" | "family";
+    creditCardName: string;
     notes: string;
   }) => {
     if (!editingTx) return;
-    const selectedCategory = categoryMap[formData.categoryId];
+    const selectedCategory = formData.categoryId ? categoryMap[formData.categoryId] : null;
     const selectedItem = formData.itemId ? itemMap[formData.itemId] : null;
+    const derivedName =
+      formData.movementType === "transfer"
+        ? `Transferencia ${formData.workspace === "business" ? "Empresa" : "Familia"} -> ${formData.destinationWorkspace === "business" ? "Empresa" : "Familia"}`
+        : formData.movementType === "credit_card_payment"
+        ? `Pago ${formData.creditCardName || "Tarjeta"}`
+        : selectedItem?.name ?? selectedCategory?.name ?? "";
+    const derivedCategory =
+      formData.movementType === "transfer"
+        ? "Transferencias"
+        : formData.movementType === "credit_card_payment"
+        ? "Pago Tarjeta"
+        : selectedCategory?.name ?? "";
     updateMutation.mutate(
       {
         id: editingTx.id,
         data: {
-          name: selectedItem?.name ?? selectedCategory?.name ?? "",
-          category: selectedCategory?.name ?? "",
+          name: derivedName,
+          category: derivedCategory,
           amount: parseFloat(formData.amount),
           type: formData.type,
           date: formData.date,
@@ -479,6 +652,13 @@ export default function OverviewPage() {
           subtype: formData.subtype,
           status: formData.status,
           itemId: formData.itemId || null,
+          workspace: formData.workspace,
+          movementType: formData.movementType,
+          paymentMethod: formData.paymentMethod,
+          destinationWorkspace: formData.movementType === "transfer" ? formData.destinationWorkspace : null,
+          creditCardName: formData.paymentMethod === "credit_card" || formData.movementType === "credit_card_payment"
+            ? formData.creditCardName || null
+            : null,
         },
       },
       {
@@ -492,6 +672,7 @@ export default function OverviewPage() {
 
   // Resolve a transaction to initial form values for editing
   const getEditValues = (tx: Transaction) => {
+    const normalized = normalizeTransaction(tx);
     const catId = categoryNameToId[tx.category] ?? "";
     const itmId = tx.itemId ?? "";
     return {
@@ -502,6 +683,11 @@ export default function OverviewPage() {
       date: tx.date,
       subtype: tx.subtype as "actual" | "planned",
       status: tx.status as "pending" | "paid" | "cancelled",
+      workspace: normalized.workspace,
+      movementType: normalized.movementType,
+      paymentMethod: normalized.paymentMethod,
+      destinationWorkspace: normalized.destinationWorkspace ?? (normalized.workspace === "business" ? "family" : "business"),
+      creditCardName: normalized.creditCardName ?? "",
       notes: tx.notes ?? "",
     };
   };
@@ -552,6 +738,33 @@ export default function OverviewPage() {
           icon={DollarSign}
           color="#3b82f6"
         />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-5">
+            <p className="text-sm text-muted-foreground">Empresa: caja real</p>
+            <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(businessMetrics.cashFlow)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Ingresos y gastos de empresa, considerando tarjetas</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <p className="text-sm text-muted-foreground">Familia: caja real</p>
+            <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(familyMetrics.cashFlow)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Incluye transferencias recibidas desde empresa</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-2">
+              <CreditCard className="size-4 text-amber-600 dark:text-amber-300" />
+              <p className="text-sm text-muted-foreground">Deuda tarjetas empresa</p>
+            </div>
+            <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(businessMetrics.creditCardDebt)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Compras TC menos pagos de tarjeta</p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -733,6 +946,8 @@ export default function OverviewPage() {
                   <TableHead>Fecha</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Categoría</TableHead>
+                  <TableHead>Ámbito</TableHead>
+                  <TableHead>Pago</TableHead>
                   <TableHead>Ejecutado/Presup.</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Monto</TableHead>
@@ -746,6 +961,10 @@ export default function OverviewPage() {
                     data-testid={`row-transaction-${tx.id}`}
                     className={selectedIds.has(tx.id) ? "bg-primary/5" : undefined}
                   >
+                    {(() => {
+                      const normalized = normalizeTransaction(tx);
+                      return (
+                        <>
                     <TableCell className="pl-5">
                       <Checkbox
                         checked={selectedIds.has(tx.id)}
@@ -763,6 +982,24 @@ export default function OverviewPage() {
                     <TableCell>
                       <Badge variant="secondary" className="text-xs">
                         {tx.category}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {normalized.workspace === "business" ? "Empresa" : "Familia"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {normalized.movementType === "transfer"
+                          ? "Transfer."
+                          : normalized.movementType === "credit_card_payment"
+                          ? "Pago TC"
+                          : normalized.paymentMethod === "credit_card"
+                          ? `TC${normalized.creditCardName ? `: ${normalized.creditCardName}` : ""}`
+                          : normalized.paymentMethod === "cash"
+                          ? "Efectivo"
+                          : "Banco"}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -818,6 +1055,9 @@ export default function OverviewPage() {
                         </Button>
                       </div>
                     </TableCell>
+                        </>
+                      );
+                    })()}
                   </TableRow>
                 ))}
               </TableBody>

@@ -16,6 +16,11 @@ export interface Transaction {
   subtype: string; // "actual" | "planned"
   status: string; // "pending" | "paid" | "cancelled"
   itemId: string | null;
+  workspace?: string; // "business" | "family"
+  movementType?: string; // "income" | "expense" | "transfer" | "credit_card_payment"
+  paymentMethod?: string; // "cash" | "bank_account" | "credit_card"
+  destinationWorkspace?: string | null;
+  creditCardName?: string | null;
 }
 
 export interface InsertTransaction {
@@ -28,6 +33,51 @@ export interface InsertTransaction {
   subtype?: string;
   status?: string;
   itemId?: string | null;
+  workspace?: string;
+  movementType?: string;
+  paymentMethod?: string;
+  destinationWorkspace?: string | null;
+  creditCardName?: string | null;
+}
+
+// ── Client Payments / Ingresos clientes ────────────────────────
+export interface ClientPayment {
+  id: string;
+  clientName: string;
+  rut: string | null;
+  contactName: string | null;
+  email: string | null;
+  accountManager: string | null;
+  serviceItem: string | null;
+  serviceMonth: string | null;
+  issueDate: string | null;
+  dueDate: string | null;
+  paymentDate: string | null;
+  netAmount: number;
+  vatAmount: number;
+  totalAmount: number;
+  status: string; // "projected" | "receivable" | "paid" | "cancelled"
+  notes: string | null;
+  workspace?: string; // business
+}
+
+export interface InsertClientPayment {
+  clientName: string;
+  rut?: string | null;
+  contactName?: string | null;
+  email?: string | null;
+  accountManager?: string | null;
+  serviceItem?: string | null;
+  serviceMonth?: string | null;
+  issueDate?: string | null;
+  dueDate?: string | null;
+  paymentDate?: string | null;
+  netAmount: number;
+  vatAmount: number;
+  totalAmount: number;
+  status: string;
+  notes?: string | null;
+  workspace?: string;
 }
 
 // ── Categories ──────────────────────────────────────────────────

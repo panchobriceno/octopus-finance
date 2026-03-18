@@ -16,6 +16,7 @@ import ImportDataPage from "@/pages/import-data";
 import CategoriesPage from "@/pages/categories";
 import ItemsManagerPage from "@/pages/items-manager";
 import BudgetPage from "@/pages/budget";
+import ClientPaymentsPage from "@/pages/client-payments";
 
 function AppRouter() {
   return (
@@ -24,6 +25,7 @@ function AppRouter() {
       <Route path="/cash-flow" component={CashFlowPage} />
       <Route path="/pnl" component={PnLPage} />
       <Route path="/import" component={ImportDataPage} />
+      <Route path="/client-payments" component={ClientPaymentsPage} />
       <Route path="/categories" component={CategoriesPage} />
       <Route path="/items" component={ItemsManagerPage} />
       <Route path="/budget" component={BudgetPage} />

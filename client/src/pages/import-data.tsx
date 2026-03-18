@@ -215,6 +215,11 @@ export default function ImportDataPage() {
       subtype: "actual" as const,
       status: "paid" as const,
       itemId: null,
+      workspace: "business" as const,
+      movementType: row.type === "income" ? "income" as const : "expense" as const,
+      paymentMethod: "bank_account" as const,
+      destinationWorkspace: null,
+      creditCardName: null,
     }));
 
     importMutation.mutate(mapped, {

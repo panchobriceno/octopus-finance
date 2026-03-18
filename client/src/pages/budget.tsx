@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Calculator, Save, TrendingUp, TrendingDown, Target } from "lucide-react";
+import { normalizeTransaction } from "@/lib/finance";
 
 // ── Month names ──────────────────────────────────────────────────
 const MONTH_NAMES = [
@@ -124,10 +125,16 @@ export default function BudgetPage() {
   const periodTransactions = useMemo(() => {
     const prefix = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
     return transactions.filter(
-      (tx) =>
-        tx.subtype === "actual" &&
-        tx.type === "expense" &&
-        tx.date.startsWith(prefix)
+      (tx) => {
+        const normalized = normalizeTransaction(tx);
+        return (
+          normalized.subtype === "actual" &&
+          normalized.type === "expense" &&
+          normalized.movementType === "expense" &&
+          normalized.workspace === "business" &&
+          normalized.date.startsWith(prefix)
+        );
+      }
     );
   }, [transactions, selectedYear, selectedMonth]);
 

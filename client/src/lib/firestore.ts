@@ -28,6 +28,7 @@ const categoriesCol = () => collection(db, "categories");
 const itemsCol = () => collection(db, "items");
 const budgetsCol = () => collection(db, "budgets");
 const openingBalancesCol = () => collection(db, "openingBalances");
+const clientPaymentsCol = () => collection(db, "clientPayments");
 
 // ════════════════════════════════════════════════════════════════
 // TRANSACTIONS
@@ -164,4 +165,31 @@ export async function updateOpeningBalance(id: string, data: Record<string, any>
   const ref = doc(db, "openingBalances", id);
   await updateDoc(ref, data);
   return { id, ...data };
+}
+
+// ════════════════════════════════════════════════════════════════
+// CLIENT PAYMENTS
+// ════════════════════════════════════════════════════════════════
+export async function getClientPayments() {
+  const snap = await getDocs(clientPaymentsCol());
+  return snapToArray<any>(snap).sort((a, b) => {
+    const left = `${b.paymentDate ?? b.dueDate ?? ""}`;
+    const right = `${a.paymentDate ?? a.dueDate ?? ""}`;
+    return left.localeCompare(right);
+  });
+}
+
+export async function createClientPayment(data: Record<string, any>) {
+  const ref = await addDoc(clientPaymentsCol(), data);
+  return { id: ref.id, ...data };
+}
+
+export async function updateClientPayment(id: string, data: Record<string, any>) {
+  const ref = doc(db, "clientPayments", id);
+  await updateDoc(ref, data);
+  return { id, ...data };
+}
+
+export async function deleteClientPayment(id: string) {
+  await deleteDoc(doc(db, "clientPayments", id));
 }

@@ -6,7 +6,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "./queryClient";
 import * as fs from "./firestore";
-import type { Transaction, Category, Item, Budget } from "@shared/schema";
+import type { Transaction, Category, Item, Budget, ClientPayment } from "@shared/schema";
 
 // ── Transactions ────────────────────────────────────────────────
 export function useTransactions() {
@@ -166,6 +166,42 @@ export function useDeleteBudget() {
     mutationFn: (id: string) => fs.deleteBudget(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
+    },
+  });
+}
+
+// ── Client Payments ────────────────────────────────────────────
+export function useClientPayments() {
+  return useQuery<ClientPayment[]>({
+    queryKey: ["client-payments"],
+    queryFn: () => fs.getClientPayments(),
+  });
+}
+
+export function useCreateClientPayment() {
+  return useMutation({
+    mutationFn: (data: Record<string, any>) => fs.createClientPayment(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client-payments"] });
+    },
+  });
+}
+
+export function useUpdateClientPayment() {
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, any> }) =>
+      fs.updateClientPayment(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client-payments"] });
+    },
+  });
+}
+
+export function useDeleteClientPayment() {
+  return useMutation({
+    mutationFn: (id: string) => fs.deleteClientPayment(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client-payments"] });
     },
   });
 }

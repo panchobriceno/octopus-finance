@@ -1,11 +1,20 @@
-import { useMemo } from "react";
-import { useTransactions } from "@/lib/hooks";
+import { useMemo, useState } from "react";
+import { useClientPayments, useTransactions } from "@/lib/hooks";
 import { formatCLP, getMonthName } from "@/lib/utils";
-import { isExecutedTransaction, isPlannedTransaction } from "@/lib/finance";
+import {
+  combineFinancialTransactions,
+  getTransactionExpenseImpact,
+  getTransactionIncomeImpact,
+  isExecutedTransaction,
+  isPlannedTransaction,
+  normalizeTransaction,
+  type WorkspaceFilter,
+} from "@/lib/finance";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, TrendingDown, TrendingUp } from "lucide-react";
 
 interface CellTotals {
@@ -35,9 +44,16 @@ function PnlCell({ value }: { value: CellTotals }) {
 
 export default function PnLPage() {
   const { data: transactions = [], isLoading: txLoading } = useTransactions();
+  const { data: clientPayments = [] } = useClientPayments();
+  const [workspace, setWorkspace] = useState<WorkspaceFilter>("all");
+  const financialTransactions = useMemo(
+    () => combineFinancialTransactions(transactions, clientPayments),
+    [transactions, clientPayments],
+  );
 
   const model = useMemo(() => {
-    const monthKeys = Array.from(new Set(transactions.map((tx) => tx.date.slice(0, 7)))).sort();
+    const scoped = financialTransactions.filter((tx) => workspace === "all" || normalizeTransaction(tx).workspace === workspace);
+    const monthKeys = Array.from(new Set(scoped.map((tx) => tx.date.slice(0, 7)))).sort();
     const incomeCategories = new Set<string>();
     const expenseCategories = new Set<string>();
     const bucket: Record<string, Record<string, CellTotals>> = {};
@@ -48,7 +64,7 @@ export default function PnLPage() {
       bucket[monthKey] = {};
     }
 
-    for (const tx of transactions) {
+    for (const tx of scoped) {
       if (tx.status === "cancelled") continue;
 
       const monthKey = tx.date.slice(0, 7);
@@ -61,17 +77,19 @@ export default function PnLPage() {
         bucket[monthKey][tx.category] = { real: 0, planned: 0 };
       }
 
-      if (tx.type === "income") {
+      if (getTransactionIncomeImpact(tx, workspace) > 0) {
         incomeCategories.add(tx.category);
-      } else {
+      }
+
+      if (getTransactionExpenseImpact(tx, workspace) > 0) {
         expenseCategories.add(tx.category);
       }
 
       if (isExecutedTransaction(tx)) {
-        bucket[monthKey][tx.category].real += tx.amount;
+        bucket[monthKey][tx.category].real += getTransactionIncomeImpact(tx, workspace) + getTransactionExpenseImpact(tx, workspace);
         monthStatus[monthKey].real = true;
       } else if (isPlannedTransaction(tx)) {
-        bucket[monthKey][tx.category].planned += tx.amount;
+        bucket[monthKey][tx.category].planned += getTransactionIncomeImpact(tx, workspace) + getTransactionExpenseImpact(tx, workspace);
         monthStatus[monthKey].planned = true;
       }
     }
@@ -140,7 +158,7 @@ export default function PnLPage() {
       grandExpense,
       grandNet,
     };
-  }, [transactions]);
+  }, [financialTransactions, workspace]);
 
   if (txLoading) {
     return (
@@ -158,6 +176,24 @@ export default function PnLPage() {
         <FileText className="size-5 text-primary" />
         <h2 className="text-xl font-semibold">Estado de Resultados</h2>
       </div>
+
+      <Card>
+        <CardContent className="pt-5">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">Ámbito:</span>
+            <Select value={workspace} onValueChange={(value) => setWorkspace(value as WorkspaceFilter)}>
+              <SelectTrigger className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Consolidado</SelectItem>
+                <SelectItem value="business">Empresa</SelectItem>
+                <SelectItem value="family">Familia</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
