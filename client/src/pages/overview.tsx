@@ -33,6 +33,8 @@ import {
   DollarSign, TrendingUp, TrendingDown, Wallet, Plus, Trash2, Pencil, X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { buildMonthlySummaries, getCurrentMonthKey } from "@/lib/finance";
+import { getMonthlyBalances, useOpeningBalance } from "@/lib/monthly-balances";
 
 // ── KPI Card ────────────────────────────────────────────────────
 function KPICard({
@@ -240,7 +242,7 @@ function TransactionForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="actual">Real</SelectItem>
+            <SelectItem value="actual">Ejecutado</SelectItem>
             <SelectItem value="planned">Presupuestado</SelectItem>
           </SelectContent>
         </Select>
@@ -313,6 +315,8 @@ export default function OverviewPage() {
   const { data: transactions = [], isLoading: txLoading } = useTransactions();
   const { data: categories = [] } = useCategories();
   const { data: items = [] } = useItems();
+  const currentMonthKey = getCurrentMonthKey();
+  const { amount: openingBalance, update: updateOpeningBalance } = useOpeningBalance(currentMonthKey);
 
   // Lookup maps
   const categoryMap = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c])), [categories]);
@@ -342,6 +346,28 @@ export default function OverviewPage() {
     .filter((t) => t.type === "expense")
     .reduce((sum, t) => sum + t.amount, 0);
   const balance = totalIncome - totalExpenses;
+  const currentMonthSummary = useMemo(() => {
+    const openingBalances = {
+      ...getMonthlyBalances(),
+      [currentMonthKey]: openingBalance,
+    };
+
+    return buildMonthlySummaries(transactions, openingBalances).find(
+      (summary) => summary.monthKey === currentMonthKey,
+    ) ?? {
+      monthKey: currentMonthKey,
+      label: "",
+      openingBalance,
+      realIncome: 0,
+      realExpenses: 0,
+      plannedIncome: 0,
+      plannedExpenses: 0,
+      realEndingBalance: openingBalance,
+      projectedEndingBalance: openingBalance,
+      hasRealData: false,
+      hasPlannedData: false,
+    };
+  }, [transactions, currentMonthKey, openingBalance]);
 
   // Monthly chart data
   const chartData = useMemo(() => {
@@ -528,6 +554,63 @@ export default function OverviewPage() {
         />
       </div>
 
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">
+            Balance de Apertura y Proyección del Mes
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-[240px_1fr]">
+          <div className="rounded-xl border border-blue-200/70 bg-blue-50/60 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
+            <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+              Saldo inicial
+            </p>
+            <p className="text-xs text-muted-foreground mt-1 mb-3">
+              Guardado por mes en este navegador
+            </p>
+            <Input
+              type="number"
+              value={String(openingBalance)}
+              onChange={(e) => updateOpeningBalance(Number(e.target.value || 0))}
+              data-testid="input-opening-balance"
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Mes: {currentMonthKey}
+            </p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-sm text-muted-foreground">Ejecutado</p>
+              <p className="text-lg font-semibold tabular-nums mt-1">
+                {formatCLP(currentMonthSummary.realEndingBalance)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                {formatCLP(openingBalance)} + {formatCLP(currentMonthSummary.realIncome)} - {formatCLP(currentMonthSummary.realExpenses)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/60 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+              <p className="text-sm text-muted-foreground">Ingresos presupuestados</p>
+              <p className="text-lg font-semibold tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">
+                {formatCLP(currentMonthSummary.plannedIncome)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                No impactan el saldo real
+              </p>
+            </div>
+            <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
+              <p className="text-sm text-muted-foreground">Saldo proyectado</p>
+              <p className="text-lg font-semibold tabular-nums mt-1 text-blue-700 dark:text-blue-300">
+                {formatCLP(currentMonthSummary.projectedEndingBalance)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Ejecutado + proyectado del resto del mes
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Chart */}
       <Card>
         <CardHeader className="pb-2">
@@ -650,7 +733,7 @@ export default function OverviewPage() {
                   <TableHead>Fecha</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Categoría</TableHead>
-                  <TableHead>Real/Presup.</TableHead>
+                  <TableHead>Ejecutado/Presup.</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Monto</TableHead>
                   <TableHead className="text-right pr-5">Acciones</TableHead>
@@ -687,7 +770,7 @@ export default function OverviewPage() {
                         variant={tx.subtype === "planned" ? "outline" : "secondary"}
                         className="text-xs"
                       >
-                        {tx.subtype === "planned" ? "Presup." : "Real"}
+                        {tx.subtype === "planned" ? "Presupuestado" : "Ejecutado"}
                       </Badge>
                     </TableCell>
                     <TableCell>
