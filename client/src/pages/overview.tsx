@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { formatCLP, formatDate } from "@/lib/utils";
 import {
   useTransactions,
@@ -38,12 +38,50 @@ import {
   buildMonthlySummaries,
   combineFinancialTransactions,
   getCurrentMonthKey,
+  getVatProjectionDateForMonth,
   getTransactionExpenseImpact,
   getTransactionIncomeImpact,
   normalizeTransaction,
+  summarizeClientPaymentsByMonth,
   summarizeWorkspaceTransactions,
 } from "@/lib/finance";
 import { getMonthlyBalances, useOpeningBalance } from "@/lib/monthly-balances";
+import { getFamilyIncomeJaviMap, setFamilyIncomeJavi } from "@/lib/family-income";
+import { getCreditCards } from "@/lib/credit-cards";
+
+const FAMILY_CATEGORY_HINTS = [
+  "dividendo",
+  "gastos comunes",
+  "gastos basicos",
+  "auto",
+  "comida",
+  "farmacia",
+  "seguros",
+  "educacion",
+  "salud",
+  "digital",
+  "ocio",
+  "tc javi",
+  "t.c javi",
+  "tc pancho",
+  "t.c pancho",
+  "consulta javi",
+  "nana",
+];
+
+function normalizeHint(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function workspaceLabel(workspace: "business" | "family" | "dentist") {
+  if (workspace === "business") return "Empresa";
+  if (workspace === "family") return "Familia";
+  return "Consulta Dentista";
+}
 
 // ── KPI Card ────────────────────────────────────────────────────
 function KPICard({
@@ -88,34 +126,34 @@ interface TransactionFormProps {
   categories: Category[];
   items: Item[];
   initialValues?: {
-    type: "income" | "expense";
     categoryId: string;
     itemId: string;
     amount: string;
     date: string;
     subtype: "actual" | "planned";
     status: "pending" | "paid" | "cancelled";
-    workspace: "business" | "family";
+    workspace: "business" | "family" | "dentist";
     movementType: "income" | "expense" | "transfer" | "credit_card_payment";
     paymentMethod: "cash" | "bank_account" | "credit_card";
-    destinationWorkspace: "business" | "family";
+    destinationWorkspace: "business" | "family" | "dentist";
     creditCardName: string;
+    installmentCount: string;
     notes: string;
   };
   isPending: boolean;
   onSubmit: (data: {
-    type: "income" | "expense";
     categoryId: string;
     itemId: string;
     amount: string;
     date: string;
     subtype: "actual" | "planned";
     status: "pending" | "paid" | "cancelled";
-    workspace: "business" | "family";
+    workspace: "business" | "family" | "dentist";
     movementType: "income" | "expense" | "transfer" | "credit_card_payment";
     paymentMethod: "cash" | "bank_account" | "credit_card";
-    destinationWorkspace: "business" | "family";
+    destinationWorkspace: "business" | "family" | "dentist";
     creditCardName: string;
+    installmentCount: string;
     notes: string;
   }) => void;
   onCancel?: () => void;
@@ -130,8 +168,9 @@ function TransactionForm({
   onSubmit,
   onCancel,
 }: TransactionFormProps) {
+  const { toast } = useToast();
+  const [creditCards, setCreditCards] = useState<string[]>([]);
   const defaults = initialValues ?? {
-    type: "income" as const,
     categoryId: "",
     itemId: "",
     amount: "",
@@ -143,6 +182,7 @@ function TransactionForm({
     paymentMethod: "bank_account" as const,
     destinationWorkspace: "family" as const,
     creditCardName: "",
+    installmentCount: "1",
     notes: "",
   };
 
@@ -157,6 +197,7 @@ function TransactionForm({
   const [formPaymentMethod, setFormPaymentMethod] = useState(defaults.paymentMethod);
   const [formDestinationWorkspace, setFormDestinationWorkspace] = useState(defaults.destinationWorkspace);
   const [formCreditCardName, setFormCreditCardName] = useState(defaults.creditCardName);
+  const [formInstallmentCount, setFormInstallmentCount] = useState(defaults.installmentCount);
   const [formNotes, setFormNotes] = useState(defaults.notes);
 
   const effectiveType = formMovementType === "income" ? "income" : "expense";
@@ -164,11 +205,45 @@ function TransactionForm({
   const filteredItems = items.filter((i) => i.categoryId === formCategoryId);
   const categoryRequired = formMovementType === "income" || formMovementType === "expense";
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sync = () => setCreditCards(getCreditCards());
+    sync();
+    window.addEventListener("octopus-credit-cards-updated", sync);
+    return () => window.removeEventListener("octopus-credit-cards-updated", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!formCategoryId || !categoryRequired) return;
+
+    const selectedCategory = categories.find((category) => category.id === formCategoryId);
+    if (!selectedCategory || selectedCategory.type !== "expense") return;
+
+    const normalizedCategoryName = normalizeHint(selectedCategory.name);
+    const isFamilyCategory = FAMILY_CATEGORY_HINTS.some((hint) => normalizedCategoryName.includes(hint));
+
+    setFormWorkspace(isFamilyCategory ? "family" : "business");
+  }, [categories, categoryRequired, formCategoryId]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!formCategoryId && categoryRequired) || !formAmount) return;
+    if (!formAmount) {
+      toast({ title: "Falta el monto", variant: "destructive" });
+      return;
+    }
+    if (!formDate) {
+      toast({ title: "Falta la fecha", variant: "destructive" });
+      return;
+    }
+    if (!formCategoryId && categoryRequired) {
+      toast({ title: "Selecciona una categoría", variant: "destructive" });
+      return;
+    }
+    if ((formMovementType === "credit_card_payment" || formPaymentMethod === "credit_card") && !formCreditCardName.trim()) {
+      toast({ title: "Escribe el nombre de la tarjeta", variant: "destructive" });
+      return;
+    }
     onSubmit({
-      type: effectiveType,
       categoryId: formCategoryId,
       itemId: formItemId,
       amount: formAmount,
@@ -180,26 +255,29 @@ function TransactionForm({
       paymentMethod: formPaymentMethod,
       destinationWorkspace: formDestinationWorkspace,
       creditCardName: formCreditCardName,
+      installmentCount: formInstallmentCount,
       notes: formNotes,
     });
   };
 
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      {/* Row 1 */}
-      <div>
-        <Select value={formWorkspace} onValueChange={(v) => setFormWorkspace(v as "business" | "family")}>
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Ambito</p>
+        <Select value={formWorkspace} onValueChange={(v) => setFormWorkspace(v as "business" | "family" | "dentist")}>
           <SelectTrigger data-testid="select-workspace">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="business">Empresa</SelectItem>
             <SelectItem value="family">Familia</SelectItem>
+            <SelectItem value="dentist">Consulta Dentista</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      <div>
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Tipo de movimiento</p>
         <Select
           value={formMovementType}
           onValueChange={(v) => {
@@ -207,9 +285,9 @@ function TransactionForm({
             setFormMovementType(movementType);
             setFormCategoryId("");
             setFormItemId("");
+            setFormInstallmentCount("1");
             if (movementType === "income") {
               setFormPaymentMethod("bank_account");
-            } else if (movementType === "expense") {
             } else {
               setFormPaymentMethod("bank_account");
             }
@@ -227,49 +305,61 @@ function TransactionForm({
         </Select>
       </div>
 
-      <div>
-        <Select
-          value={effectiveType}
-          onValueChange={(v) => {
-            setFormMovementType(v as "income" | "expense");
-            setFormCategoryId("");
-            setFormItemId("");
-          }}
-          disabled={formMovementType !== "income" && formMovementType !== "expense"}
-        >
-          <SelectTrigger data-testid="select-type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="income">Ingreso</SelectItem>
-            <SelectItem value="expense">Gasto</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">
+          {formMovementType === "transfer"
+            ? "Destino"
+            : formMovementType === "credit_card_payment"
+            ? "Tarjeta"
+            : "Categoria"}
+        </p>
+        {formMovementType === "transfer" ? (
+          <Select value={formDestinationWorkspace} onValueChange={(v) => setFormDestinationWorkspace(v as "business" | "family" | "dentist")}>
+            <SelectTrigger data-testid="select-destination-workspace">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(["business", "family", "dentist"] as const)
+                .filter((workspace) => workspace !== formWorkspace)
+                .map((workspace) => (
+                  <SelectItem key={workspace} value={workspace}>
+                    {workspace === "business" ? "Empresa" : workspace === "family" ? "Familia" : "Consulta Dentista"}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        ) : formMovementType === "credit_card_payment" ? (
+          <Input
+            placeholder="Nombre tarjeta"
+            value={formCreditCardName}
+            onChange={(e) => setFormCreditCardName(e.target.value)}
+            data-testid="input-credit-card-name"
+          />
+        ) : (
+          <Select
+            value={formCategoryId}
+            onValueChange={(v) => {
+              setFormCategoryId(v);
+              setFormItemId("");
+            }}
+            disabled={!categoryRequired}
+          >
+            <SelectTrigger data-testid="select-category">
+              <SelectValue placeholder={categoryRequired ? "Categoria" : "No aplica"} />
+            </SelectTrigger>
+            <SelectContent>
+              {filteredCategories.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  {cat.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
-      <div>
-        <Select
-          value={formCategoryId}
-          onValueChange={(v) => {
-            setFormCategoryId(v);
-            setFormItemId("");
-          }}
-          disabled={!categoryRequired}
-        >
-          <SelectTrigger data-testid="select-category">
-            <SelectValue placeholder={categoryRequired ? "Categoría" : "No aplica"} />
-          </SelectTrigger>
-          <SelectContent>
-            {filteredCategories.map((cat) => (
-              <SelectItem key={cat.id} value={cat.id}>
-                {cat.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Subcategoria</p>
         <Select
           value={formItemId}
           onValueChange={setFormItemId}
@@ -293,7 +383,8 @@ function TransactionForm({
         </Select>
       </div>
 
-      <div>
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Monto</p>
         <Input
           type="number"
           placeholder="Monto"
@@ -303,7 +394,8 @@ function TransactionForm({
         />
       </div>
 
-      <div>
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Fecha</p>
         <Input
           type="date"
           value={formDate}
@@ -312,24 +404,33 @@ function TransactionForm({
         />
       </div>
 
-      <div>
-        <Select
-          value={formPaymentMethod}
-          onValueChange={(v) => setFormPaymentMethod(v as "cash" | "bank_account" | "credit_card")}
-          disabled={formMovementType === "income" || formMovementType === "transfer" || formMovementType === "credit_card_payment"}
-        >
-          <SelectTrigger data-testid="select-payment-method">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="cash">Efectivo</SelectItem>
-            <SelectItem value="bank_account">Cuenta bancaria</SelectItem>
-            <SelectItem value="credit_card">Tarjeta de crédito</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Metodo de pago</p>
+        {formMovementType === "expense" ? (
+          <Select
+            value={formPaymentMethod}
+            onValueChange={(v) => setFormPaymentMethod(v as "cash" | "bank_account" | "credit_card")}
+            data-testid="select-payment-method"
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cash">Efectivo</SelectItem>
+              <SelectItem value="bank_account">Cuenta bancaria</SelectItem>
+              <SelectItem value="credit_card">Tarjeta de crédito</SelectItem>
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input
+            value={formMovementType === "income" ? "No aplica" : formMovementType === "transfer" ? "Transferencia" : "Pago tarjeta"}
+            readOnly
+          />
+        )}
       </div>
 
-      <div>
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Estado</p>
         <Select value={formSubtype} onValueChange={(v) => setFormSubtype(v as "actual" | "planned")}>
           <SelectTrigger data-testid="select-subtype">
             <SelectValue />
@@ -341,40 +442,8 @@ function TransactionForm({
         </Select>
       </div>
 
-      <div>
-        {formMovementType === "transfer" ? (
-          <Select value={formDestinationWorkspace} onValueChange={(v) => setFormDestinationWorkspace(v as "business" | "family")}>
-            <SelectTrigger data-testid="select-destination-workspace">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={formWorkspace === "business" ? "family" : "business"}>
-                {formWorkspace === "business" ? "Hacia Familia" : "Hacia Empresa"}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        ) : formMovementType === "credit_card_payment" || formPaymentMethod === "credit_card" ? (
-          <Input
-            placeholder="Nombre tarjeta"
-            value={formCreditCardName}
-            onChange={(e) => setFormCreditCardName(e.target.value)}
-            data-testid="input-credit-card-name"
-          />
-        ) : (
-          <Select value={formStatus} onValueChange={(v) => setFormStatus(v as "pending" | "paid" | "cancelled")}>
-            <SelectTrigger data-testid="select-status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pending">Pendiente</SelectItem>
-              <SelectItem value="paid">Pagado</SelectItem>
-              <SelectItem value="cancelled">Cancelado</SelectItem>
-            </SelectContent>
-          </Select>
-        )}
-      </div>
-
-      <div>
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Situacion</p>
         <Select value={formStatus} onValueChange={(v) => setFormStatus(v as "pending" | "paid" | "cancelled")}>
           <SelectTrigger data-testid="select-status">
             <SelectValue />
@@ -387,7 +456,82 @@ function TransactionForm({
         </Select>
       </div>
 
-      <div>
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">
+          {formMovementType === "credit_card_payment" || formPaymentMethod === "credit_card" ? "Tarjeta" : "Referencia"}
+        </p>
+        {(formMovementType === "credit_card_payment" || formPaymentMethod === "credit_card") ? (
+          creditCards.length > 0 ? (
+            <Select value={formCreditCardName} onValueChange={setFormCreditCardName}>
+              <SelectTrigger data-testid="input-credit-card-name">
+                <SelectValue placeholder="Seleccionar tarjeta" />
+              </SelectTrigger>
+              <SelectContent>
+                {creditCards.map((card) => (
+                  <SelectItem key={card} value={card}>
+                    {card}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              placeholder="Nombre tarjeta"
+              value={formCreditCardName}
+              onChange={(e) => setFormCreditCardName(e.target.value)}
+              data-testid="input-credit-card-name"
+            />
+          )
+        ) : mode === "create" ? (
+          <Input value="-" readOnly />
+        ) : (
+          <Input value="-" readOnly />
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">
+          {formPaymentMethod === "credit_card" && formMovementType === "expense" ? "Cuotas" : "Detalle"}
+        </p>
+        {formPaymentMethod === "credit_card" && formMovementType === "expense" ? (
+          <Select value={formInstallmentCount} onValueChange={setFormInstallmentCount} data-testid="select-installment-count">
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {["1", "2", "3", "6", "12"].map((count) => (
+                <SelectItem key={count} value={count}>
+                  {count} cuota{count === "1" ? "" : "s"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : mode === "create" ? (
+          <Input value="-" readOnly />
+        ) : (
+          <Input value="-" readOnly />
+        )}
+      </div>
+
+      {(formPaymentMethod === "credit_card" && formMovementType === "expense") && (
+        <div className="sm:col-span-2 lg:col-span-4 rounded-lg border border-amber-200/70 bg-amber-50/60 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+          La compra se registra como gasto en este mes. Las cuotas quedan informadas por ahora y luego podremos desglosarlas y ajustarlas manualmente segun la cartola.
+        </div>
+      )}
+
+      {/* Row 3 — Notes (full width) */}
+      <div className="sm:col-span-2 lg:col-span-4">
+        <Textarea
+          placeholder="Notas (opcional)"
+          value={formNotes}
+          onChange={(e) => setFormNotes(e.target.value)}
+          rows={2}
+          className="resize-none"
+          data-testid="input-notes"
+        />
+      </div>
+
+      <div className="sm:col-span-2 lg:col-span-4">
         {mode === "create" ? (
           <Button
             type="submit"
@@ -415,18 +559,6 @@ function TransactionForm({
           </div>
         )}
       </div>
-
-      {/* Row 3 — Notes (full width) */}
-      <div className="sm:col-span-2 lg:col-span-4">
-        <Textarea
-          placeholder="Notas (opcional)"
-          value={formNotes}
-          onChange={(e) => setFormNotes(e.target.value)}
-          rows={2}
-          className="resize-none"
-          data-testid="input-notes"
-        />
-      </div>
     </form>
   );
 }
@@ -436,6 +568,10 @@ export default function OverviewPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [filterFromDate, setFilterFromDate] = useState("");
+  const [filterToDate, setFilterToDate] = useState("");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [familyIncomeJaviMap, setFamilyIncomeJaviMap] = useState<Record<string, number>>({});
   const { toast } = useToast();
 
   const { data: transactions = [], isLoading: txLoading } = useTransactions();
@@ -444,6 +580,7 @@ export default function OverviewPage() {
   const { data: items = [] } = useItems();
   const currentMonthKey = getCurrentMonthKey();
   const { amount: openingBalance, update: updateOpeningBalance } = useOpeningBalance(currentMonthKey);
+  const familyIncomeJavi = familyIncomeJaviMap[currentMonthKey] ?? 0;
 
   // Lookup maps
   const categoryMap = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c])), [categories]);
@@ -456,8 +593,21 @@ export default function OverviewPage() {
     return map;
   }, [categories]);
 
+  const transactionCategoryOptions = useMemo(
+    () => Array.from(new Set(transactions.map((tx) => tx.category))).sort((a, b) => a.localeCompare(b)),
+    [transactions],
+  );
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((tx) => {
+      if (filterCategory !== "all" && tx.category !== filterCategory) return false;
+      if (filterFromDate && tx.date < filterFromDate) return false;
+      if (filterToDate && tx.date > filterToDate) return false;
+      return true;
+    });
+  }, [transactions, filterCategory, filterFromDate, filterToDate]);
+
   // Visible transactions (limited to 50)
-  const visibleTransactions = transactions.slice(0, 50);
+  const visibleTransactions = filteredTransactions.slice(0, 50);
 
   // ── Mutations ──
   const createMutation = useCreateTransaction();
@@ -478,9 +628,21 @@ export default function OverviewPage() {
     () => summarizeWorkspaceTransactions(financialTransactions, "family"),
     [financialTransactions],
   );
+  const dentistMetrics = useMemo(
+    () => summarizeWorkspaceTransactions(financialTransactions, "dentist"),
+    [financialTransactions],
+  );
   const totalIncome = financialTransactions.reduce((sum, tx) => sum + getTransactionIncomeImpact(tx, "all"), 0);
   const totalExpenses = financialTransactions.reduce((sum, tx) => sum + getTransactionExpenseImpact(tx, "all"), 0);
   const balance = totalIncome - totalExpenses;
+  const clientPaymentsByMonth = useMemo(
+    () => summarizeClientPaymentsByMonth(clientPayments),
+    [clientPayments],
+  );
+  const currentMonthPaidVat = clientPaymentsByMonth[currentMonthKey]?.paidVat ?? 0;
+  const nextVatDueDate = getVatProjectionDateForMonth(currentMonthKey);
+  const businessAvailableAfterVat = businessMetrics.cashFlow - currentMonthPaidVat;
+  const familyAvailableWithJavi = familyMetrics.cashFlow + familyIncomeJavi;
   const currentMonthSummary = useMemo(() => {
     const openingBalances = {
       ...getMonthlyBalances(),
@@ -503,6 +665,14 @@ export default function OverviewPage() {
       hasPlannedData: false,
     };
   }, [financialTransactions, currentMonthKey, openingBalance]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sync = () => setFamilyIncomeJaviMap(getFamilyIncomeJaviMap());
+    sync();
+    window.addEventListener("octopus-family-income-updated", sync);
+    return () => window.removeEventListener("octopus-family-income-updated", sync);
+  }, []);
 
   // Monthly chart data
   const chartData = useMemo(() => {
@@ -556,25 +726,25 @@ export default function OverviewPage() {
 
   // ── Form handlers ──
   const handleCreate = (formData: {
-    type: "income" | "expense";
     categoryId: string;
     itemId: string;
     amount: string;
     date: string;
     subtype: "actual" | "planned";
     status: "pending" | "paid" | "cancelled";
-    workspace: "business" | "family";
+    workspace: "business" | "family" | "dentist";
     movementType: "income" | "expense" | "transfer" | "credit_card_payment";
     paymentMethod: "cash" | "bank_account" | "credit_card";
-    destinationWorkspace: "business" | "family";
+    destinationWorkspace: "business" | "family" | "dentist";
     creditCardName: string;
+    installmentCount: string;
     notes: string;
   }) => {
     const selectedCategory = formData.categoryId ? categoryMap[formData.categoryId] : null;
     const selectedItem = formData.itemId ? itemMap[formData.itemId] : null;
     const derivedName =
       formData.movementType === "transfer"
-        ? `Transferencia ${formData.workspace === "business" ? "Empresa" : "Familia"} -> ${formData.destinationWorkspace === "business" ? "Empresa" : "Familia"}`
+        ? `Transferencia ${workspaceLabel(formData.workspace)} -> ${workspaceLabel(formData.destinationWorkspace)}`
         : formData.movementType === "credit_card_payment"
         ? `Pago ${formData.creditCardName || "Tarjeta"}`
         : selectedItem?.name ?? selectedCategory?.name ?? "";
@@ -584,12 +754,20 @@ export default function OverviewPage() {
         : formData.movementType === "credit_card_payment"
         ? "Pago Tarjeta"
         : selectedCategory?.name ?? "";
+    if (!derivedName || !derivedCategory) {
+      toast({
+        title: "Faltan datos para crear la transacción",
+        description: "Revisa categoría, subcategoría o tipo de movimiento.",
+        variant: "destructive",
+      });
+      return;
+    }
     createMutation.mutate(
       {
         name: derivedName,
         category: derivedCategory,
         amount: parseFloat(formData.amount),
-        type: formData.type,
+        type: formData.movementType === "income" ? "income" : "expense",
         date: formData.date,
         notes: formData.notes || null,
         subtype: formData.subtype,
@@ -602,6 +780,9 @@ export default function OverviewPage() {
         creditCardName: formData.paymentMethod === "credit_card" || formData.movementType === "credit_card_payment"
           ? formData.creditCardName || null
           : null,
+        installmentCount: formData.paymentMethod === "credit_card" && formData.movementType === "expense"
+          ? Number.parseInt(formData.installmentCount || "1", 10)
+          : null,
       },
       {
         onSuccess: () => toast({ title: "Transacción creada" }),
@@ -610,18 +791,18 @@ export default function OverviewPage() {
   };
 
   const handleEdit = (formData: {
-    type: "income" | "expense";
     categoryId: string;
     itemId: string;
     amount: string;
     date: string;
     subtype: "actual" | "planned";
     status: "pending" | "paid" | "cancelled";
-    workspace: "business" | "family";
+    workspace: "business" | "family" | "dentist";
     movementType: "income" | "expense" | "transfer" | "credit_card_payment";
     paymentMethod: "cash" | "bank_account" | "credit_card";
-    destinationWorkspace: "business" | "family";
+    destinationWorkspace: "business" | "family" | "dentist";
     creditCardName: string;
+    installmentCount: string;
     notes: string;
   }) => {
     if (!editingTx) return;
@@ -629,7 +810,7 @@ export default function OverviewPage() {
     const selectedItem = formData.itemId ? itemMap[formData.itemId] : null;
     const derivedName =
       formData.movementType === "transfer"
-        ? `Transferencia ${formData.workspace === "business" ? "Empresa" : "Familia"} -> ${formData.destinationWorkspace === "business" ? "Empresa" : "Familia"}`
+        ? `Transferencia ${workspaceLabel(formData.workspace)} -> ${workspaceLabel(formData.destinationWorkspace)}`
         : formData.movementType === "credit_card_payment"
         ? `Pago ${formData.creditCardName || "Tarjeta"}`
         : selectedItem?.name ?? selectedCategory?.name ?? "";
@@ -646,7 +827,7 @@ export default function OverviewPage() {
           name: derivedName,
           category: derivedCategory,
           amount: parseFloat(formData.amount),
-          type: formData.type,
+          type: formData.movementType === "income" ? "income" : "expense",
           date: formData.date,
           notes: formData.notes || null,
           subtype: formData.subtype,
@@ -658,6 +839,9 @@ export default function OverviewPage() {
           destinationWorkspace: formData.movementType === "transfer" ? formData.destinationWorkspace : null,
           creditCardName: formData.paymentMethod === "credit_card" || formData.movementType === "credit_card_payment"
             ? formData.creditCardName || null
+            : null,
+          installmentCount: formData.paymentMethod === "credit_card" && formData.movementType === "expense"
+            ? Number.parseInt(formData.installmentCount || "1", 10)
             : null,
         },
       },
@@ -676,7 +860,6 @@ export default function OverviewPage() {
     const catId = categoryNameToId[tx.category] ?? "";
     const itmId = tx.itemId ?? "";
     return {
-      type: tx.type as "income" | "expense",
       categoryId: catId,
       itemId: itmId,
       amount: String(tx.amount),
@@ -688,6 +871,7 @@ export default function OverviewPage() {
       paymentMethod: normalized.paymentMethod,
       destinationWorkspace: normalized.destinationWorkspace ?? (normalized.workspace === "business" ? "family" : "business"),
       creditCardName: normalized.creditCardName ?? "",
+      installmentCount: String((tx.installmentCount ?? 1)),
       notes: tx.notes ?? "",
     };
   };
@@ -740,7 +924,7 @@ export default function OverviewPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-5">
             <p className="text-sm text-muted-foreground">Empresa: caja real</p>
@@ -757,12 +941,74 @@ export default function OverviewPage() {
         </Card>
         <Card>
           <CardContent className="pt-5">
+            <p className="text-sm text-muted-foreground">Consulta Dentista: caja real</p>
+            <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(dentistMetrics.cashFlow)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Ingresos y gastos del ámbito consulta</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
             <div className="flex items-center gap-2">
               <CreditCard className="size-4 text-amber-600 dark:text-amber-300" />
               <p className="text-sm text-muted-foreground">Deuda tarjetas empresa</p>
             </div>
             <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(businessMetrics.creditCardDebt)}</p>
             <p className="text-xs text-muted-foreground mt-1">Compras TC menos pagos de tarjeta</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="pt-5">
+            <p className="text-sm text-muted-foreground">Ingreso Javi del mes</p>
+            <Input
+              type="number"
+              value={String(familyIncomeJavi)}
+              onChange={(e) => setFamilyIncomeJaviMap(setFamilyIncomeJavi(currentMonthKey, Number(e.target.value || 0)))}
+              className="mt-3"
+              data-testid="input-overview-family-income-javi"
+            />
+            <p className="text-xs text-muted-foreground mt-2">Se sincroniza con Presupuesto Familia</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <p className="text-sm text-muted-foreground">Familia disponible con Ingreso Javi</p>
+            <p className="text-xl font-semibold tabular-nums mt-1 text-blue-700 dark:text-blue-300">
+              {formatCLP(familyAvailableWithJavi)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Caja real familia más ingreso manual del mes</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-5">
+            <p className="text-sm text-muted-foreground">IVA cobrado este mes</p>
+            <p className="text-xl font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">
+              {formatCLP(currentMonthPaidVat)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Se actualiza a medida que los clientes van pagando</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <p className="text-sm text-muted-foreground">IVA proyectado próximo 20</p>
+            <p className="text-xl font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">
+              {formatCLP(currentMonthPaidVat)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Pago estimado para {formatDate(nextVatDueDate)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <p className="text-sm text-muted-foreground">Caja empresa disponible sin IVA</p>
+            <p className="text-xl font-semibold tabular-nums mt-1">
+              {formatCLP(businessAvailableAfterVat)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Caja empresa menos IVA cobrado este mes</p>
           </CardContent>
         </Card>
       </div>
@@ -901,6 +1147,47 @@ export default function OverviewPage() {
           </div>
         </CardHeader>
         <CardContent className="px-0">
+          <div className="mx-5 mb-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Desde</p>
+              <Input type="date" value={filterFromDate} onChange={(e) => setFilterFromDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Hasta</p>
+              <Input type="date" value={filterToDate} onChange={(e) => setFilterToDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Categoría</p>
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {transactionCategoryOptions.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setFilterFromDate("");
+                  setFilterToDate("");
+                  setFilterCategory("all");
+                }}
+              >
+                Limpiar filtros
+              </Button>
+            </div>
+          </div>
+
           {/* Bulk action bar */}
           {selectedIds.size > 0 && (
             <div className="mx-5 mb-3 flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5" data-testid="bulk-action-bar">
@@ -986,7 +1273,7 @@ export default function OverviewPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs">
-                        {normalized.workspace === "business" ? "Empresa" : "Familia"}
+                        {workspaceLabel(normalized.workspace)}
                       </Badge>
                     </TableCell>
                     <TableCell>

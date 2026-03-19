@@ -2,7 +2,7 @@ import type { ClientPayment, Transaction } from "@shared/schema";
 import { getMonthName } from "./utils";
 import type { MonthlyBalanceMap } from "./monthly-balances";
 
-export type Workspace = "business" | "family";
+export type Workspace = "business" | "family" | "dentist";
 export type WorkspaceFilter = Workspace | "all";
 
 export interface NormalizedTransaction extends Transaction {
@@ -57,6 +57,37 @@ export function getMonthLabel(monthKey: string) {
 
 export function getCurrentMonthKey() {
   return new Date().toISOString().slice(0, 7);
+}
+
+export function getNextMonthKey(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const next = new Date(year, month, 1);
+  return next.toISOString().slice(0, 7);
+}
+
+export function getClientPaymentReferenceDate(payment: ClientPayment) {
+  return payment.paymentDate ?? payment.dueDate ?? payment.issueDate ?? null;
+}
+
+export function getVatProjectionDateForMonth(monthKey: string) {
+  return `${getNextMonthKey(monthKey)}-20`;
+}
+
+function addMonthsToDate(date: string, monthsToAdd: number) {
+  const [year, month, day] = date.split("-").map(Number);
+  const target = new Date(year, month - 1 + monthsToAdd, 1);
+  const daysInTargetMonth = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  const safeDay = Math.min(day, daysInTargetMonth);
+  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
+}
+
+function splitInstallments(amount: number, count: number) {
+  const base = Math.floor(amount / count);
+  const remainder = amount - base * count;
+
+  return Array.from({ length: count }, (_, index) =>
+    index === count - 1 ? base + remainder : base,
+  );
 }
 
 export function normalizeTransaction(tx: Transaction): NormalizedTransaction {
@@ -166,8 +197,7 @@ export function summarizeWorkspaceTransactions(
 
     const normalized = normalizeTransaction(tx);
     const executed = isExecutedTransaction(normalized);
-    const planned = isPlannedTransaction(normalized);
-    if (!executed && !planned) return acc;
+    if (!executed) return acc;
 
     acc.income += getTransactionIncomeImpact(normalized, workspace);
     acc.expenses += getTransactionExpenseImpact(normalized, workspace);
@@ -190,10 +220,48 @@ export function summarizeWorkspaceTransactions(
   });
 }
 
+export function buildCreditCardInstallmentProjectionTransactions(transactions: Transaction[]) {
+  return transactions.flatMap((tx) => {
+    const normalized = normalizeTransaction(tx);
+    const installmentCount = normalized.installmentCount ?? 1;
+
+    if (
+      normalized.movementType !== "expense" ||
+      normalized.paymentMethod !== "credit_card" ||
+      normalized.subtype !== "actual" ||
+      normalized.status !== "paid" ||
+      installmentCount < 1
+    ) {
+      return [];
+    }
+
+    const installmentAmounts = splitInstallments(normalized.amount, installmentCount);
+
+    return installmentAmounts.map((installmentAmount, index) => ({
+      id: `${normalized.id}-installment-${index + 1}`,
+      name: `Cuota ${index + 1}/${installmentCount} ${normalized.creditCardName ? `- ${normalized.creditCardName}` : ""}`.trim(),
+      category: "Cuota Tarjeta",
+      amount: installmentAmount,
+      type: "expense",
+      date: addMonthsToDate(normalized.date, index + 1),
+      notes: `Proyección automática de cuotas para ${normalized.category}`,
+      subtype: "planned",
+      status: "pending",
+      itemId: null,
+      workspace: normalized.workspace,
+      movementType: "credit_card_payment",
+      paymentMethod: "bank_account",
+      destinationWorkspace: null,
+      creditCardName: normalized.creditCardName ?? null,
+      installmentCount: null,
+    } satisfies Transaction));
+  });
+}
+
 export function clientPaymentToIncomeTransaction(payment: ClientPayment): Transaction | null {
   if (payment.status === "cancelled") return null;
 
-  const date = payment.paymentDate ?? payment.dueDate ?? payment.issueDate;
+  const date = getClientPaymentReferenceDate(payment);
   if (!date) return null;
 
   const subtype = payment.status === "paid" ? "actual" : "planned";
@@ -218,6 +286,37 @@ export function clientPaymentToIncomeTransaction(payment: ClientPayment): Transa
   };
 }
 
+export function buildVatProjectionTransactions(clientPayments: ClientPayment[]): Transaction[] {
+  const paidVatByMonth = clientPayments.reduce<Record<string, number>>((acc, payment) => {
+    if (payment.status !== "paid") return acc;
+
+    const referenceDate = getClientPaymentReferenceDate(payment);
+    if (!referenceDate) return acc;
+
+    const monthKey = getMonthKeyFromDate(referenceDate);
+    acc[monthKey] = (acc[monthKey] ?? 0) + payment.vatAmount;
+    return acc;
+  }, {});
+
+  return Object.entries(paidVatByMonth).map(([monthKey, amount]) => ({
+    id: `vat-projection-${monthKey}`,
+    name: `IVA por pagar ${monthKey}`,
+    category: "IVA por pagar",
+    amount,
+    type: "expense",
+    date: getVatProjectionDateForMonth(monthKey),
+    notes: `Proyección automática del IVA cobrado en ${getMonthLabel(monthKey)}`,
+    subtype: "planned",
+    status: "pending",
+    itemId: null,
+    workspace: "business",
+    movementType: "expense",
+    paymentMethod: "bank_account",
+    destinationWorkspace: null,
+    creditCardName: null,
+  }));
+}
+
 export function combineFinancialTransactions(
   transactions: Transaction[],
   clientPayments: ClientPayment[] = [],
@@ -225,8 +324,50 @@ export function combineFinancialTransactions(
   const paymentTransactions = clientPayments
     .map(clientPaymentToIncomeTransaction)
     .filter((tx): tx is Transaction => tx !== null);
+  const vatProjectionTransactions = buildVatProjectionTransactions(clientPayments);
+  const installmentProjectionTransactions = buildCreditCardInstallmentProjectionTransactions(transactions);
 
-  return [...transactions, ...paymentTransactions];
+  return [...transactions, ...paymentTransactions, ...vatProjectionTransactions, ...installmentProjectionTransactions];
+}
+
+export function summarizeClientPaymentsByMonth(clientPayments: ClientPayment[]) {
+  return clientPayments.reduce<Record<string, {
+    net: number;
+    vat: number;
+    gross: number;
+    paidNet: number;
+    paidVat: number;
+    paidGross: number;
+  }>>((acc, payment) => {
+    if (payment.status === "cancelled") return acc;
+
+    const referenceDate = getClientPaymentReferenceDate(payment);
+    if (!referenceDate) return acc;
+
+    const monthKey = getMonthKeyFromDate(referenceDate);
+    if (!acc[monthKey]) {
+      acc[monthKey] = {
+        net: 0,
+        vat: 0,
+        gross: 0,
+        paidNet: 0,
+        paidVat: 0,
+        paidGross: 0,
+      };
+    }
+
+    acc[monthKey].net += payment.netAmount;
+    acc[monthKey].vat += payment.vatAmount;
+    acc[monthKey].gross += payment.totalAmount;
+
+    if (payment.status === "paid") {
+      acc[monthKey].paidNet += payment.netAmount;
+      acc[monthKey].paidVat += payment.vatAmount;
+      acc[monthKey].paidGross += payment.totalAmount;
+    }
+
+    return acc;
+  }, {});
 }
 
 function ensureSummary(

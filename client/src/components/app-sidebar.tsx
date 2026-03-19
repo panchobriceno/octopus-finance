@@ -1,5 +1,6 @@
-import { LayoutDashboard, ArrowUpDown, FileText, Upload, Settings, Tags, Target, BriefcaseBusiness } from "lucide-react";
+import { LayoutDashboard, ArrowUpDown, FileText, Upload, Settings, Tags, Target, BriefcaseBusiness, ClipboardList, CreditCard } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useEffect, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -18,43 +19,63 @@ const mainNav = [
   { title: "Flujo de Caja", url: "/cash-flow", icon: ArrowUpDown },
   { title: "Estado de Resultados", url: "/pnl", icon: FileText },
   { title: "Ingresos Clientes", url: "/client-payments", icon: BriefcaseBusiness },
-  { title: "Importar Datos", url: "/import", icon: Upload },
   { title: "Presupuesto", url: "/budget", icon: Target },
+  { title: "Cierre Mensual", url: "/monthly-close", icon: ClipboardList },
+  { title: "Panel de Tarjetas", url: "/credit-cards", icon: CreditCard },
+  { title: "Importar Datos", url: "/import", icon: Upload },
 ];
 
 const settingsNav = [
+  { title: "Branding", url: "/settings", icon: Settings },
   { title: "Categorías", url: "/categories", icon: Tags },
   { title: "Items", url: "/items", icon: Settings },
 ];
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const syncLogo = () => setLogoDataUrl(window.localStorage.getItem("octopus_app_logo"));
+    syncLogo();
+    window.addEventListener("octopus-logo-updated", syncLogo);
+    return () => window.removeEventListener("octopus-logo-updated", syncLogo);
+  }, [location]);
 
   return (
     <Sidebar data-testid="sidebar-nav">
       <SidebarHeader className="px-4 py-5">
         <div className="flex items-center gap-3">
-          <svg
-            width="32"
-            height="32"
-            viewBox="0 0 32 32"
-            fill="none"
-            aria-label="Octopus Finance Logo"
-          >
-            <rect width="32" height="32" rx="8" fill="hsl(160, 84%, 39%)" />
-            <path
-              d="M8 22V14a8 8 0 0116 0v8"
-              stroke="white"
-              strokeWidth="2.5"
-              strokeLinecap="round"
+          {logoDataUrl ? (
+            <img
+              src={logoDataUrl}
+              alt="Octopus Finance Logo"
+              className="size-8 rounded-lg object-cover"
             />
-            <path
-              d="M12 22V17M16 22V15M20 22V17"
-              stroke="white"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            />
-          </svg>
+          ) : (
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 32 32"
+              fill="none"
+              aria-label="Octopus Finance Logo"
+            >
+              <rect width="32" height="32" rx="8" fill="hsl(160, 84%, 39%)" />
+              <path
+                d="M8 22V14a8 8 0 0116 0v8"
+                stroke="white"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+              <path
+                d="M12 22V17M16 22V15M20 22V17"
+                stroke="white"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          )}
           <div>
             <h1 className="text-sm font-semibold text-sidebar-foreground tracking-tight">
               Octopus Finance

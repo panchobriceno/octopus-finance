@@ -189,6 +189,7 @@ export default function PnLPage() {
                 <SelectItem value="all">Consolidado</SelectItem>
                 <SelectItem value="business">Empresa</SelectItem>
                 <SelectItem value="family">Familia</SelectItem>
+                <SelectItem value="dentist">Consulta Dentista</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -251,12 +252,19 @@ export default function PnLPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">Real</Badge>
-            <Badge variant="outline">Presupuestado</Badge>
-            <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+          <div className="flex flex-wrap gap-3 text-xs">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-muted-foreground">
+              <span className="size-2 rounded-full bg-secondary-foreground/70" />
+              Real
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-muted-foreground">
+              <span className="size-2 rounded-full border border-muted-foreground" />
+              Presupuestado
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/70 bg-amber-50/60 px-3 py-1 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+              <span className="size-2 rounded-full bg-amber-500" />
               Mes con datos mixtos
-            </Badge>
+            </div>
           </div>
 
           <div className="overflow-x-auto">

@@ -22,6 +22,7 @@ export interface Transaction {
   paymentMethod?: string; // "cash" | "bank_account" | "credit_card"
   destinationWorkspace?: string | null;
   creditCardName?: string | null;
+  installmentCount?: number | null;
 }
 
 export interface InsertTransaction {
@@ -39,6 +40,7 @@ export interface InsertTransaction {
   paymentMethod?: string;
   destinationWorkspace?: string | null;
   creditCardName?: string | null;
+  installmentCount?: number | null;
 }
 
 // ── Client Payments / Ingresos clientes ────────────────────────
@@ -87,12 +89,14 @@ export interface Category {
   name: string;
   type: string; // "income" | "expense"
   color: string | null;
+  workspace?: string | null; // "business" | "family"
 }
 
 export interface InsertCategory {
   name: string;
   type: string;
   color?: string | null;
+  workspace?: string | null;
 }
 
 // ── Items (subcategories) ───────────────────────────────────────
@@ -114,6 +118,7 @@ export interface Budget {
   month: number; // 1-12
   categoryGroup: string;
   amount: number;
+  workspace?: string; // "business" | "family"
 }
 
 export interface InsertBudget {
@@ -121,6 +126,7 @@ export interface InsertBudget {
   month: number;
   categoryGroup: string;
   amount: number;
+  workspace?: string;
 }
 
 // ── Opening Balances ────────────────────────────────────────────
@@ -147,12 +153,14 @@ export const insertTransactionSchema = z.object({
   paymentMethod: z.string().optional(),
   destinationWorkspace: z.string().nullable().optional(),
   creditCardName: z.string().nullable().optional(),
+  installmentCount: z.number().int().nullable().optional(),
 });
 
 export const insertCategorySchema = z.object({
   name: z.string().min(1),
   type: z.string().min(1),
   color: z.string().nullable().optional(),
+  workspace: z.string().nullable().optional(),
 });
 
 export const insertItemSchema = z.object({
@@ -165,6 +173,7 @@ export const insertBudgetSchema = z.object({
   month: z.number().int(),
   categoryGroup: z.string().min(1),
   amount: z.number(),
+  workspace: z.string().optional(),
 });
 
 export const insertClientPaymentSchema = z.object({

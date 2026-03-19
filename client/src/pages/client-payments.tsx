@@ -20,10 +20,11 @@ type PaymentStatus = "projected" | "receivable" | "paid" | "cancelled";
 
 const defaultForm = {
   clientName: "",
+  rut: "",
   serviceItem: "",
   serviceMonth: "",
+  issueDate: "",
   dueDate: "",
-  paymentDate: "",
   netAmount: "",
   vatAmount: "",
   totalAmount: "",
@@ -64,14 +65,12 @@ export default function ClientPaymentsPage() {
     setForm((current) => {
       const next = { ...current, [field]: value };
       const net = Number.parseFloat(next.netAmount || "0");
-      const vat = Number.parseFloat(next.vatAmount || "0");
-      const total = Number.parseFloat(next.totalAmount || "0");
+      const computedVat = Math.round((Number.isFinite(net) ? net : 0) * 0.19);
+      const computedTotal = (Number.isFinite(net) ? net : 0) + computedVat;
 
-      if (field === "netAmount" || field === "vatAmount") {
-        next.totalAmount = String((Number.isFinite(net) ? net : 0) + (Number.isFinite(vat) ? vat : 0));
-      } else if (field === "totalAmount" && next.vatAmount === "") {
-        next.vatAmount = "0";
-        next.netAmount = String(Number.isFinite(total) ? total : 0);
+      if (field === "netAmount") {
+        next.vatAmount = String(computedVat);
+        next.totalAmount = String(computedTotal);
       }
 
       return next;
@@ -83,15 +82,15 @@ export default function ClientPaymentsPage() {
 
     createMutation.mutate({
       clientName: form.clientName.trim(),
-      rut: null,
+      rut: form.rut.trim() || null,
       contactName: null,
       email: null,
       accountManager: null,
       serviceItem: form.serviceItem || null,
       serviceMonth: form.serviceMonth || null,
-      issueDate: null,
+      issueDate: form.issueDate || null,
       dueDate: form.dueDate || null,
-      paymentDate: form.paymentDate || null,
+      paymentDate: form.status === "paid" ? new Date().toISOString().slice(0, 10) : null,
       netAmount: Number.parseFloat(form.netAmount || "0"),
       vatAmount: Number.parseFloat(form.vatAmount || "0"),
       totalAmount: Number.parseFloat(form.totalAmount || "0"),
@@ -174,38 +173,73 @@ export default function ClientPaymentsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          <Input
-            placeholder="Cliente"
-            value={form.clientName}
-            onChange={(e) => handleChange("clientName", e.target.value)}
-            data-testid="input-client-name"
-          />
-          <Input
-            placeholder="Servicio"
-            value={form.serviceItem}
-            onChange={(e) => handleChange("serviceItem", e.target.value)}
-          />
-          <Input
-            placeholder="Mes de servicio"
-            value={form.serviceMonth}
-            onChange={(e) => handleChange("serviceMonth", e.target.value)}
-          />
-          <Select value={form.status} onValueChange={(value) => handleChange("status", value)}>
-            <SelectTrigger data-testid="select-client-payment-status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="projected">Proyectado</SelectItem>
-              <SelectItem value="receivable">Por cobrar</SelectItem>
-              <SelectItem value="paid">Cobrado</SelectItem>
-              <SelectItem value="cancelled">Cancelado</SelectItem>
-            </SelectContent>
-          </Select>
-          <Input type="date" value={form.dueDate} onChange={(e) => handleChange("dueDate", e.target.value)} />
-          <Input type="date" value={form.paymentDate} onChange={(e) => handleChange("paymentDate", e.target.value)} />
-          <Input type="number" placeholder="Monto neto" value={form.netAmount} onChange={(e) => handleChange("netAmount", e.target.value)} />
-          <Input type="number" placeholder="IVA" value={form.vatAmount} onChange={(e) => handleChange("vatAmount", e.target.value)} />
-          <Input type="number" placeholder="Monto total" value={form.totalAmount} onChange={(e) => handleChange("totalAmount", e.target.value)} />
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Cliente</p>
+            <Input
+              placeholder="Cliente"
+              value={form.clientName}
+              onChange={(e) => handleChange("clientName", e.target.value)}
+              data-testid="input-client-name"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">RUT</p>
+            <Input
+              placeholder="12.345.678-9"
+              value={form.rut}
+              onChange={(e) => handleChange("rut", e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Servicio</p>
+            <Input
+              placeholder="Servicio"
+              value={form.serviceItem}
+              onChange={(e) => handleChange("serviceItem", e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Estado</p>
+            <Select value={form.status} onValueChange={(value) => handleChange("status", value)}>
+              <SelectTrigger data-testid="select-client-payment-status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="projected">Proyectado</SelectItem>
+                <SelectItem value="receivable">Por cobrar</SelectItem>
+                <SelectItem value="paid">Cobrado</SelectItem>
+                <SelectItem value="cancelled">Cancelado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Mes de servicio</p>
+            <Input
+              placeholder="Mes de servicio"
+              value={form.serviceMonth}
+              onChange={(e) => handleChange("serviceMonth", e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Fecha emisión</p>
+            <Input type="date" value={form.issueDate} onChange={(e) => handleChange("issueDate", e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Fecha vencimiento</p>
+            <Input type="date" value={form.dueDate} onChange={(e) => handleChange("dueDate", e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Monto neto</p>
+            <Input type="number" placeholder="Monto neto" value={form.netAmount} onChange={(e) => handleChange("netAmount", e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">IVA (19% automático)</p>
+            <Input type="number" placeholder="IVA (19% automático)" value={form.vatAmount} readOnly />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Monto total</p>
+            <Input type="number" placeholder="Monto total" value={form.totalAmount} readOnly />
+          </div>
           <div className="xl:col-span-3" />
           <Button onClick={handleCreate} disabled={createMutation.isPending} data-testid="button-add-client-payment">
             {createMutation.isPending ? "Guardando..." : "Guardar ingreso"}
@@ -223,8 +257,10 @@ export default function ClientPaymentsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="pl-5">Cliente</TableHead>
+                  <TableHead>RUT</TableHead>
                   <TableHead>Servicio</TableHead>
                   <TableHead>Mes</TableHead>
+                  <TableHead>Emisión</TableHead>
                   <TableHead>Vencimiento</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Neto</TableHead>
@@ -237,8 +273,10 @@ export default function ClientPaymentsPage() {
                 {payments.map((payment) => (
                   <TableRow key={payment.id}>
                     <TableCell className="pl-5 text-sm font-medium">{payment.clientName}</TableCell>
+                    <TableCell className="text-sm">{payment.rut ?? "-"}</TableCell>
                     <TableCell className="text-sm">{payment.serviceItem ?? "-"}</TableCell>
                     <TableCell className="text-sm">{payment.serviceMonth ?? "-"}</TableCell>
+                    <TableCell className="text-sm">{payment.issueDate ?? "-"}</TableCell>
                     <TableCell className="text-sm">{payment.dueDate ?? "-"}</TableCell>
                     <TableCell>
                       <Select

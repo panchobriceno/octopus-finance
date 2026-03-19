@@ -6,6 +6,8 @@ import {
   buildMonthlySummaries,
   combineFinancialTransactions,
   getCurrentMonthKey,
+  getVatProjectionDateForMonth,
+  summarizeClientPaymentsByMonth,
   summarizeWorkspaceTransactions,
   type WorkspaceFilter,
 } from "@/lib/finance";
@@ -39,6 +41,10 @@ export default function CashFlowPage() {
   const financialTransactions = useMemo(
     () => combineFinancialTransactions(transactions, clientPayments),
     [transactions, clientPayments],
+  );
+  const clientPaymentsByMonth = useMemo(
+    () => summarizeClientPaymentsByMonth(clientPayments),
+    [clientPayments],
   );
 
   const monthlySummaries = useMemo(() => {
@@ -79,6 +85,8 @@ export default function CashFlowPage() {
     () => buildDailyProjectionData(financialTransactions, selectedMonth, openingBalance, workspace),
     [financialTransactions, selectedMonth, openingBalance, workspace],
   );
+  const selectedMonthPaidVat = clientPaymentsByMonth[selectedMonth]?.paidVat ?? 0;
+  const selectedMonthVatDueDate = getVatProjectionDateForMonth(selectedMonth);
 
   if (isLoading) {
     return (
@@ -115,6 +123,7 @@ export default function CashFlowPage() {
                 <SelectItem value="all">Consolidado</SelectItem>
                 <SelectItem value="business">Empresa</SelectItem>
                 <SelectItem value="family">Familia</SelectItem>
+                <SelectItem value="dentist">Consulta Dentista</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -217,7 +226,7 @@ export default function CashFlowPage() {
 
       {workspace !== "family" && (
         <Card>
-          <CardContent className="pt-5 grid gap-3 sm:grid-cols-3">
+          <CardContent className="pt-5 grid gap-3 sm:grid-cols-4">
             <div>
               <p className="text-sm text-muted-foreground">Deuda tarjeta</p>
               <p className="text-lg font-semibold tabular-nums mt-1">{formatCLP(workspaceMetrics.creditCardDebt)}</p>
@@ -229,6 +238,11 @@ export default function CashFlowPage() {
             <div>
               <p className="text-sm text-muted-foreground">Transferencias enviadas</p>
               <p className="text-lg font-semibold tabular-nums mt-1">{formatCLP(workspaceMetrics.transfersOut)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">IVA proyectado próximo 20</p>
+              <p className="text-lg font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">{formatCLP(selectedMonthPaidVat)}</p>
+              <p className="text-xs text-muted-foreground mt-1">{selectedMonthVatDueDate}</p>
             </div>
           </CardContent>
         </Card>

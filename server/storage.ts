@@ -82,7 +82,7 @@ export class MemStorage implements IStorage {
 
     for (const cat of defaultCategories) {
       const id = randomUUID();
-      this.categories.set(id, { ...cat, id, color: cat.color ?? null });
+      this.categories.set(id, { ...cat, id, color: cat.color ?? null, workspace: cat.workspace ?? null });
     }
 
     // Seed items — now use categoryId (resolved from category name)
@@ -251,7 +251,7 @@ export class MemStorage implements IStorage {
 
   async createCategory(cat: InsertCategory): Promise<Category> {
     const id = randomUUID();
-    const category: Category = { ...cat, id, color: cat.color ?? null };
+    const category: Category = { ...cat, id, color: cat.color ?? null, workspace: cat.workspace ?? null };
     this.categories.set(id, category);
     return category;
   }
@@ -259,7 +259,7 @@ export class MemStorage implements IStorage {
   async updateCategory(id: string, cat: Partial<InsertCategory>): Promise<Category | undefined> {
     const existing = this.categories.get(id);
     if (!existing) return undefined;
-    const updated = { ...existing, ...cat };
+    const updated = { ...existing, ...cat, workspace: cat.workspace ?? existing.workspace ?? null };
     this.categories.set(id, updated);
     return updated;
   }
