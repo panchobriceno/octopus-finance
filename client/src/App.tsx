@@ -15,6 +15,7 @@ import PnLPage from "@/pages/pnl";
 import ImportDataPage from "@/pages/import-data";
 import CategoriesPage from "@/pages/categories";
 import ItemsManagerPage from "@/pages/items-manager";
+import AccountsPage from "@/pages/accounts";
 import BudgetPage from "@/pages/budget";
 import ClientPaymentsPage from "@/pages/client-payments";
 import SettingsPage from "@/pages/settings";
@@ -33,6 +34,7 @@ function AppRouter() {
       <Route path="/monthly-close" component={MonthlyClosePage} />
       <Route path="/credit-cards" component={CreditCardsPanelPage} />
       <Route path="/categories" component={CategoriesPage} />
+      <Route path="/accounts" component={AccountsPage} />
       <Route path="/items" component={ItemsManagerPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />

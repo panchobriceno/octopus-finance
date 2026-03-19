@@ -23,6 +23,7 @@ export interface Transaction {
   destinationWorkspace?: string | null;
   creditCardName?: string | null;
   installmentCount?: number | null;
+  accountId?: string | null;
   importBatchId?: string | null;
   importBatchLabel?: string | null;
   importedAt?: string | null;
@@ -44,6 +45,7 @@ export interface InsertTransaction {
   destinationWorkspace?: string | null;
   creditCardName?: string | null;
   installmentCount?: number | null;
+  accountId?: string | null;
   importBatchId?: string | null;
   importBatchLabel?: string | null;
   importedAt?: string | null;
@@ -53,6 +55,7 @@ export interface InsertTransaction {
 export interface ClientPayment {
   id: string;
   clientName: string;
+  clientId?: string | null;
   rut: string | null;
   contactName: string | null;
   email: string | null;
@@ -61,6 +64,7 @@ export interface ClientPayment {
   serviceMonth: string | null;
   issueDate: string | null;
   dueDate: string | null;
+  expectedDate?: string | null;
   paymentDate: string | null;
   netAmount: number;
   vatAmount: number;
@@ -72,6 +76,7 @@ export interface ClientPayment {
 
 export interface InsertClientPayment {
   clientName: string;
+  clientId?: string | null;
   rut?: string | null;
   contactName?: string | null;
   email?: string | null;
@@ -80,6 +85,7 @@ export interface InsertClientPayment {
   serviceMonth?: string | null;
   issueDate?: string | null;
   dueDate?: string | null;
+  expectedDate?: string | null;
   paymentDate?: string | null;
   netAmount: number;
   vatAmount: number;
@@ -87,6 +93,60 @@ export interface InsertClientPayment {
   status: string;
   notes?: string | null;
   workspace?: string;
+}
+
+// ── Clients ────────────────────────────────────────────────────
+export interface Client {
+  id: string;
+  name: string;
+  rut: string | null;
+  contactName: string | null;
+  email: string | null;
+  accountManager: string | null;
+  paymentRisk: string; // "low" | "medium" | "high"
+  averageDaysLate: number;
+  notes: string | null;
+  workspace: string; // "business"
+  createdAt: string; // YYYY-MM-DD
+}
+
+export interface InsertClient {
+  name: string;
+  rut?: string | null;
+  contactName?: string | null;
+  email?: string | null;
+  accountManager?: string | null;
+  paymentRisk?: string;
+  averageDaysLate?: number;
+  notes?: string | null;
+  workspace?: string;
+  createdAt?: string;
+}
+
+// ── Accounts ───────────────────────────────────────────────────
+export interface Account {
+  id: string;
+  name: string;
+  bank: string;
+  type: string; // "checking" | "savings" | "credit_card"
+  currentBalance: number;
+  currency: string;
+  workspace: string; // "business" | "family" | "shared"
+  isShared: boolean;
+  notes: string | null;
+  updatedAt: string;
+}
+
+export interface InsertAccount {
+  name: string;
+  bank: string;
+  type: string;
+  currentBalance: number;
+  currency?: string;
+  workspace?: string;
+  isShared?: boolean;
+  notes?: string | null;
+  updatedAt?: string;
 }
 
 // ── Categories ──────────────────────────────────────────────────
@@ -160,6 +220,7 @@ export const insertTransactionSchema = z.object({
   destinationWorkspace: z.string().nullable().optional(),
   creditCardName: z.string().nullable().optional(),
   installmentCount: z.number().int().nullable().optional(),
+  accountId: z.string().nullable().optional(),
   importBatchId: z.string().nullable().optional(),
   importBatchLabel: z.string().nullable().optional(),
   importedAt: z.string().nullable().optional(),
@@ -187,6 +248,7 @@ export const insertBudgetSchema = z.object({
 
 export const insertClientPaymentSchema = z.object({
   clientName: z.string().min(1),
+  clientId: z.string().nullable().optional(),
   rut: z.string().nullable().optional(),
   contactName: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
@@ -195,6 +257,7 @@ export const insertClientPaymentSchema = z.object({
   serviceMonth: z.string().nullable().optional(),
   issueDate: z.string().nullable().optional(),
   dueDate: z.string().nullable().optional(),
+  expectedDate: z.string().nullable().optional(),
   paymentDate: z.string().nullable().optional(),
   netAmount: z.number(),
   vatAmount: z.number(),
@@ -202,4 +265,29 @@ export const insertClientPaymentSchema = z.object({
   status: z.string().min(1),
   notes: z.string().nullable().optional(),
   workspace: z.string().optional(),
+});
+
+export const insertClientSchema = z.object({
+  name: z.string().min(1),
+  rut: z.string().nullable().optional(),
+  contactName: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  accountManager: z.string().nullable().optional(),
+  paymentRisk: z.enum(["low", "medium", "high"]).optional(),
+  averageDaysLate: z.number().optional(),
+  notes: z.string().nullable().optional(),
+  workspace: z.string().optional(),
+  createdAt: z.string().optional(),
+});
+
+export const insertAccountSchema = z.object({
+  name: z.string().min(1),
+  bank: z.string().min(1),
+  type: z.enum(["checking", "savings", "credit_card"]),
+  currentBalance: z.number(),
+  currency: z.string().optional(),
+  workspace: z.enum(["business", "family", "shared"]).optional(),
+  isShared: z.boolean().optional(),
+  notes: z.string().nullable().optional(),
+  updatedAt: z.string().optional(),
 });

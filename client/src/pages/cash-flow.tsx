@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useClientPayments, useTransactions } from "@/lib/hooks";
+import { useAccounts, useClientPayments, useTransactions } from "@/lib/hooks";
 import { formatCLP } from "@/lib/utils";
 import {
   buildDailyProjectionData,
@@ -18,6 +18,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   CartesianGrid,
   Legend,
@@ -30,13 +32,147 @@ import {
   YAxis,
 } from "recharts";
 import { ArrowUpDown } from "lucide-react";
+import type { ClientPayment, Transaction } from "@shared/schema";
+
+type WeeklyCashViewMode = "current-month" | "next-4-weeks";
+
+type WeeklyDetailItem = {
+  id: string;
+  label: string;
+  date: string | null;
+  amount: number;
+  meta?: string | null;
+};
+
+type WeeklyColumn = {
+  key: string;
+  start: Date;
+  end: Date;
+  label: string;
+};
+
+type WeeklyBreakdown = {
+  openingBalance: number;
+  clientIncome: number;
+  plannedExpenses: number;
+  pendingCreditCard: number;
+  endingBalance: number;
+  details: {
+    openingBalance: WeeklyDetailItem[];
+    clientIncome: WeeklyDetailItem[];
+    plannedExpenses: WeeklyDetailItem[];
+    pendingCreditCard: WeeklyDetailItem[];
+    endingBalance: WeeklyDetailItem[];
+  };
+};
+
+function toStartOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function parseIsoDate(value: string | null | undefined) {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function startOfWeekMonday(date: Date) {
+  const normalized = toStartOfDay(date);
+  const day = normalized.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  normalized.setDate(normalized.getDate() + diff);
+  return normalized;
+}
+
+function endOfWeekSunday(date: Date) {
+  const start = startOfWeekMonday(date);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return end;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function addWeeks(date: Date, weeks: number) {
+  return addDays(date, weeks * 7);
+}
+
+function formatShortDate(date: Date) {
+  return new Intl.DateTimeFormat("es-CL", {
+    day: "2-digit",
+    month: "2-digit",
+  }).format(date);
+}
+
+function buildCurrentMonthWeeks(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const firstDay = new Date(year, (month ?? 1) - 1, 1);
+  const lastDay = new Date(year, month ?? 1, 0);
+  const columns: WeeklyColumn[] = [];
+
+  for (
+    let cursor = startOfWeekMonday(firstDay);
+    cursor <= lastDay;
+    cursor = addWeeks(cursor, 1)
+  ) {
+    const start = new Date(cursor);
+    const end = endOfWeekSunday(start);
+    columns.push({
+      key: `${start.toISOString().slice(0, 10)}_${end.toISOString().slice(0, 10)}`,
+      start,
+      end,
+      label: `${formatShortDate(start)} - ${formatShortDate(end)}`,
+    });
+  }
+
+  return columns;
+}
+
+function buildNextFourWeeks() {
+  const today = new Date();
+  const firstWeek = startOfWeekMonday(today);
+  return Array.from({ length: 4 }, (_, index) => {
+    const start = addWeeks(firstWeek, index);
+    const end = endOfWeekSunday(start);
+    return {
+      key: `${start.toISOString().slice(0, 10)}_${end.toISOString().slice(0, 10)}`,
+      start,
+      end,
+      label: `${formatShortDate(start)} - ${formatShortDate(end)}`,
+    };
+  });
+}
+
+function isDateWithinRange(dateValue: string | null | undefined, start: Date, end: Date) {
+  const date = parseIsoDate(dateValue);
+  if (!date) return false;
+  const normalized = toStartOfDay(date);
+  return normalized >= start && normalized <= end;
+}
+
+function matchesWorkspace(workspace: string | undefined | null, selectedWorkspace: WorkspaceFilter) {
+  if (selectedWorkspace === "all") return true;
+  return (workspace ?? "business") === selectedWorkspace;
+}
 
 export default function CashFlowPage() {
   const { data: transactions = [], isLoading } = useTransactions();
   const { data: clientPayments = [] } = useClientPayments();
+  const { data: accounts = [] } = useAccounts();
   const currentMonthKey = getCurrentMonthKey();
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
   const [workspace, setWorkspace] = useState<WorkspaceFilter>("all");
+  const [weeklyViewMode, setWeeklyViewMode] = useState<WeeklyCashViewMode>("current-month");
+  const [detailDialog, setDetailDialog] = useState<{
+    title: string;
+    description: string;
+    items: WeeklyDetailItem[];
+  } | null>(null);
   const { amount: openingBalance, update: updateOpeningBalance } = useOpeningBalance(selectedMonth);
   const financialTransactions = useMemo(
     () => combineFinancialTransactions(transactions, clientPayments),
@@ -87,6 +223,131 @@ export default function CashFlowPage() {
   );
   const selectedMonthPaidVat = clientPaymentsByMonth[selectedMonth]?.paidVat ?? 0;
   const selectedMonthVatDueDate = getVatProjectionDateForMonth(selectedMonth);
+  const totalAccountsBalance = useMemo(
+    () => accounts.reduce((sum, account) => sum + (Number(account.currentBalance) || 0), 0),
+    [accounts],
+  );
+
+  const weeklyColumns = useMemo(
+    () => (weeklyViewMode === "current-month" ? buildCurrentMonthWeeks(selectedMonth) : buildNextFourWeeks()),
+    [weeklyViewMode, selectedMonth],
+  );
+
+  const weeklyBreakdown = useMemo(() => {
+    const relevantClientPayments = clientPayments.filter((payment) => {
+      if (!matchesWorkspace(payment.workspace, workspace)) return false;
+      return payment.status === "receivable" || payment.status === "projected";
+    });
+
+    const relevantTransactions = transactions.filter((transaction) => matchesWorkspace(transaction.workspace, workspace));
+    let rollingOpeningBalance = totalAccountsBalance;
+
+    return weeklyColumns.map((column, index): WeeklyBreakdown => {
+      const clientIncomeItems = relevantClientPayments
+        .filter((payment) => isDateWithinRange(payment.expectedDate ?? payment.dueDate, column.start, column.end))
+        .map((payment) => ({
+          id: payment.id,
+          label: payment.clientName,
+          date: payment.expectedDate ?? payment.dueDate ?? null,
+          amount: payment.totalAmount,
+          meta: payment.serviceItem ?? payment.status,
+        }));
+
+      const plannedExpenseItems = relevantTransactions
+        .filter((transaction) => {
+          const normalizedStatus = transaction.status ?? "pending";
+          return (
+            transaction.subtype === "planned" &&
+            normalizedStatus === "pending" &&
+            transaction.paymentMethod !== "credit_card" &&
+            isDateWithinRange(transaction.date, column.start, column.end)
+          );
+        })
+        .map((transaction) => ({
+          id: transaction.id,
+          label: transaction.name,
+          date: transaction.date,
+          amount: Math.abs(transaction.amount),
+          meta: transaction.category,
+        }));
+
+      const pendingCreditCardItems = relevantTransactions
+        .filter((transaction) => {
+          const normalizedStatus = transaction.status ?? "pending";
+          return (
+            transaction.paymentMethod === "credit_card" &&
+            normalizedStatus === "pending" &&
+            isDateWithinRange(transaction.date, column.start, column.end)
+          );
+        })
+        .map((transaction) => ({
+          id: transaction.id,
+          label: transaction.name,
+          date: transaction.date,
+          amount: Math.abs(transaction.amount),
+          meta: transaction.creditCardName ?? transaction.category,
+        }));
+
+      const clientIncome = clientIncomeItems.reduce((sum, item) => sum + item.amount, 0);
+      const plannedExpenses = plannedExpenseItems.reduce((sum, item) => sum + item.amount, 0);
+      const pendingCreditCard = pendingCreditCardItems.reduce((sum, item) => sum + item.amount, 0);
+      const openingBalanceValue = index === 0 ? totalAccountsBalance : rollingOpeningBalance;
+      const endingBalance = openingBalanceValue + clientIncome - plannedExpenses - pendingCreditCard;
+
+      const details = {
+        openingBalance: [
+          {
+            id: `opening-${column.key}`,
+            label: "Saldo sumado de cuentas",
+            date: column.start.toISOString().slice(0, 10),
+            amount: openingBalanceValue,
+            meta: `${accounts.length} cuenta(s) consideradas`,
+          },
+        ],
+        clientIncome: clientIncomeItems,
+        plannedExpenses: plannedExpenseItems,
+        pendingCreditCard: pendingCreditCardItems,
+        endingBalance: [
+          {
+            id: `ending-${column.key}-opening`,
+            label: "Saldo inicial",
+            date: column.start.toISOString().slice(0, 10),
+            amount: openingBalanceValue,
+          },
+          ...clientIncomeItems.map((item) => ({ ...item, meta: `Ingreso cliente${item.meta ? ` · ${item.meta}` : ""}` })),
+          ...plannedExpenseItems.map((item) => ({ ...item, amount: -item.amount, meta: `Gasto presupuestado${item.meta ? ` · ${item.meta}` : ""}` })),
+          ...pendingCreditCardItems.map((item) => ({ ...item, amount: -item.amount, meta: `Pago tarjeta${item.meta ? ` · ${item.meta}` : ""}` })),
+        ],
+      };
+
+      rollingOpeningBalance = endingBalance;
+
+      return {
+        openingBalance: openingBalanceValue,
+        clientIncome,
+        plannedExpenses,
+        pendingCreditCard,
+        endingBalance,
+        details,
+      };
+    });
+  }, [accounts.length, clientPayments, selectedMonth, totalAccountsBalance, transactions, weeklyColumns, workspace]);
+
+  const openWeeklyDetail = (
+    rowKey: keyof WeeklyBreakdown["details"],
+    weekIndex: number,
+    weekLabel: string,
+    rowLabel: string,
+  ) => {
+    const breakdown = weeklyBreakdown[weekIndex];
+    if (!breakdown) return;
+
+    setDetailDialog({
+      title: `${rowLabel} · ${weekLabel}`,
+      description: "Detalle de movimientos considerados en esa celda semanal.",
+      items: breakdown.details[rowKey],
+    });
+  };
 
   if (isLoading) {
     return (
@@ -249,6 +510,139 @@ export default function CashFlowPage() {
       )}
 
       <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <CardTitle className="text-base font-semibold">Flujo de Caja Semanal</CardTitle>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={weeklyViewMode === "current-month" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setWeeklyViewMode("current-month")}
+                data-testid="button-weekly-current-month"
+              >
+                Mes actual
+              </Button>
+              <Button
+                variant={weeklyViewMode === "next-4-weeks" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setWeeklyViewMode("next-4-weeks")}
+                data-testid="button-weekly-next-4-weeks"
+              >
+                Próximas 4 semanas
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="px-0">
+          <div className="overflow-x-auto">
+            <Table className="zebra-stripe" data-testid="table-cashflow-weekly">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-5 min-w-[220px]">Concepto</TableHead>
+                  {weeklyColumns.map((column) => (
+                    <TableHead key={column.key} className="text-right min-w-[180px]">
+                      {column.label}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell className="pl-5 font-medium text-sm">Saldo inicial</TableCell>
+                  {weeklyBreakdown.map((week, index) => (
+                    <TableCell key={`opening-${weeklyColumns[index]?.key}`} className="text-right">
+                      <Button
+                        variant="ghost"
+                        className="h-auto p-0 text-right font-medium tabular-nums"
+                        onClick={() => openWeeklyDetail("openingBalance", index, weeklyColumns[index].label, "Saldo inicial")}
+                      >
+                        {formatCLP(week.openingBalance)}
+                      </Button>
+                    </TableCell>
+                  ))}
+                </TableRow>
+                <TableRow className="bg-emerald-50/40 dark:bg-emerald-950/10">
+                  <TableCell className="pl-5 font-medium text-sm text-emerald-700 dark:text-emerald-300">
+                    Ingresos clientes
+                  </TableCell>
+                  {weeklyBreakdown.map((week, index) => (
+                    <TableCell key={`income-${weeklyColumns[index]?.key}`} className="text-right">
+                      <Button
+                        variant="ghost"
+                        className="h-auto p-0 text-right font-medium tabular-nums text-emerald-700 dark:text-emerald-300"
+                        onClick={() => openWeeklyDetail("clientIncome", index, weeklyColumns[index].label, "Ingresos clientes")}
+                      >
+                        {formatCLP(week.clientIncome)}
+                      </Button>
+                    </TableCell>
+                  ))}
+                </TableRow>
+                <TableRow className="bg-red-50/40 dark:bg-red-950/10">
+                  <TableCell className="pl-5 font-medium text-sm text-red-700 dark:text-red-300">
+                    Gastos presupuestados
+                  </TableCell>
+                  {weeklyBreakdown.map((week, index) => (
+                    <TableCell key={`planned-${weeklyColumns[index]?.key}`} className="text-right">
+                      <Button
+                        variant="ghost"
+                        className="h-auto p-0 text-right font-medium tabular-nums text-red-700 dark:text-red-300"
+                        onClick={() => openWeeklyDetail("plannedExpenses", index, weeklyColumns[index].label, "Gastos presupuestados")}
+                      >
+                        {formatCLP(week.plannedExpenses)}
+                      </Button>
+                    </TableCell>
+                  ))}
+                </TableRow>
+                <TableRow className="bg-red-50/40 dark:bg-red-950/10">
+                  <TableCell className="pl-5 font-medium text-sm text-red-700 dark:text-red-300">
+                    Pagos tarjeta de crédito
+                  </TableCell>
+                  {weeklyBreakdown.map((week, index) => (
+                    <TableCell key={`cards-${weeklyColumns[index]?.key}`} className="text-right">
+                      <Button
+                        variant="ghost"
+                        className="h-auto p-0 text-right font-medium tabular-nums text-red-700 dark:text-red-300"
+                        onClick={() => openWeeklyDetail("pendingCreditCard", index, weeklyColumns[index].label, "Pagos tarjeta de crédito")}
+                      >
+                        {formatCLP(week.pendingCreditCard)}
+                      </Button>
+                    </TableCell>
+                  ))}
+                </TableRow>
+                <TableRow>
+                  <TableCell className="pl-5 font-semibold text-sm">Saldo final</TableCell>
+                  {weeklyBreakdown.map((week, index) => {
+                    const isNegative = week.endingBalance < 0;
+                    const isLowWarning = !isNegative && week.openingBalance > 0 && week.endingBalance < week.openingBalance * 0.2;
+                    const cellClass = isNegative
+                      ? "text-red-700 dark:text-red-300"
+                      : isLowWarning
+                      ? "text-amber-700 dark:text-amber-300"
+                      : "text-blue-700 dark:text-blue-300";
+
+                    return (
+                      <TableCell
+                        key={`ending-${weeklyColumns[index]?.key}`}
+                        className={`text-right ${isNegative ? "bg-red-50/60 dark:bg-red-950/15" : isLowWarning ? "bg-amber-50/60 dark:bg-amber-950/15" : ""}`}
+                      >
+                        <Button
+                          variant="ghost"
+                          className={`h-auto p-0 text-right font-semibold tabular-nums ${cellClass}`}
+                          onClick={() => openWeeklyDetail("endingBalance", index, weeklyColumns[index].label, "Saldo final")}
+                        >
+                          {formatCLP(week.endingBalance)}
+                        </Button>
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base font-semibold">
             Saldo Diario Ejecutado vs Proyectado
@@ -364,6 +758,48 @@ export default function CashFlowPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={!!detailDialog} onOpenChange={(open) => { if (!open) setDetailDialog(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{detailDialog?.title ?? "Detalle semanal"}</DialogTitle>
+            <DialogDescription>
+              {detailDialog?.description ?? "Detalle de movimientos"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[420px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Detalle</TableHead>
+                  <TableHead>Referencia</TableHead>
+                  <TableHead className="text-right">Monto</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(detailDialog?.items ?? []).map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="text-sm">{item.date ?? "—"}</TableCell>
+                    <TableCell className="text-sm font-medium">{item.label}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{item.meta ?? "—"}</TableCell>
+                    <TableCell className={`text-right text-sm tabular-nums ${item.amount < 0 ? "text-red-700 dark:text-red-300" : ""}`}>
+                      {formatCLP(item.amount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {(detailDialog?.items?.length ?? 0) === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-6">
+                      No hay movimientos en esta celda.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

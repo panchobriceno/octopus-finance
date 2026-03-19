@@ -6,7 +6,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "./queryClient";
 import * as fs from "./firestore";
-import type { Transaction, Category, Item, Budget, ClientPayment } from "@shared/schema";
+import type { Transaction, Category, Item, Budget, ClientPayment, Client, Account } from "@shared/schema";
 
 // ── Transactions ────────────────────────────────────────────────
 export function useTransactions() {
@@ -202,6 +202,90 @@ export function useDeleteClientPayment() {
     mutationFn: (id: string) => fs.deleteClientPayment(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["client-payments"] });
+    },
+  });
+}
+
+// ── Clients ────────────────────────────────────────────────────
+export function useClients() {
+  return useQuery<Client[]>({
+    queryKey: ["clients"],
+    queryFn: () => fs.getClients(),
+  });
+}
+
+export function useCreateClient() {
+  return useMutation({
+    mutationFn: (data: Record<string, any>) =>
+      fs.createClient({
+        paymentRisk: "low",
+        averageDaysLate: 0,
+        workspace: "business",
+        ...data,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+    },
+  });
+}
+
+export function useUpdateClient() {
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, any> }) =>
+      fs.updateClient(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+    },
+  });
+}
+
+export function useDeleteClient() {
+  return useMutation({
+    mutationFn: (id: string) => fs.deleteClient(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+    },
+  });
+}
+
+// ── Accounts ───────────────────────────────────────────────────
+export function useAccounts() {
+  return useQuery<Account[]>({
+    queryKey: ["accounts"],
+    queryFn: () => fs.getAccounts(),
+  });
+}
+
+export function useCreateAccount() {
+  return useMutation({
+    mutationFn: (data: Record<string, any>) =>
+      fs.createAccount({
+        currency: "CLP",
+        workspace: "business",
+        isShared: false,
+        ...data,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+    },
+  });
+}
+
+export function useUpdateAccount() {
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, any> }) =>
+      fs.updateAccount(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+    },
+  });
+}
+
+export function useDeleteAccount() {
+  return useMutation({
+    mutationFn: (id: string) => fs.deleteAccount(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
     },
   });
 }

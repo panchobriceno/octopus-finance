@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useCategories, useBulkCreateTransactions, useCreateCategory, useTransactions } from "@/lib/hooks";
+import { useCategories, useBulkCreateTransactions, useBulkDeleteTransactions, useCreateCategory, useTransactions } from "@/lib/hooks";
 import { getCreditCards } from "@/lib/credit-cards";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Upload, FileText, CheckCircle2, AlertCircle, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCLP } from "@/lib/utils";
@@ -46,6 +56,15 @@ interface ColumnMapping {
 }
 
 type ImportWorkspace = ParsedPreviewRow["workspace"];
+
+type ImportBatchSummary = {
+  id: string;
+  label: string;
+  importedAt: string;
+  cardName: string | null;
+  rows: number;
+  totalAmount: number;
+};
 
 function normalizeText(value: string) {
   return value
@@ -176,6 +195,7 @@ function suggestWorkspace(
   category: string,
   type: "income" | "expense" | "credit_card_payment",
   accountType: AccountType,
+  defaultWorkspace: ImportWorkspace,
 ): ImportWorkspace {
   const normalizedCategory = normalizeText(category);
 
@@ -188,7 +208,7 @@ function suggestWorkspace(
   }
 
   if (accountType === "credit") {
-    return "family" as const;
+    return defaultWorkspace;
   }
 
   return "business" as const;
@@ -325,14 +345,17 @@ export default function ImportDataPage() {
   const [mapping, setMapping] = useState<ColumnMapping>({ date: "", description: "", amount: "", installments: "" });
   const [savedCards, setSavedCards] = useState<string[]>([]);
   const [selectedCard, setSelectedCard] = useState("");
+  const [defaultImportWorkspace, setDefaultImportWorkspace] = useState<ImportWorkspace>("family");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryWorkspace, setNewCategoryWorkspace] = useState<"business" | "family" | "dentist">("family");
+  const [batchToDelete, setBatchToDelete] = useState<ImportBatchSummary | null>(null);
   const { toast } = useToast();
 
   const { data: categories = [] } = useCategories();
   const { data: transactions = [] } = useTransactions();
   const importMutation = useBulkCreateTransactions();
   const createCategoryMutation = useCreateCategory();
+  const deleteImportMutation = useBulkDeleteTransactions();
 
   const existingKeys = useMemo(() => new Set(
     transactions
@@ -375,7 +398,7 @@ export default function ImportDataPage() {
           amount: 0,
           type: "expense",
           category: "Sin categoría",
-          workspace: (accountType === "credit" ? "family" : "business") as ImportWorkspace,
+          workspace: (accountType === "credit" ? defaultImportWorkspace : "business") as ImportWorkspace,
           installmentsLabel: installments.label,
           installmentCount: installments.count,
           duplicate: false,
@@ -401,7 +424,7 @@ export default function ImportDataPage() {
         amount,
         type,
         category: suggestRowCategory(name, type, categories),
-        workspace: suggestWorkspace(suggestRowCategory(name, type, categories), type, accountType),
+        workspace: suggestWorkspace(suggestRowCategory(name, type, categories), type, accountType, defaultImportWorkspace),
         installmentsLabel: installments.label,
         installmentCount: installments.count,
         duplicate: existingKeys.has(key),
@@ -442,7 +465,7 @@ export default function ImportDataPage() {
           category: shouldResuggestCategory
             ? suggestRowCategory(row.name, row.type, categories)
             : (previous.category || suggestRowCategory(row.name, row.type, categories)),
-          workspace: previous.workspace ?? suggestWorkspace(row.category, row.type, accountType),
+          workspace: previous.workspace ?? suggestWorkspace(row.category, row.type, accountType, defaultImportWorkspace),
           installmentsLabel: previous.installmentsLabel || row.installmentsLabel,
           installmentCount: previous.installmentCount ?? row.installmentCount,
           type: preservedType,
@@ -450,7 +473,7 @@ export default function ImportDataPage() {
         };
       }),
     );
-  }, [csvRows, mapping, accountType, existingKeys, ignoredRowIds, categories]);
+  }, [csvRows, mapping, accountType, existingKeys, ignoredRowIds, categories, defaultImportWorkspace]);
 
   const handleImport = () => {
     const importableRows = previewRows.filter((row) => !row.error && !row.duplicate);
@@ -594,7 +617,7 @@ export default function ImportDataPage() {
 
   const updateRowCategory = (index: number, category: string) => {
     setPreviewRows((prev) => prev.map((row, rowIndex) => (
-      rowIndex === index ? { ...row, category, workspace: suggestWorkspace(category, row.type, accountType) } : row
+      rowIndex === index ? { ...row, category, workspace: suggestWorkspace(category, row.type, accountType, defaultImportWorkspace) } : row
     )));
   };
 
@@ -603,7 +626,7 @@ export default function ImportDataPage() {
       const next = prev.map((row, rowIndex) => {
         if (rowIndex !== index) return row;
         const category = suggestRowCategory(row.name, type, categories);
-        return { ...row, type, category, workspace: suggestWorkspace(category, type, accountType) };
+        return { ...row, type, category, workspace: suggestWorkspace(category, type, accountType, defaultImportWorkspace) };
       });
       const seenInFile = new Set<string>();
 
@@ -615,6 +638,22 @@ export default function ImportDataPage() {
         const duplicateAgainstExisting = existingKeys.has(key);
         return { ...row, duplicate: duplicateInFile || duplicateAgainstExisting };
       });
+    });
+  };
+
+  const applyDefaultWorkspaceToAllRows = () => {
+    setPreviewRows((prev) => prev.map((row) => ({
+      ...row,
+      workspace:
+        row.type === "income"
+          ? "business"
+          : row.category === "Empresa"
+            ? "business"
+            : defaultImportWorkspace,
+    })));
+    toast({
+      title: "Ámbito aplicado",
+      description: `Se aplicó ${defaultImportWorkspace === "family" ? "Familia" : defaultImportWorkspace === "business" ? "Empresa" : "Consulta Dentista"} a la cartola.`,
     });
   };
 
@@ -676,6 +715,54 @@ export default function ImportDataPage() {
     getDefaultExpenseCategoryOptions().forEach((name) => names.add(name));
     return Array.from(names).sort((left, right) => left.localeCompare(right, "es"));
   }, [categories]);
+
+  const importBatches = useMemo<ImportBatchSummary[]>(() => {
+    const grouped = new Map<string, ImportBatchSummary>();
+
+    for (const transaction of transactions) {
+      if (!transaction.importBatchId || !transaction.importedAt) continue;
+
+      const current = grouped.get(transaction.importBatchId);
+      if (current) {
+        current.rows += 1;
+        current.totalAmount += transaction.amount;
+        continue;
+      }
+
+      grouped.set(transaction.importBatchId, {
+        id: transaction.importBatchId,
+        label: transaction.importBatchLabel ?? "Importación",
+        importedAt: transaction.importedAt,
+        cardName: transaction.creditCardName ?? null,
+        rows: 1,
+        totalAmount: transaction.amount,
+      });
+    }
+
+    return Array.from(grouped.values()).sort((left, right) => right.importedAt.localeCompare(left.importedAt));
+  }, [transactions]);
+
+  const latestImportBatchId = importBatches[0]?.id ?? null;
+
+  const deleteImportBatch = (batch: ImportBatchSummary) => {
+    const ids = transactions
+      .filter((transaction) => transaction.importBatchId === batch.id)
+      .map((transaction) => transaction.id);
+
+    if (ids.length === 0) return;
+
+    deleteImportMutation.mutate(ids, {
+      onSuccess: (data: { deleted: number }) => {
+        if (batchToDelete?.id === batch.id) {
+          setBatchToDelete(null);
+        }
+        toast({
+          title: "Importación eliminada",
+          description: `${data.deleted} transacciones borradas del sistema.`,
+        });
+      },
+    });
+  };
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
@@ -783,6 +870,22 @@ export default function ImportDataPage() {
             </div>
           ) : null}
 
+          {accountType === "credit" ? (
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Ámbito por defecto</p>
+              <Select value={defaultImportWorkspace} onValueChange={(value) => setDefaultImportWorkspace(value as ImportWorkspace)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="family">Familia</SelectItem>
+                  <SelectItem value="business">Empresa</SelectItem>
+                  <SelectItem value="dentist">Consulta Dentista</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+
           <div>
             <p className="text-sm text-muted-foreground mb-2">Columna fecha</p>
             <Select value={mapping.date} onValueChange={(value) => setMapping((prev) => ({ ...prev, date: value }))}>
@@ -838,6 +941,14 @@ export default function ImportDataPage() {
               </SelectContent>
             </Select>
           </div>
+
+          {accountType === "credit" ? (
+            <div className="md:col-span-2 xl:col-span-4 flex justify-end">
+              <Button variant="outline" onClick={applyDefaultWorkspaceToAllRows}>
+                Aplicar ámbito por defecto a la cartola
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -864,6 +975,72 @@ export default function ImportDataPage() {
           <Button onClick={handleCreateCategory} disabled={createCategoryMutation.isPending}>
             {createCategoryMutation.isPending ? "Creando..." : "Crear categoría"}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Últimas cargas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Carga</TableHead>
+                <TableHead>Tarjeta</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead className="text-right">Filas</TableHead>
+                <TableHead className="text-right">Monto</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {importBatches.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                    Aún no hay cargas registradas.
+                  </TableCell>
+                </TableRow>
+              ) : importBatches.slice(0, 10).map((batch) => {
+                const isLatest = batch.id === latestImportBatchId;
+                return (
+                  <TableRow key={batch.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <span>{batch.label}</span>
+                        {isLatest ? <Badge variant="secondary">Última</Badge> : null}
+                      </div>
+                    </TableCell>
+                    <TableCell>{batch.cardName ?? "-"}</TableCell>
+                    <TableCell>{batch.importedAt.slice(0, 16).replace("T", " ")}</TableCell>
+                    <TableCell className="text-right tabular-nums">{batch.rows}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCLP(batch.totalAmount)}</TableCell>
+                    <TableCell className="text-right">
+                      {isLatest ? (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteImportBatch(batch)}
+                          disabled={deleteImportMutation.isPending}
+                        >
+                          {deleteImportMutation.isPending ? "Eliminando..." : "Deshacer"}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setBatchToDelete(batch)}
+                          disabled={deleteImportMutation.isPending}
+                        >
+                          Eliminar con alerta
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
@@ -905,6 +1082,28 @@ export default function ImportDataPage() {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!batchToDelete} onOpenChange={(open) => { if (!open) setBatchToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar una carga anterior</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta no es la última importación. Si la eliminas, también se borrarán sus transacciones de Resumen, Panel de Tarjetas y demás vistas. Úsalo solo si estás segura de que quieres revertir esa carga antigua.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (batchToDelete) deleteImportBatch(batchToDelete);
+              }}
+            >
+              Eliminar carga
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {previewRows.length > 0 && (
         <Card>

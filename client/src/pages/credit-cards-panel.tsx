@@ -63,6 +63,7 @@ export default function CreditCardsPanelPage() {
   const [editingTransaction, setEditingTransaction] = useState<ReturnType<typeof normalizeTransaction> | null>(null);
   const [deleteTransaction, setDeleteTransaction] = useState<ReturnType<typeof normalizeTransaction> | null>(null);
   const [selectedFutureIds, setSelectedFutureIds] = useState<Set<string>>(new Set());
+  const [batchToDelete, setBatchToDelete] = useState<ImportBatchSummary | null>(null);
   const [editName, setEditName] = useState("");
   const [editCategory, setEditCategory] = useState("");
   const [editAmount, setEditAmount] = useState("");
@@ -293,6 +294,7 @@ export default function CreditCardsPanelPage() {
 
     return Array.from(grouped.values()).sort((left, right) => right.importedAt.localeCompare(left.importedAt));
   }, [normalizedTransactions, selectedCard]);
+  const latestImportBatchId = importBatches[0]?.id ?? null;
 
   useEffect(() => {
     if (!editingTransaction) return;
@@ -621,14 +623,25 @@ export default function CreditCardsPanelPage() {
                   <TableCell className="text-right tabular-nums">{batch.rows}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatCLP(batch.totalAmount)}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleDeleteImportBatch(batch.id)}
-                      disabled={bulkDeleteMutation.isPending}
-                    >
-                      {bulkDeleteMutation.isPending ? "Eliminando..." : "Eliminar lote"}
-                    </Button>
+                    {batch.id === latestImportBatchId ? (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteImportBatch(batch.id)}
+                        disabled={bulkDeleteMutation.isPending}
+                      >
+                        {bulkDeleteMutation.isPending ? "Eliminando..." : "Deshacer"}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setBatchToDelete(batch)}
+                        disabled={bulkDeleteMutation.isPending}
+                      >
+                        Eliminar con alerta
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -894,6 +907,29 @@ export default function CreditCardsPanelPage() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete}>
               Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!batchToDelete} onOpenChange={(open) => { if (!open) setBatchToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar una importación anterior</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta no es la última carga. Si la eliminas, también desaparecerán sus transacciones en Resumen y en las demás vistas. Confirma solo si realmente quieres revertir ese lote antiguo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (batchToDelete) handleDeleteImportBatch(batchToDelete.id);
+                setBatchToDelete(null);
+              }}
+            >
+              Eliminar lote
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

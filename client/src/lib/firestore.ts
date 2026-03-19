@@ -29,6 +29,8 @@ const itemsCol = () => collection(db, "items");
 const budgetsCol = () => collection(db, "budgets");
 const openingBalancesCol = () => collection(db, "openingBalances");
 const clientPaymentsCol = () => collection(db, "clientPayments");
+const clientsCol = () => collection(db, "clients");
+const accountsCol = () => collection(db, "accounts");
 
 // ════════════════════════════════════════════════════════════════
 // TRANSACTIONS
@@ -192,4 +194,70 @@ export async function updateClientPayment(id: string, data: Record<string, any>)
 
 export async function deleteClientPayment(id: string) {
   await deleteDoc(doc(db, "clientPayments", id));
+}
+
+// ════════════════════════════════════════════════════════════════
+// CLIENTS
+// ════════════════════════════════════════════════════════════════
+export async function getClients() {
+  const snap = await getDocs(clientsCol());
+  return snapToArray<any>(snap).sort((a, b) => `${a.name ?? ""}`.localeCompare(`${b.name ?? ""}`));
+}
+
+export async function createClient(data: Record<string, any>) {
+  const payload = {
+    paymentRisk: "low",
+    averageDaysLate: 0,
+    workspace: "business",
+    createdAt: new Date().toISOString().slice(0, 10),
+    rut: null,
+    contactName: null,
+    email: null,
+    accountManager: null,
+    notes: null,
+    ...data,
+  };
+  const ref = await addDoc(clientsCol(), payload);
+  return { id: ref.id, ...payload };
+}
+
+export async function updateClient(id: string, data: Record<string, any>) {
+  const ref = doc(db, "clients", id);
+  await updateDoc(ref, data);
+  return { id, ...data };
+}
+
+export async function deleteClient(id: string) {
+  await deleteDoc(doc(db, "clients", id));
+}
+
+// ════════════════════════════════════════════════════════════════
+// ACCOUNTS
+// ════════════════════════════════════════════════════════════════
+export async function getAccounts() {
+  const snap = await getDocs(accountsCol());
+  return snapToArray<any>(snap).sort((a, b) => `${a.name ?? ""}`.localeCompare(`${b.name ?? ""}`));
+}
+
+export async function createAccount(data: Record<string, any>) {
+  const payload = {
+    currency: "CLP",
+    workspace: "business",
+    isShared: false,
+    notes: null,
+    updatedAt: new Date().toISOString().slice(0, 10),
+    ...data,
+  };
+  const ref = await addDoc(accountsCol(), payload);
+  return { id: ref.id, ...payload };
+}
+
+export async function updateAccount(id: string, data: Record<string, any>) {
+  const ref = doc(db, "accounts", id);
+  await updateDoc(ref, data);
+  return { id, ...data };
+}
+
+export async function deleteAccount(id: string) {
+  await deleteDoc(doc(db, "accounts", id));
 }

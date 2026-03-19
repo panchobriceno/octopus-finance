@@ -1,4 +1,4 @@
-import { LayoutDashboard, ArrowUpDown, FileText, Upload, Settings, Tags, Target, BriefcaseBusiness, ClipboardList, CreditCard } from "lucide-react";
+import { LayoutDashboard, ArrowUpDown, FileText, Upload, Settings, Tags, Target, BriefcaseBusiness, ClipboardList, CreditCard, Landmark } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import {
@@ -28,6 +28,7 @@ const mainNav = [
 const settingsNav = [
   { title: "Branding", url: "/settings", icon: Settings },
   { title: "Categorías", url: "/categories", icon: Tags },
+  { title: "Cuentas", url: "/accounts", icon: Landmark },
   { title: "Items", url: "/items", icon: Settings },
 ];
 

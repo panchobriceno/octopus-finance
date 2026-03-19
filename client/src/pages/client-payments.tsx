@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import {
   useClientPayments,
+  useClients,
+  useCreateClient,
   useCreateClientPayment,
   useDeleteClientPayment,
   useUpdateClientPayment,
@@ -19,8 +21,11 @@ import { BriefcaseBusiness, Plus, Trash2 } from "lucide-react";
 type PaymentStatus = "projected" | "receivable" | "paid" | "cancelled";
 
 const defaultForm = {
+  clientId: "",
   clientName: "",
   rut: "",
+  contactName: "",
+  email: "",
   serviceItem: "",
   serviceMonth: "",
   issueDate: "",
@@ -33,9 +38,15 @@ const defaultForm = {
 
 export default function ClientPaymentsPage() {
   const [form, setForm] = useState(defaultForm);
+  const [showCreateClientForm, setShowCreateClientForm] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientRut, setNewClientRut] = useState("");
+  const [newClientWorkspace, setNewClientWorkspace] = useState("business");
   const { toast } = useToast();
 
+  const { data: clients = [] } = useClients();
   const { data: payments = [], isLoading } = useClientPayments();
+  const createClientMutation = useCreateClient();
   const createMutation = useCreateClientPayment();
   const updateMutation = useUpdateClientPayment();
   const deleteMutation = useDeleteClientPayment();
@@ -77,14 +88,33 @@ export default function ClientPaymentsPage() {
     });
   };
 
-  const handleCreate = () => {
+  const handleClientSelection = (value: string) => {
+    const selectedClient = clients.find((client) => client.id === value);
+    setForm((current) => ({
+      ...current,
+      clientId: value,
+      clientName: selectedClient?.name ?? current.clientName,
+      rut: selectedClient?.rut ?? "",
+      contactName: selectedClient?.contactName ?? "",
+      email: selectedClient?.email ?? "",
+    }));
+  };
+
+  const handleCreate = async () => {
     if (!form.clientName.trim() || !form.netAmount) return;
 
+    let resolvedClientId: string | null = null;
+
+    if (form.clientId) {
+      resolvedClientId = form.clientId;
+    }
+
     createMutation.mutate({
+      clientId: resolvedClientId,
       clientName: form.clientName.trim(),
       rut: form.rut.trim() || null,
-      contactName: null,
-      email: null,
+      contactName: form.contactName.trim() || null,
+      email: form.email.trim() || null,
       accountManager: null,
       serviceItem: form.serviceItem || null,
       serviceMonth: form.serviceMonth || null,
@@ -103,6 +133,37 @@ export default function ClientPaymentsPage() {
         setForm(defaultForm);
       },
     });
+  };
+
+  const handleQuickCreateClient = async () => {
+    if (!newClientName.trim()) {
+      toast({
+        title: "Falta el nombre",
+        description: "Ingresa el nombre del cliente antes de crearlo.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const createdClient = await createClientMutation.mutateAsync({
+      name: newClientName.trim(),
+      rut: newClientRut.trim() || null,
+      workspace: newClientWorkspace,
+    });
+
+    setForm((current) => ({
+      ...current,
+      clientId: createdClient.id,
+      clientName: newClientName.trim(),
+      rut: createdClient.rut ?? "",
+      contactName: createdClient.contactName ?? "",
+      email: createdClient.email ?? "",
+    }));
+    setShowCreateClientForm(false);
+    setNewClientName("");
+    setNewClientRut("");
+    setNewClientWorkspace("business");
+    toast({ title: "Cliente creado" });
   };
 
   const handleStatusChange = (id: string, status: PaymentStatus) => {
@@ -175,11 +236,27 @@ export default function ClientPaymentsPage() {
         <CardContent className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">Cliente</p>
+            <Select value={form.clientId || undefined} onValueChange={handleClientSelection}>
+              <SelectTrigger data-testid="select-client-existing">
+                <SelectValue placeholder="Seleccionar cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((client) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Nombre cliente</p>
             <Input
               placeholder="Cliente"
               value={form.clientName}
               onChange={(e) => handleChange("clientName", e.target.value)}
               data-testid="input-client-name"
+              readOnly={Boolean(form.clientId)}
             />
           </div>
           <div className="space-y-1.5">
@@ -188,6 +265,25 @@ export default function ClientPaymentsPage() {
               placeholder="12.345.678-9"
               value={form.rut}
               onChange={(e) => handleChange("rut", e.target.value)}
+              readOnly={Boolean(form.clientId)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Contacto</p>
+            <Input
+              placeholder="Contacto"
+              value={form.contactName}
+              onChange={(e) => handleChange("contactName", e.target.value)}
+              readOnly={Boolean(form.clientId)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Email</p>
+            <Input
+              placeholder="email@cliente.com"
+              value={form.email}
+              onChange={(e) => handleChange("email", e.target.value)}
+              readOnly={Boolean(form.clientId)}
             />
           </div>
           <div className="space-y-1.5">
@@ -240,10 +336,77 @@ export default function ClientPaymentsPage() {
             <p className="text-xs text-muted-foreground">Monto total</p>
             <Input type="number" placeholder="Monto total" value={form.totalAmount} readOnly />
           </div>
-          <div className="xl:col-span-3" />
-          <Button onClick={handleCreate} disabled={createMutation.isPending} data-testid="button-add-client-payment">
-            {createMutation.isPending ? "Guardando..." : "Guardar ingreso"}
+          <div className="xl:col-span-2" />
+          <Button
+            onClick={handleCreate}
+            disabled={createMutation.isPending || createClientMutation.isPending}
+            data-testid="button-add-client-payment"
+          >
+            {createMutation.isPending || createClientMutation.isPending ? "Guardando..." : "Guardar ingreso"}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Crear cliente nuevo</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Si el cliente no existe en la lista, puedes crearlo rápido aquí mismo sin salir de la página.
+            </p>
+            <Button
+              variant={showCreateClientForm ? "secondary" : "outline"}
+              onClick={() => setShowCreateClientForm((current) => !current)}
+              data-testid="button-toggle-create-client"
+            >
+              {showCreateClientForm ? "Cerrar" : "Crear cliente nuevo"}
+            </Button>
+          </div>
+
+          {showCreateClientForm ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">Nombre</p>
+                <Input
+                  placeholder="Nombre cliente"
+                  value={newClientName}
+                  onChange={(e) => setNewClientName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">RUT</p>
+                <Input
+                  placeholder="12.345.678-9"
+                  value={newClientRut}
+                  onChange={(e) => setNewClientRut(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">Ámbito</p>
+                <Select value={newClientWorkspace} onValueChange={setNewClientWorkspace}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="business">Empresa</SelectItem>
+                    <SelectItem value="family">Familia</SelectItem>
+                    <SelectItem value="dentist">Consulta Dentista</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <Button
+                  onClick={handleQuickCreateClient}
+                  disabled={createClientMutation.isPending}
+                  data-testid="button-create-client-inline"
+                >
+                  {createClientMutation.isPending ? "Creando..." : "Guardar cliente"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
