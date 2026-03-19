@@ -120,7 +120,15 @@ export function isPlannedTransaction(tx: Transaction) {
 
 export function isExecutedTransaction(tx: Transaction) {
   const normalized = normalizeTransaction(tx);
-  return normalized.subtype !== "planned" && normalized.status === "paid";
+  if (normalized.subtype === "planned") return false;
+
+  if (normalized.status === "paid") return true;
+
+  return (
+    normalized.movementType === "expense" &&
+    normalized.paymentMethod === "credit_card" &&
+    normalized.status === "pending"
+  );
 }
 
 export function affectsWorkspace(tx: Transaction, workspace: WorkspaceFilter) {

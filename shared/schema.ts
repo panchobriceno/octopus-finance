@@ -23,6 +23,9 @@ export interface Transaction {
   destinationWorkspace?: string | null;
   creditCardName?: string | null;
   installmentCount?: number | null;
+  importBatchId?: string | null;
+  importBatchLabel?: string | null;
+  importedAt?: string | null;
 }
 
 export interface InsertTransaction {
@@ -41,6 +44,9 @@ export interface InsertTransaction {
   destinationWorkspace?: string | null;
   creditCardName?: string | null;
   installmentCount?: number | null;
+  importBatchId?: string | null;
+  importBatchLabel?: string | null;
+  importedAt?: string | null;
 }
 
 // ── Client Payments / Ingresos clientes ────────────────────────
@@ -154,6 +160,9 @@ export const insertTransactionSchema = z.object({
   destinationWorkspace: z.string().nullable().optional(),
   creditCardName: z.string().nullable().optional(),
   installmentCount: z.number().int().nullable().optional(),
+  importBatchId: z.string().nullable().optional(),
+  importBatchLabel: z.string().nullable().optional(),
+  importedAt: z.string().nullable().optional(),
 });
 
 export const insertCategorySchema = z.object({

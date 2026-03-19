@@ -568,6 +568,10 @@ export default function OverviewPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
+  const [bulkEditCategory, setBulkEditCategory] = useState("__keep__");
+  const [bulkEditWorkspace, setBulkEditWorkspace] = useState("__keep__");
+  const [bulkEditStatus, setBulkEditStatus] = useState("__keep__");
   const [filterFromDate, setFilterFromDate] = useState("");
   const [filterToDate, setFilterToDate] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -722,6 +726,33 @@ export default function OverviewPage() {
       }
       return next;
     });
+  };
+
+  const handleBulkEdit = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    const updateData: Record<string, string> = {};
+    if (bulkEditCategory !== "__keep__") updateData.category = bulkEditCategory;
+    if (bulkEditWorkspace !== "__keep__") updateData.workspace = bulkEditWorkspace;
+    if (bulkEditStatus !== "__keep__") updateData.status = bulkEditStatus;
+
+    if (Object.keys(updateData).length === 0) {
+      toast({
+        title: "Sin cambios",
+        description: "Elige al menos un campo para actualizar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await Promise.all(ids.map((id) => updateMutation.mutateAsync({ id, data: updateData })));
+    setSelectedIds(new Set());
+    setShowBulkEditDialog(false);
+    setBulkEditCategory("__keep__");
+    setBulkEditWorkspace("__keep__");
+    setBulkEditStatus("__keep__");
+    toast({ title: `${ids.length} transacciones actualizadas` });
   };
 
   // ── Form handlers ──
@@ -1205,6 +1236,15 @@ export default function OverviewPage() {
                   Limpiar
                 </Button>
                 <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setShowBulkEditDialog(true)}
+                >
+                  <Pencil className="size-3.5" />
+                  Editar seleccionadas
+                </Button>
+                <Button
                   variant="destructive"
                   size="sm"
                   className="gap-1.5"
@@ -1407,6 +1447,73 @@ export default function OverviewPage() {
               onCancel={() => setEditingTx(null)}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showBulkEditDialog} onOpenChange={setShowBulkEditDialog}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Editar transacciones seleccionadas</DialogTitle>
+            <DialogDescription>
+              Aplica cambios masivos a las transacciones seleccionadas. Los campos en “No cambiar” se mantienen igual.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <p className="text-sm text-muted-foreground">Categoría</p>
+              <Select value={bulkEditCategory} onValueChange={setBulkEditCategory}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__keep__">No cambiar</SelectItem>
+                  {transactionCategoryOptions.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              <div className="grid gap-2">
+                <p className="text-sm text-muted-foreground">Ámbito</p>
+                <Select value={bulkEditWorkspace} onValueChange={setBulkEditWorkspace}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__keep__">No cambiar</SelectItem>
+                    <SelectItem value="business">Empresa</SelectItem>
+                    <SelectItem value="family">Familia</SelectItem>
+                    <SelectItem value="dentist">Consulta Dentista</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <p className="text-sm text-muted-foreground">Estado</p>
+                <Select value={bulkEditStatus} onValueChange={setBulkEditStatus}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__keep__">No cambiar</SelectItem>
+                    <SelectItem value="pending">Pendiente</SelectItem>
+                    <SelectItem value="paid">Pagado</SelectItem>
+                    <SelectItem value="cancelled">Cancelado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowBulkEditDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleBulkEdit} disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Guardando..." : `Actualizar ${selectedIds.size}`}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

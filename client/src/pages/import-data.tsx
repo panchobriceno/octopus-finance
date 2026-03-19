@@ -31,6 +31,7 @@ interface ParsedPreviewRow {
   amount: number;
   type: "income" | "expense" | "credit_card_payment";
   category: string;
+  workspace: "business" | "family" | "dentist";
   installmentsLabel: string;
   installmentCount: number | null;
   duplicate: boolean;
@@ -43,6 +44,8 @@ interface ColumnMapping {
   amount: string;
   installments: string;
 }
+
+type ImportWorkspace = ParsedPreviewRow["workspace"];
 
 function normalizeText(value: string) {
   return value
@@ -163,6 +166,51 @@ function suggestRowType(name: string, fallbackType: "income" | "expense") {
   }
 
   return fallbackType;
+}
+
+function getDefaultExpenseCategoryOptions() {
+  return SUGGESTED_FAMILY_EXPENSE_CATEGORIES;
+}
+
+function suggestWorkspace(
+  category: string,
+  type: "income" | "expense" | "credit_card_payment",
+  accountType: AccountType,
+): ImportWorkspace {
+  const normalizedCategory = normalizeText(category);
+
+  if (type === "income") {
+    return "business" as const;
+  }
+
+  if (normalizedCategory === "empresa") {
+    return "business" as const;
+  }
+
+  if (accountType === "credit") {
+    return "family" as const;
+  }
+
+  return "business" as const;
+}
+
+function categoryMatchesType(
+  categoryName: string,
+  type: "income" | "expense" | "credit_card_payment",
+  categories: { name: string; type: string }[],
+) {
+  if (!categoryName || categoryName === "Sin categoría") return false;
+
+  if (type === "credit_card_payment") {
+    return true;
+  }
+
+  const matched = categories.find((category) => category.name === categoryName);
+  if (!matched) {
+    return type !== "income";
+  }
+
+  return matched.type === type;
 }
 
 function splitCsvLine(line: string, delimiter: string) {
@@ -310,7 +358,7 @@ export default function ImportDataPage() {
       return;
     }
 
-    const nextRows: ParsedPreviewRow[] = csvRows.map((row, index) => {
+    const nextRows = csvRows.map((row, index): ParsedPreviewRow | null => {
       const rowId = `${index}`;
       if (ignoredRowIds.has(rowId)) return null;
 
@@ -327,6 +375,7 @@ export default function ImportDataPage() {
           amount: 0,
           type: "expense",
           category: "Sin categoría",
+          workspace: (accountType === "credit" ? "family" : "business") as ImportWorkspace,
           installmentsLabel: installments.label,
           installmentCount: installments.count,
           duplicate: false,
@@ -334,8 +383,13 @@ export default function ImportDataPage() {
         };
       }
 
-      const normalizedAmount = accountType === "credit" ? rawAmount * -1 : rawAmount;
-      const inferredType = normalizedAmount >= 0 ? "income" : "expense";
+      const normalizedAmount = accountType === "credit" ? rawAmount : rawAmount;
+      const inferredType =
+        accountType === "credit"
+          ? "expense"
+          : normalizedAmount >= 0
+            ? "income"
+            : "expense";
       const type = suggestRowType(name, inferredType);
       const amount = Math.abs(normalizedAmount);
       const key = `${date}__${name.toLowerCase()}__${type}__${amount}`;
@@ -347,6 +401,7 @@ export default function ImportDataPage() {
         amount,
         type,
         category: suggestRowCategory(name, type, categories),
+        workspace: suggestWorkspace(suggestRowCategory(name, type, categories), type, accountType),
         installmentsLabel: installments.label,
         installmentCount: installments.count,
         duplicate: existingKeys.has(key),
@@ -372,16 +427,22 @@ export default function ImportDataPage() {
         const previous = current.find((item) => item.id === row.id);
         if (!previous) return row;
 
-        const preservedType = previous.error ? row.type : previous.type;
+        const preservedType = row.type;
         const duplicate = existingKeys.has(
           `${row.date}__${row.name.trim().toLowerCase()}__${preservedType}__${row.amount}`,
         );
+        const shouldResuggestCategory =
+          previous.type !== row.type ||
+          !previous.category ||
+          previous.category === "Sin categoría" ||
+          !categoryMatchesType(previous.category, row.type, categories);
 
         return {
           ...row,
-          category: previous.category === "Sin categoría"
+          category: shouldResuggestCategory
             ? suggestRowCategory(row.name, row.type, categories)
             : (previous.category || suggestRowCategory(row.name, row.type, categories)),
+          workspace: previous.workspace ?? suggestWorkspace(row.category, row.type, accountType),
           installmentsLabel: previous.installmentsLabel || row.installmentsLabel,
           installmentCount: previous.installmentCount ?? row.installmentCount,
           type: preservedType,
@@ -412,17 +473,23 @@ export default function ImportDataPage() {
       return;
     }
 
+    const batchId = `import-${Date.now()}`;
+    const importedAt = new Date().toISOString();
+    const batchLabel = accountType === "credit"
+      ? `${fileName || "Cartola"} · ${selectedCard.trim()}`
+      : `${fileName || "Importación CSV"} · Cuenta bancaria`;
+
     const mapped = importableRows.map((row) => ({
       name: row.name,
-      category: row.category,
+      category: row.category || suggestRowCategory(row.name, row.type, categories),
       amount: row.amount,
       type: row.type,
       date: row.date,
       notes: null,
       subtype: "actual" as const,
-      status: "paid" as const,
+      status: accountType === "credit" && row.type === "expense" ? "pending" as const : "paid" as const,
       itemId: null,
-      workspace: "business" as const,
+      workspace: row.workspace,
       movementType:
         row.type === "income"
           ? "income" as const
@@ -436,6 +503,9 @@ export default function ImportDataPage() {
       destinationWorkspace: null,
       creditCardName: accountType === "credit" ? selectedCard.trim() : null,
       installmentCount: accountType === "credit" && row.type === "expense" ? row.installmentCount : null,
+      importBatchId: batchId,
+      importBatchLabel: batchLabel,
+      importedAt,
     }));
 
     importMutation.mutate(mapped, {
@@ -524,7 +594,7 @@ export default function ImportDataPage() {
 
   const updateRowCategory = (index: number, category: string) => {
     setPreviewRows((prev) => prev.map((row, rowIndex) => (
-      rowIndex === index ? { ...row, category } : row
+      rowIndex === index ? { ...row, category, workspace: suggestWorkspace(category, row.type, accountType) } : row
     )));
   };
 
@@ -532,7 +602,8 @@ export default function ImportDataPage() {
     setPreviewRows((prev) => {
       const next = prev.map((row, rowIndex) => {
         if (rowIndex !== index) return row;
-        return { ...row, type, category: suggestRowCategory(row.name, type, categories) };
+        const category = suggestRowCategory(row.name, type, categories);
+        return { ...row, type, category, workspace: suggestWorkspace(category, type, accountType) };
       });
       const seenInFile = new Set<string>();
 
@@ -545,6 +616,12 @@ export default function ImportDataPage() {
         return { ...row, duplicate: duplicateInFile || duplicateAgainstExisting };
       });
     });
+  };
+
+  const updateRowWorkspace = (index: number, workspace: "business" | "family" | "dentist") => {
+    setPreviewRows((prev) => prev.map((row, rowIndex) => (
+      rowIndex === index ? { ...row, workspace } : row
+    )));
   };
 
   const removeRow = (index: number) => {
@@ -596,7 +673,7 @@ export default function ImportDataPage() {
         .map((category) => category.name),
     );
 
-    SUGGESTED_FAMILY_EXPENSE_CATEGORIES.forEach((name) => names.add(name));
+    getDefaultExpenseCategoryOptions().forEach((name) => names.add(name));
     return Array.from(names).sort((left, right) => left.localeCompare(right, "es"));
   }, [categories]);
 
@@ -860,6 +937,7 @@ export default function ImportDataPage() {
                     <TableHead>Cuotas</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Categoría</TableHead>
+                    <TableHead>Ámbito</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
                     <TableHead className="text-right pr-5">Acciones</TableHead>
@@ -868,6 +946,10 @@ export default function ImportDataPage() {
                 <TableBody>
                   {previewRows.map((row, index) => (
                     <TableRow key={row.id}>
+                      {(() => {
+                        const effectiveCategory = row.category || suggestRowCategory(row.name, row.type, categories);
+                        return (
+                          <>
                       <TableCell className="pl-5 tabular-nums text-sm">{row.date}</TableCell>
                       <TableCell className="text-sm font-medium">
                         <div className="space-y-1">
@@ -893,26 +975,50 @@ export default function ImportDataPage() {
                         </Select>
                       </TableCell>
                       <TableCell>
+                        {(() => {
+                          const categoryOptionsForRow = row.type === "income"
+                            ? categories
+                                .filter((category) => category.type === "income")
+                                .map((category) => category.name)
+                            : expenseCategoryOptions;
+                          const mergedCategoryOptions = effectiveCategory && !categoryOptionsForRow.includes(effectiveCategory)
+                            ? [effectiveCategory, ...categoryOptionsForRow]
+                            : categoryOptionsForRow;
+
+                          return (
                         <Select
-                          value={row.category}
+                          value={effectiveCategory}
                           onValueChange={(value) => updateRowCategory(index, value)}
                           disabled={Boolean(row.error)}
                         >
                           <SelectTrigger className="w-44 h-8 text-xs">
-                            <SelectValue />
+                            <SelectValue placeholder={effectiveCategory || "Seleccionar categoría"} />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Sin categoría">Sin categoría</SelectItem>
-                            {(row.type === "income"
-                              ? categories
-                                  .filter((category) => category.type === "income")
-                                  .map((category) => category.name)
-                              : expenseCategoryOptions
-                            ).map((categoryName) => (
+                            {mergedCategoryOptions.map((categoryName) => (
                               <SelectItem key={categoryName} value={categoryName}>
                                 {categoryName}
                               </SelectItem>
                             ))}
+                          </SelectContent>
+                          </Select>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={row.workspace}
+                          onValueChange={(value) => updateRowWorkspace(index, value as "business" | "family" | "dentist")}
+                          disabled={Boolean(row.error)}
+                        >
+                          <SelectTrigger className="w-40 h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="business">Empresa</SelectItem>
+                            <SelectItem value="family">Familia</SelectItem>
+                            <SelectItem value="dentist">Consulta Dentista</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -945,6 +1051,9 @@ export default function ImportDataPage() {
                           <X className="size-3.5 text-muted-foreground" />
                         </Button>
                       </TableCell>
+                          </>
+                        );
+                      })()}
                     </TableRow>
                   ))}
                 </TableBody>
