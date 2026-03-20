@@ -329,6 +329,7 @@ export function buildCreditCardInstallmentProjectionTransactions(transactions: T
     creditCardName: normalized.creditCardName ?? null,
     installmentCount: null,
     accountId: null,
+    sourceClientPaymentId: null,
   } satisfies Transaction));
   });
 }
@@ -359,6 +360,7 @@ export function clientPaymentToIncomeTransaction(payment: ClientPayment): Transa
     destinationWorkspace: null,
     creditCardName: null,
     accountId: null,
+    sourceClientPaymentId: null,
   };
 }
 
@@ -391,6 +393,7 @@ export function buildVatProjectionTransactions(clientPayments: ClientPayment[]):
     destinationWorkspace: null,
     creditCardName: null,
     accountId: null,
+    sourceClientPaymentId: null,
   }));
 }
 

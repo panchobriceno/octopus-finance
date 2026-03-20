@@ -1058,6 +1058,58 @@ export default function OverviewPage() {
   const currentMonthPaidVat = clientPaymentsByMonth[currentMonthKey]?.paidVat ?? 0;
   const nextVatDueDate = getVatProjectionDateForMonth(currentMonthKey);
   const businessAvailableAfterVat = businessMetrics.cashFlow - currentMonthPaidVat;
+  const currentMonthRealIncome = useMemo(() => {
+    const paidClientIncome = filteredClientPayments.reduce((sum, payment) => {
+      const referenceDate = payment.paymentDate ?? payment.expectedDate ?? payment.dueDate ?? payment.issueDate ?? "";
+      if (payment.status !== "paid" || !referenceDate.startsWith(currentMonthKey)) return sum;
+      return sum + payment.netAmount;
+    }, 0);
+
+    const actualIncomeTransactions = filteredFinancialTransactions.reduce((sum, tx) => {
+      if (
+        tx.type !== "income" ||
+        tx.subtype !== "actual" ||
+        tx.status !== "paid" ||
+        tx.sourceClientPaymentId ||
+        !tx.date.startsWith(currentMonthKey)
+      ) {
+        return sum;
+      }
+
+      return sum + tx.amount;
+    }, 0);
+
+    return paidClientIncome + actualIncomeTransactions;
+  }, [currentMonthKey, filteredClientPayments, filteredFinancialTransactions]);
+  const currentMonthProjectedIncome = useMemo(
+    () =>
+      filteredClientPayments.reduce((sum, payment) => {
+        const referenceDate = payment.expectedDate ?? payment.dueDate ?? payment.issueDate ?? "";
+        if (!referenceDate.startsWith(currentMonthKey)) return sum;
+        if (
+          payment.status !== "invoiced" &&
+          payment.status !== "receivable" &&
+          payment.status !== "projected"
+        ) {
+          return sum;
+        }
+
+        return sum + payment.netAmount;
+      }, 0),
+    [currentMonthKey, filteredClientPayments],
+  );
+  const currentMonthExpenseTotal = useMemo(
+    () =>
+      filteredFinancialTransactions.reduce((sum, tx) => {
+        if (!tx.date.startsWith(currentMonthKey)) return sum;
+        return sum + getTransactionExpenseImpact(tx, "all");
+      }, 0),
+    [currentMonthKey, filteredFinancialTransactions],
+  );
+  const currentMonthMargin =
+    currentMonthRealIncome > 0
+      ? ((currentMonthRealIncome - currentMonthExpenseTotal) / currentMonthRealIncome) * 100
+      : 0;
   const summaryOpeningBalance = selectedAccount ? (selectedAccount.currentBalance ?? 0) : openingBalance;
   const currentMonthSummary = useMemo(() => {
     const openingBalances = {
@@ -1145,12 +1197,27 @@ export default function OverviewPage() {
           id: "kpi-ingresos" as DashboardCardId,
           className: "",
           content: (
-            <KPICard
-              title="Ingresos"
-              value={formatCLP(totalIncome)}
-              icon={TrendingUp}
-              color="#10b981"
-            />
+            <Card data-testid="kpi-ingresos">
+              <CardContent className="pt-5 pb-4 px-5">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Ingresos</p>
+                    <p className="text-xl font-semibold tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">
+                      {formatCLP(currentMonthRealIncome)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Proyectado: {formatCLP(currentMonthProjectedIncome)}
+                    </p>
+                  </div>
+                  <div
+                    className="p-2.5 rounded-lg"
+                    style={{ backgroundColor: `${"#10b981"}15` }}
+                  >
+                    <TrendingUp className="size-5" style={{ color: "#10b981" }} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           ),
         },
         "kpi-gastos": {
@@ -1172,8 +1239,8 @@ export default function OverviewPage() {
             <KPICard
               title="Margen"
               value={
-                totalIncome > 0
-                  ? `${((balance / totalIncome) * 100).toFixed(1)}%`
+                currentMonthRealIncome > 0
+                  ? `${currentMonthMargin.toFixed(1)}%`
                   : "0%"
               }
               icon={DollarSign}
@@ -1362,12 +1429,16 @@ export default function OverviewPage() {
       businessMetrics.cashFlow,
       businessMetrics.creditCardDebt,
       currentMonthKey,
+      currentMonthMargin,
+      currentMonthProjectedIncome,
       currentMonthPaidVat,
+      currentMonthRealIncome,
       currentMonthSummary.plannedIncome,
       currentMonthSummary.projectedEndingBalance,
       currentMonthSummary.realEndingBalance,
       currentMonthSummary.realExpenses,
       currentMonthSummary.realIncome,
+      currentMonthExpenseTotal,
       dentistMetrics.cashFlow,
       filteredSavingsBalance,
       familyMetrics.cashFlow,

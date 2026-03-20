@@ -2,12 +2,12 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore/lite";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDFkNHHxpcRNB_2n_JaDJxD0sCI_cY2skA",
-  authDomain: "my-cash-flow-bcb24.firebaseapp.com",
-  projectId: "my-cash-flow-bcb24",
-  storageBucket: "my-cash-flow-bcb24.firebasestorage.app",
-  messagingSenderId: "660839296094",
-  appId: "1:660839296094:f0e9e5bd5a9518cf",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);
