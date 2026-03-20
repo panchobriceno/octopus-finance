@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
-import type { ClientPayment } from "@shared/schema";
+import type { Account, ClientPayment } from "@shared/schema";
 import {
   useClientPayments,
   useClients,
+  useAccounts,
   useCreateClient,
   useCreateClientPayment,
+  useCreateTransaction,
   useDeleteClientPayment,
+  useMigrateClientPaymentStatuses,
   useUpdateClientPayment,
 } from "@/lib/hooks";
 import { formatCLP } from "@/lib/utils";
@@ -27,10 +30,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { BriefcaseBusiness, Check, Pencil, Plus, Trash2, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
-type PaymentStatus = "projected" | "receivable" | "paid" | "cancelled";
+type PaymentStatus = "projected" | "receivable" | "invoiced" | "paid" | "cancelled";
 
 const defaultForm = {
   clientId: "",
@@ -65,6 +69,24 @@ type EditForm = {
   notes: string;
 };
 
+type MarkPaidContext =
+  | {
+      mode: "create";
+      formData: typeof defaultForm;
+    }
+  | {
+      mode: "update";
+      payment: ClientPayment;
+      updatedFields: Partial<ClientPayment>;
+    };
+
+type MarkPaidDraft = {
+  netAmount: string;
+  paymentDate: string;
+  accountId: string;
+  context: MarkPaidContext;
+};
+
 function calculateVatAndTotal(netAmount: string) {
   const net = Number.parseFloat(netAmount || "0");
   const safeNet = Number.isFinite(net) ? net : 0;
@@ -73,6 +95,26 @@ function calculateVatAndTotal(netAmount: string) {
     vatAmount: String(vat),
     totalAmount: String(safeNet + vat),
   };
+}
+
+function normalizeText(value: string | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function findDefaultSantanderOmAccount(accounts: Account[]) {
+  return (
+    accounts.find((account) => {
+      const name = normalizeText(account.name);
+      return (
+        (account.type === "checking" || account.type === "savings") &&
+        name.includes("santander om")
+      );
+    }) ?? null
+  );
 }
 
 function buildEditForm(payment: ClientPayment): EditForm {
@@ -98,6 +140,7 @@ export default function ClientPaymentsPage() {
   const [form, setForm] = useState(defaultForm);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [markPaidDraft, setMarkPaidDraft] = useState<MarkPaidDraft | null>(null);
   const [showCreateClientForm, setShowCreateClientForm] = useState(false);
   const [newClientName, setNewClientName] = useState("");
   const [newClientRut, setNewClientRut] = useState("");
@@ -107,11 +150,36 @@ export default function ClientPaymentsPage() {
   const { toast } = useToast();
 
   const { data: clients = [] } = useClients();
+  const { data: accounts = [] } = useAccounts();
   const { data: payments = [], isLoading } = useClientPayments();
   const createClientMutation = useCreateClient();
   const createMutation = useCreateClientPayment();
+  const createTransactionMutation = useCreateTransaction();
   const updateMutation = useUpdateClientPayment();
   const deleteMutation = useDeleteClientPayment();
+  const migrateStatusesMutation = useMigrateClientPaymentStatuses();
+
+  const activeBankAccounts = useMemo(
+    () =>
+      accounts.filter((account) => {
+        const isBankType = account.type === "checking" || account.type === "savings";
+        const isActive = (account as Account & { isActive?: boolean }).isActive ?? true;
+        return isBankType && isActive;
+      }),
+    [accounts],
+  );
+  const defaultSantanderOmAccount = useMemo(
+    () => findDefaultSantanderOmAccount(activeBankAccounts),
+    [activeBankAccounts],
+  );
+  const hasLegacyStatuses = useMemo(
+    () =>
+      payments.some((payment) => {
+        const normalizedStatus = normalizeText(payment.status);
+        return normalizedStatus === "cobrado";
+      }),
+    [payments],
+  );
 
   const summary = useMemo(() => payments.reduce((acc, payment) => {
     if (payment.status === "cancelled") return acc;
@@ -121,6 +189,7 @@ export default function ClientPaymentsPage() {
     acc.totalGross += payment.totalAmount;
 
     if (payment.status === "paid") acc.paid += payment.netAmount;
+    if (payment.status === "invoiced") acc.invoiced += payment.netAmount;
     if (payment.status === "receivable") acc.receivable += payment.netAmount;
     if (payment.status === "projected") acc.projected += payment.netAmount;
 
@@ -130,6 +199,7 @@ export default function ClientPaymentsPage() {
     totalVat: 0,
     totalGross: 0,
     paid: 0,
+    invoiced: 0,
     receivable: 0,
     projected: 0,
   }), [payments]);
@@ -214,6 +284,22 @@ export default function ClientPaymentsPage() {
       resolvedClientId = form.clientId;
     }
 
+    if (form.status === "paid") {
+      setMarkPaidDraft({
+        netAmount: form.netAmount || "0",
+        paymentDate: new Date().toISOString().slice(0, 10),
+        accountId: defaultSantanderOmAccount?.id ?? activeBankAccounts[0]?.id ?? "",
+        context: {
+          mode: "create",
+          formData: {
+            ...form,
+            clientId: resolvedClientId ?? "",
+          },
+        },
+      });
+      return;
+    }
+
     createMutation.mutate({
       clientId: resolvedClientId,
       clientName: form.clientName.trim(),
@@ -225,7 +311,8 @@ export default function ClientPaymentsPage() {
       serviceMonth: form.serviceMonth || null,
       issueDate: form.issueDate || null,
       dueDate: form.dueDate || null,
-      paymentDate: form.status === "paid" ? new Date().toISOString().slice(0, 10) : null,
+      expectedDate: form.dueDate || null,
+      paymentDate: null,
       netAmount: Number.parseFloat(form.netAmount || "0"),
       vatAmount: Number.parseFloat(form.vatAmount || "0"),
       totalAmount: Number.parseFloat(form.totalAmount || "0"),
@@ -271,12 +358,60 @@ export default function ClientPaymentsPage() {
     toast({ title: "Cliente creado" });
   };
 
-  const handleStatusChange = (id: string, status: PaymentStatus) => {
+  const createSettlementTransaction = async ({
+    clientPaymentId,
+    clientName,
+    netAmount,
+    paymentDate,
+    accountId,
+  }: {
+    clientPaymentId: string;
+    clientName: string;
+    netAmount: number;
+    paymentDate: string;
+    accountId: string;
+  }) => {
+    await createTransactionMutation.mutateAsync({
+      name: clientName,
+      type: "income",
+      subtype: "actual",
+      status: "paid",
+      amount: netAmount,
+      category: "Ingresos Clientes",
+      workspace: "business",
+      accountId,
+      paymentMethod: "bank_account",
+      date: paymentDate,
+      sourceClientPaymentId: clientPaymentId,
+      movementType: "income",
+      notes: null,
+      itemId: null,
+      destinationWorkspace: null,
+      creditCardName: null,
+      installmentCount: null,
+    });
+  };
+
+  const handleStatusChange = (payment: ClientPayment, status: PaymentStatus) => {
+    if (status === "paid" && payment.status !== "paid") {
+      setMarkPaidDraft({
+        netAmount: String(payment.netAmount ?? 0),
+        paymentDate: new Date().toISOString().slice(0, 10),
+        accountId: defaultSantanderOmAccount?.id ?? activeBankAccounts[0]?.id ?? "",
+        context: {
+          mode: "update",
+          payment,
+          updatedFields: {},
+        },
+      });
+      return;
+    }
+
     updateMutation.mutate({
-      id,
+      id: payment.id,
       data: {
         status,
-        paymentDate: status === "paid" ? new Date().toISOString().slice(0, 10) : null,
+        paymentDate: status === "paid" ? payment.paymentDate ?? new Date().toISOString().slice(0, 10) : null,
       },
     });
   };
@@ -322,6 +457,33 @@ export default function ClientPaymentsPage() {
   const handleSaveEdit = async () => {
     if (!editingPaymentId || !editForm || !editForm.clientName.trim()) return;
 
+    const existingPayment = payments.find((payment) => payment.id === editingPaymentId);
+    if (editForm.status === "paid" && existingPayment && existingPayment.status !== "paid") {
+      setMarkPaidDraft({
+        netAmount: editForm.netAmount || "0",
+        paymentDate: new Date().toISOString().slice(0, 10),
+        accountId: defaultSantanderOmAccount?.id ?? activeBankAccounts[0]?.id ?? "",
+        context: {
+          mode: "update",
+          payment: existingPayment,
+          updatedFields: {
+            clientId: editForm.clientId || null,
+            clientName: editForm.clientName.trim(),
+            rut: editForm.rut.trim() || null,
+            contactName: editForm.contactName.trim() || null,
+            email: editForm.email.trim() || null,
+            serviceItem: editForm.serviceItem.trim() || null,
+            serviceMonth: editForm.serviceMonth.trim() || null,
+            issueDate: editForm.issueDate || null,
+            dueDate: editForm.dueDate || null,
+            expectedDate: editForm.dueDate || null,
+            notes: editForm.notes.trim() || null,
+          },
+        },
+      });
+      return;
+    }
+
     await updateMutation.mutateAsync({
       id: editingPaymentId,
       data: {
@@ -334,16 +496,99 @@ export default function ClientPaymentsPage() {
         serviceMonth: editForm.serviceMonth.trim() || null,
         issueDate: editForm.issueDate || null,
         dueDate: editForm.dueDate || null,
+        expectedDate: editForm.dueDate || null,
         netAmount: Number.parseFloat(editForm.netAmount || "0"),
         vatAmount: Number.parseFloat(editForm.vatAmount || "0"),
         totalAmount: Number.parseFloat(editForm.totalAmount || "0"),
         status: editForm.status,
+        paymentDate: editForm.status === "paid" ? new Date().toISOString().slice(0, 10) : null,
         notes: editForm.notes.trim() || null,
       },
     });
 
     toast({ title: "Ingreso cliente actualizado" });
     cancelEdit();
+  };
+
+  const handleConfirmMarkPaid = async () => {
+    if (!markPaidDraft) return;
+
+    const netAmount = Number.parseFloat(markPaidDraft.netAmount || "0");
+    const safeNetAmount = Number.isFinite(netAmount) ? netAmount : 0;
+    const { vatAmount, totalAmount } = calculateVatAndTotal(String(safeNetAmount));
+
+    if (!markPaidDraft.accountId) {
+      toast({
+        title: "Falta la cuenta destino",
+        description: "Selecciona la cuenta donde entró el pago del cliente.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (markPaidDraft.context.mode === "create") {
+      const sourceForm = markPaidDraft.context.formData;
+      const createdPayment = await createMutation.mutateAsync({
+        clientId: sourceForm.clientId || null,
+        clientName: sourceForm.clientName.trim(),
+        rut: sourceForm.rut.trim() || null,
+        contactName: sourceForm.contactName.trim() || null,
+        email: sourceForm.email.trim() || null,
+        accountManager: null,
+        serviceItem: sourceForm.serviceItem || null,
+        serviceMonth: sourceForm.serviceMonth || null,
+        issueDate: sourceForm.issueDate || null,
+        dueDate: sourceForm.dueDate || null,
+        expectedDate: sourceForm.dueDate || null,
+        paymentDate: markPaidDraft.paymentDate,
+        netAmount: safeNetAmount,
+        vatAmount: Number.parseFloat(vatAmount),
+        totalAmount: Number.parseFloat(totalAmount),
+        status: "paid",
+        notes: null,
+        workspace: "business",
+      });
+
+      await createSettlementTransaction({
+        clientPaymentId: createdPayment.id,
+        clientName: sourceForm.clientName.trim(),
+        netAmount: safeNetAmount,
+        paymentDate: markPaidDraft.paymentDate,
+        accountId: markPaidDraft.accountId,
+      });
+
+      toast({ title: "Pago de cliente registrado" });
+      setForm(defaultForm);
+      setMarkPaidDraft(null);
+      return;
+    }
+
+    const { payment, updatedFields } = markPaidDraft.context;
+    const updatedClientName = String(updatedFields.clientName ?? payment.clientName).trim();
+
+    await updateMutation.mutateAsync({
+      id: payment.id,
+      data: {
+        ...updatedFields,
+        netAmount: safeNetAmount,
+        vatAmount: Number.parseFloat(vatAmount),
+        totalAmount: Number.parseFloat(totalAmount),
+        status: "paid",
+        paymentDate: markPaidDraft.paymentDate,
+      },
+    });
+
+    await createSettlementTransaction({
+      clientPaymentId: payment.id,
+      clientName: updatedClientName,
+      netAmount: safeNetAmount,
+      paymentDate: markPaidDraft.paymentDate,
+      accountId: markPaidDraft.accountId,
+    });
+
+    toast({ title: "Pago de cliente registrado" });
+    cancelEdit();
+    setMarkPaidDraft(null);
   };
 
   if (isLoading) {
@@ -358,12 +603,31 @@ export default function ClientPaymentsPage() {
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
-      <div className="flex items-center gap-3">
-        <BriefcaseBusiness className="size-5 text-primary" />
-        <h2 className="text-xl font-semibold">Ingresos Clientes</h2>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <BriefcaseBusiness className="size-5 text-primary" />
+          <h2 className="text-xl font-semibold">Ingresos Clientes</h2>
+        </div>
+        {hasLegacyStatuses ? (
+          <Button
+            variant="outline"
+            onClick={() =>
+              migrateStatusesMutation.mutate(undefined, {
+                onSuccess: ({ updated }) =>
+                  toast({
+                    title: "Estados históricos migrados",
+                    description: `${updated} registros pasaron a Facturado.`,
+                  }),
+              })
+            }
+            disabled={migrateStatusesMutation.isPending}
+          >
+            {migrateStatusesMutation.isPending ? "Migrando..." : "Migrar estados históricos"}
+          </Button>
+        ) : null}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="pt-5">
             <p className="text-sm text-muted-foreground">Neto total</p>
@@ -372,9 +636,17 @@ export default function ClientPaymentsPage() {
         </Card>
         <Card>
           <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Cobrado</p>
+            <p className="text-sm text-muted-foreground">Pagado</p>
             <p className="text-xl font-semibold tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">
               {formatCLP(summary.paid)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <p className="text-sm text-muted-foreground">Facturado</p>
+            <p className="text-xl font-semibold tabular-nums mt-1 text-violet-700 dark:text-violet-300">
+              {formatCLP(summary.invoiced)}
             </p>
           </CardContent>
         </Card>
@@ -473,8 +745,9 @@ export default function ClientPaymentsPage() {
               <SelectContent>
                 <SelectItem value="projected">Proyectado</SelectItem>
                 <SelectItem value="receivable">Por cobrar</SelectItem>
-                <SelectItem value="paid">Cobrado</SelectItem>
-                <SelectItem value="cancelled">Cancelado</SelectItem>
+                <SelectItem value="invoiced">Facturado</SelectItem>
+                <SelectItem value="paid">Pagado</SelectItem>
+                <SelectItem value="cancelled">Anulado</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -717,17 +990,18 @@ export default function ClientPaymentsPage() {
                             <SelectTrigger className="w-36 h-8 text-xs">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="projected">Proyectado</SelectItem>
-                              <SelectItem value="receivable">Por cobrar</SelectItem>
-                              <SelectItem value="paid">Cobrado</SelectItem>
-                              <SelectItem value="cancelled">Cancelado</SelectItem>
-                            </SelectContent>
-                          </Select>
+                              <SelectContent>
+                                <SelectItem value="projected">Proyectado</SelectItem>
+                                <SelectItem value="receivable">Por cobrar</SelectItem>
+                                <SelectItem value="invoiced">Facturado</SelectItem>
+                                <SelectItem value="paid">Pagado</SelectItem>
+                                <SelectItem value="cancelled">Anulado</SelectItem>
+                              </SelectContent>
+                            </Select>
                         ) : (
                           <Select
                             value={payment.status}
-                            onValueChange={(value) => handleStatusChange(payment.id, value as PaymentStatus)}
+                            onValueChange={(value) => handleStatusChange(payment, value as PaymentStatus)}
                           >
                             <SelectTrigger className="w-36 h-8 text-xs">
                               <SelectValue />
@@ -735,8 +1009,9 @@ export default function ClientPaymentsPage() {
                             <SelectContent>
                               <SelectItem value="projected">Proyectado</SelectItem>
                               <SelectItem value="receivable">Por cobrar</SelectItem>
-                              <SelectItem value="paid">Cobrado</SelectItem>
-                              <SelectItem value="cancelled">Cancelado</SelectItem>
+                              <SelectItem value="invoiced">Facturado</SelectItem>
+                              <SelectItem value="paid">Pagado</SelectItem>
+                              <SelectItem value="cancelled">Anulado</SelectItem>
                             </SelectContent>
                           </Select>
                         )}
@@ -795,9 +1070,17 @@ export default function ClientPaymentsPage() {
                           ) : (
                             <>
                               <Badge variant={
-                                payment.status === "paid" ? "secondary" : payment.status === "projected" ? "outline" : "outline"
+                                payment.status === "paid" ? "secondary" : payment.status === "invoiced" ? "default" : "outline"
                               }>
-                                {payment.status === "paid" ? "Cobrado" : payment.status === "receivable" ? "Por cobrar" : payment.status === "projected" ? "Proyectado" : "Cancelado"}
+                                {payment.status === "paid"
+                                  ? "Pagado"
+                                  : payment.status === "invoiced"
+                                    ? "Facturado"
+                                    : payment.status === "receivable"
+                                      ? "Por cobrar"
+                                      : payment.status === "projected"
+                                        ? "Proyectado"
+                                        : "Anulado"}
                               </Badge>
                               <Button
                                 variant="ghost"
@@ -857,6 +1140,86 @@ export default function ClientPaymentsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={Boolean(markPaidDraft)} onOpenChange={(open) => !open && setMarkPaidDraft(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Marcar cliente como pagado</DialogTitle>
+            <DialogDescription>
+              Confirma el monto que entró y la cuenta destino donde se recibió el pago.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Monto neto</p>
+              <Input
+                type="number"
+                value={markPaidDraft?.netAmount ?? ""}
+                onChange={(e) =>
+                  setMarkPaidDraft((current) => (current ? { ...current, netAmount: e.target.value } : current))
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">IVA (19%)</p>
+              <Input
+                value={formatCLP(Number(calculateVatAndTotal(markPaidDraft?.netAmount ?? "0").vatAmount))}
+                readOnly
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Total</p>
+              <Input
+                value={formatCLP(Number(calculateVatAndTotal(markPaidDraft?.netAmount ?? "0").totalAmount))}
+                readOnly
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Fecha de pago</p>
+              <Input
+                type="date"
+                value={markPaidDraft?.paymentDate ?? ""}
+                onChange={(e) =>
+                  setMarkPaidDraft((current) => (current ? { ...current, paymentDate: e.target.value } : current))
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Cuenta destino</p>
+              <Select
+                value={markPaidDraft?.accountId ?? ""}
+                onValueChange={(value) =>
+                  setMarkPaidDraft((current) => (current ? { ...current, accountId: value } : current))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar cuenta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeBankAccounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name} — {account.bank}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMarkPaidDraft(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmMarkPaid}
+              disabled={createMutation.isPending || updateMutation.isPending || createTransactionMutation.isPending}
+            >
+              {createMutation.isPending || updateMutation.isPending || createTransactionMutation.isPending ? "Guardando..." : "Confirmar pago"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

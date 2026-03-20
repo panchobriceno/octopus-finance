@@ -217,6 +217,15 @@ export function useDeleteClientPayment() {
   });
 }
 
+export function useMigrateClientPaymentStatuses() {
+  return useMutation({
+    mutationFn: () => fs.migrateClientPaymentStatuses(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client-payments"] });
+    },
+  });
+}
+
 // ── Clients ────────────────────────────────────────────────────
 export function useClients() {
   return useQuery<Client[]>({

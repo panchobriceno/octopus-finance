@@ -103,7 +103,15 @@ export function getNextMonthKey(monthKey: string) {
 }
 
 export function getClientPaymentReferenceDate(payment: ClientPayment) {
-  return payment.paymentDate ?? payment.dueDate ?? payment.issueDate ?? null;
+  if (payment.status === "paid") {
+    return payment.paymentDate ?? payment.expectedDate ?? payment.dueDate ?? payment.issueDate ?? null;
+  }
+
+  return payment.expectedDate ?? payment.dueDate ?? payment.issueDate ?? null;
+}
+
+function isGeneratedFromClientPayment(tx: Transaction) {
+  return Boolean(tx.sourceClientPaymentId);
 }
 
 export function getVatProjectionDateForMonth(monthKey: string) {
@@ -181,18 +189,21 @@ function isMatchingScope(tx: Transaction, workspace: WorkspaceFilter) {
 
 export function getTransactionIncomeImpact(tx: Transaction, workspace: WorkspaceFilter = "all") {
   const normalized = normalizeTransaction(tx);
+  if (isGeneratedFromClientPayment(normalized)) return 0;
   if (!isMatchingScope(normalized, workspace)) return 0;
   return normalized.movementType === "income" ? normalized.amount : 0;
 }
 
 export function getTransactionExpenseImpact(tx: Transaction, workspace: WorkspaceFilter = "all") {
   const normalized = normalizeTransaction(tx);
+  if (isGeneratedFromClientPayment(normalized)) return 0;
   if (!isMatchingScope(normalized, workspace)) return 0;
   return normalized.movementType === "expense" ? normalized.amount : 0;
 }
 
 export function getTransactionCashFlowImpact(tx: Transaction, workspace: WorkspaceFilter = "all") {
   const normalized = normalizeTransaction(tx);
+  if (isGeneratedFromClientPayment(normalized)) return 0;
 
   if (normalized.movementType === "transfer") {
     if (workspace === "all") return 0;
@@ -224,6 +235,7 @@ export function getTransactionCreditCardDebtImpact(
   accounts: Account[] = [],
 ) {
   const normalized = normalizeTransaction(tx);
+  if (isGeneratedFromClientPayment(normalized)) return 0;
 
   if (accounts.length > 0) {
     const matchedCreditCardAccount = findMatchingCreditCardAccount(normalized.creditCardName, accounts);

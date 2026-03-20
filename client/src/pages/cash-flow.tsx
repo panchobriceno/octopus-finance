@@ -236,7 +236,7 @@ export default function CashFlowPage() {
   const weeklyBreakdown = useMemo(() => {
     const relevantClientPayments = clientPayments.filter((payment) => {
       if (!matchesWorkspace(payment.workspace, workspace)) return false;
-      return payment.status === "receivable" || payment.status === "projected";
+      return payment.status === "receivable" || payment.status === "projected" || payment.status === "invoiced";
     });
 
     const relevantTransactions = transactions.filter((transaction) => matchesWorkspace(transaction.workspace, workspace));

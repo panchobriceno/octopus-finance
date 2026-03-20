@@ -24,6 +24,7 @@ export interface Transaction {
   creditCardName?: string | null;
   installmentCount?: number | null;
   accountId?: string | null;
+  sourceClientPaymentId?: string | null;
   importBatchId?: string | null;
   importBatchLabel?: string | null;
   importedAt?: string | null;
@@ -46,6 +47,7 @@ export interface InsertTransaction {
   creditCardName?: string | null;
   installmentCount?: number | null;
   accountId?: string | null;
+  sourceClientPaymentId?: string | null;
   importBatchId?: string | null;
   importBatchLabel?: string | null;
   importedAt?: string | null;
@@ -69,7 +71,7 @@ export interface ClientPayment {
   netAmount: number;
   vatAmount: number;
   totalAmount: number;
-  status: string; // "projected" | "receivable" | "paid" | "cancelled"
+  status: string; // "projected" | "receivable" | "invoiced" | "paid" | "cancelled"
   notes: string | null;
   workspace?: string; // business
 }
@@ -227,6 +229,7 @@ export const insertTransactionSchema = z.object({
   creditCardName: z.string().nullable().optional(),
   installmentCount: z.number().int().nullable().optional(),
   accountId: z.string().nullable().optional(),
+  sourceClientPaymentId: z.string().nullable().optional(),
   importBatchId: z.string().nullable().optional(),
   importBatchLabel: z.string().nullable().optional(),
   importedAt: z.string().nullable().optional(),

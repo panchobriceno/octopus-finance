@@ -283,6 +283,33 @@ export async function deleteClientPayment(id: string) {
   await deleteDoc(doc(db, "clientPayments", id));
 }
 
+export async function migrateClientPaymentStatuses() {
+  const snap = await getDocs(clientPaymentsCol());
+  const legacyPayments = snapToArray<any>(snap).filter((payment) => {
+    const normalizedStatus = String(payment.status ?? "").toLowerCase();
+    return normalizedStatus === "paid" || normalizedStatus === "cobrado";
+  });
+
+  if (legacyPayments.length === 0) {
+    return { updated: 0 };
+  }
+
+  for (let index = 0; index < legacyPayments.length; index += 450) {
+    const chunk = legacyPayments.slice(index, index + 450);
+    const batch = writeBatch(db);
+
+    for (const payment of chunk) {
+      batch.update(doc(db, "clientPayments", payment.id), {
+        status: "invoiced",
+      });
+    }
+
+    await batch.commit();
+  }
+
+  return { updated: legacyPayments.length };
+}
+
 // ════════════════════════════════════════════════════════════════
 // CLIENTS
 // ════════════════════════════════════════════════════════════════
