@@ -300,3 +300,21 @@ export function useDeleteAccount() {
     },
   });
 }
+
+// ── Dashboard Preferences ──────────────────────────────────────
+export function useDashboardPreferences() {
+  return useQuery<{ cardOrder?: string[]; hiddenCards?: string[] } | null>({
+    queryKey: ["dashboard-preferences"],
+    queryFn: () => fs.getDashboardPreferences(),
+  });
+}
+
+export function useUpdateDashboardPreferences() {
+  return useMutation({
+    mutationFn: (data: { cardOrder: string[]; hiddenCards: string[] }) =>
+      fs.updateDashboardPreferences(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dashboard-preferences"] });
+    },
+  });
+}

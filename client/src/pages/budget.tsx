@@ -1,4 +1,7 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   useTransactions,
   useBudgets,
@@ -22,12 +25,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Calculator, Save, TrendingUp, TrendingDown, Target, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { Calculator, GripVertical, Save, TrendingUp, TrendingDown, Target, Trash2 } from "lucide-react";
 import { normalizeTransaction, summarizeClientPaymentsByMonth } from "@/lib/finance";
 import { getFamilyIncomeJaviMap, setFamilyIncomeJavi } from "@/lib/family-income";
 
 type BudgetWorkspace = "business" | "family";
-const BUDGET_ORDER_STORAGE_KEY = "octopus_budget_order";
 const ITEM_BUDGET_PREFIX = "item:";
 
 // ── Month names ──────────────────────────────────────────────────
@@ -38,6 +40,10 @@ const MONTH_NAMES = [
 
 function getBudgetStateKey(monthKey: string, workspace: BudgetWorkspace, groupName: string) {
   return `${monthKey}::${workspace}::${groupName}`;
+}
+
+function getBudgetScopeKey(monthKey: string, workspace: BudgetWorkspace) {
+  return `${monthKey}::${workspace}`;
 }
 
 function getItemBudgetKey(itemId: string) {
@@ -65,6 +71,40 @@ function matchesWorkspace(category: Category, workspace: BudgetWorkspace) {
   return true;
 }
 
+function SortableBudgetRow({
+  id,
+  children,
+}: {
+  id: string;
+  children: ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  return (
+    <TableRow
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.7 : 1,
+      }}
+    >
+      {children}
+      <TableCell className="text-right pr-5">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 cursor-grab active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-4 text-muted-foreground" />
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 // ── Component ────────────────────────────────────────────────────
 export default function BudgetPage() {
   const now = new Date();
@@ -79,7 +119,8 @@ export default function BudgetPage() {
   const [savingGroup, setSavingGroup] = useState<string | null>(null);
   const [newBudgetCategory, setNewBudgetCategory] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [budgetOrderMap, setBudgetOrderMap] = useState<Record<string, string[]>>({});
+  const [draftGroupMap, setDraftGroupMap] = useState<Record<string, string[]>>({});
+  const [manualOrderMap, setManualOrderMap] = useState<Record<string, string[]>>({});
   const { toast } = useToast();
 
   const { data: transactions = [], isLoading: txLoading } = useTransactions();
@@ -96,6 +137,8 @@ export default function BudgetPage() {
   const [familyIncomeJaviMap, setFamilyIncomeJaviMap] = useState<Record<string, number>>({});
 
   const selectedMonthKey = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+  const selectedScopeKey = getBudgetScopeKey(selectedMonthKey, selectedWorkspace);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -103,18 +146,6 @@ export default function BudgetPage() {
     sync();
     window.addEventListener("octopus-family-income-updated", sync);
     return () => window.removeEventListener("octopus-family-income-updated", sync);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(BUDGET_ORDER_STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Record<string, string[]>;
-      setBudgetOrderMap(parsed);
-    } catch {
-      setBudgetOrderMap({});
-    }
   }, []);
 
   const expenseCategories = useMemo(
@@ -211,8 +242,14 @@ export default function BudgetPage() {
 
   const effectiveBudgetByGroup = useMemo(() => {
     const map: Record<string, Budget | undefined> = {};
+    const candidateGroups = new Set<string>([
+      ...groupNames,
+      ...periodBudgets.map((budget) => budget.categoryGroup),
+      ...(draftGroupMap[selectedScopeKey] ?? []),
+      ...(manualOrderMap[selectedScopeKey] ?? []),
+    ]);
 
-    for (const group of groupNames) {
+    for (const group of Array.from(candidateGroups)) {
       const exact = budgetByGroup[group];
       if (exact) {
         map[group] = exact;
@@ -236,7 +273,7 @@ export default function BudgetPage() {
     }
 
     return map;
-  }, [allBudgets, budgetByGroup, groupNames, selectedMonth, selectedWorkspace, selectedYear]);
+  }, [allBudgets, budgetByGroup, draftGroupMap, groupNames, manualOrderMap, periodBudgets, selectedMonth, selectedScopeKey, selectedWorkspace, selectedYear]);
 
   // Filter transactions: subtype = "actual", expense, matching year/month
   const periodTransactions = useMemo(() => {
@@ -258,13 +295,13 @@ export default function BudgetPage() {
   const visibleGroupNames = useMemo(() => {
     const names = new Set<string>();
     const prefix = `${selectedMonthKey}::${selectedWorkspace}::`;
-    const savedOrder = budgetOrderMap[selectedWorkspace] ?? [];
+    const draftGroups = draftGroupMap[selectedScopeKey] ?? [];
 
     for (const budget of periodBudgets) {
       names.add(budget.categoryGroup);
     }
 
-    for (const group of savedOrder) {
+    for (const group of draftGroups) {
       names.add(group);
     }
 
@@ -277,24 +314,50 @@ export default function BudgetPage() {
     }
 
     return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [budgetOrderMap, inputValues, periodBudgets, selectedMonthKey, selectedWorkspace]);
+  }, [draftGroupMap, inputValues, periodBudgets, selectedMonthKey, selectedScopeKey, selectedWorkspace]);
 
   const orderedVisibleGroupNames = useMemo(() => {
-    const savedOrder = budgetOrderMap[selectedWorkspace] ?? [];
-    const orderIndex = new Map(savedOrder.map((name, index) => [name, index]));
+    const manualOrder = manualOrderMap[selectedScopeKey];
+    if (manualOrder?.length) {
+      const inManualOrder = manualOrder.filter((group) => visibleGroupNames.includes(group));
+      const missing = visibleGroupNames.filter((group) => !inManualOrder.includes(group));
+      return [...inManualOrder, ...missing];
+    }
 
     return [...visibleGroupNames].sort((left, right) => {
-      const leftIndex = orderIndex.get(left);
-      const rightIndex = orderIndex.get(right);
+      const leftOrder = effectiveBudgetByGroup[left]?.order;
+      const rightOrder = effectiveBudgetByGroup[right]?.order;
 
-      if (leftIndex === undefined && rightIndex === undefined) {
-        return left.localeCompare(right);
+      if (leftOrder != null && rightOrder != null && leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
       }
-      if (leftIndex === undefined) return 1;
-      if (rightIndex === undefined) return -1;
-      return leftIndex - rightIndex;
+      if (leftOrder != null && rightOrder == null) return -1;
+      if (leftOrder == null && rightOrder != null) return 1;
+      return left.localeCompare(right);
     });
-  }, [budgetOrderMap, selectedWorkspace, visibleGroupNames]);
+  }, [effectiveBudgetByGroup, manualOrderMap, selectedScopeKey, visibleGroupNames]);
+
+  const sortableIdByGroup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const group of orderedVisibleGroupNames) {
+      const budget = budgetByGroup[group] ?? effectiveBudgetByGroup[group];
+      map.set(group, budget?.id ?? `draft:${group}`);
+    }
+    return map;
+  }, [budgetByGroup, effectiveBudgetByGroup, orderedVisibleGroupNames]);
+
+  const groupBySortableId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [group, sortableId] of Array.from(sortableIdByGroup.entries())) {
+      map.set(sortableId, group);
+    }
+    return map;
+  }, [sortableIdByGroup]);
+
+  const sortableBudgetRowIds = useMemo(
+    () => orderedVisibleGroupNames.map((group) => sortableIdByGroup.get(group) ?? `draft:${group}`),
+    [orderedVisibleGroupNames, sortableIdByGroup],
+  );
 
   const availableCategoryOptions = useMemo(
     () => [
@@ -419,6 +482,7 @@ export default function BudgetPage() {
     const rawValue = inputValues[stateKey];
     const amount = parseFloat(rawValue || "0");
     if (isNaN(amount) || amount < 0) return;
+    const order = orderedVisibleGroupNames.indexOf(groupName);
 
     setSavingGroup(groupName);
 
@@ -433,6 +497,7 @@ export default function BudgetPage() {
             dayOfMonth: recurringValues[stateKey]
               ? Math.max(1, Math.min(31, Number(dayOfMonthValues[stateKey] || 1)))
               : null,
+            order,
           },
         });
       } else {
@@ -446,6 +511,7 @@ export default function BudgetPage() {
           dayOfMonth: recurringValues[stateKey]
             ? Math.max(1, Math.min(31, Number(dayOfMonthValues[stateKey] || 1)))
             : null,
+          order,
         });
       }
       toast({
@@ -540,12 +606,14 @@ export default function BudgetPage() {
       ...current,
       [stateKey]: current[stateKey] ?? "",
     }));
-    const nextOrder = [...orderedVisibleGroupNames, newBudgetCategory];
-    const nextMap = { ...budgetOrderMap, [selectedWorkspace]: nextOrder };
-    setBudgetOrderMap(nextMap);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(BUDGET_ORDER_STORAGE_KEY, JSON.stringify(nextMap));
-    }
+    setDraftGroupMap((current) => ({
+      ...current,
+      [selectedScopeKey]: [...(current[selectedScopeKey] ?? []), newBudgetCategory],
+    }));
+    setManualOrderMap((current) => ({
+      ...current,
+      [selectedScopeKey]: [...orderedVisibleGroupNames, newBudgetCategory],
+    }));
     setNewBudgetCategory("");
   };
 
@@ -579,6 +647,14 @@ export default function BudgetPage() {
       ...current,
       [stateKey]: current[stateKey] ?? "",
     }));
+    setDraftGroupMap((current) => ({
+      ...current,
+      [selectedScopeKey]: [...(current[selectedScopeKey] ?? []), trimmedName],
+    }));
+    setManualOrderMap((current) => ({
+      ...current,
+      [selectedScopeKey]: [...orderedVisibleGroupNames, trimmedName],
+    }));
     setNewCategoryName("");
     toast({
       title: alreadyExists ? "Categoría agregada al presupuesto" : "Categoría creada",
@@ -608,12 +684,14 @@ export default function BudgetPage() {
       delete next[stateKey];
       return next;
     });
-    const nextOrder = orderedVisibleGroupNames.filter((name) => name !== groupName);
-    const nextMap = { ...budgetOrderMap, [selectedWorkspace]: nextOrder };
-    setBudgetOrderMap(nextMap);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(BUDGET_ORDER_STORAGE_KEY, JSON.stringify(nextMap));
-    }
+    setDraftGroupMap((current) => ({
+      ...current,
+      [selectedScopeKey]: (current[selectedScopeKey] ?? []).filter((name) => name !== groupName),
+    }));
+    setManualOrderMap((current) => ({
+      ...current,
+      [selectedScopeKey]: orderedVisibleGroupNames.filter((name) => name !== groupName),
+    }));
 
     toast({
       title: "Categoría quitada del presupuesto",
@@ -621,21 +699,38 @@ export default function BudgetPage() {
     });
   };
 
-  const handleMoveBudgetCategory = (groupName: string, direction: "up" | "down") => {
+  const handleDragEnd = async ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+
     const currentOrder = [...orderedVisibleGroupNames];
-    const currentIndex = currentOrder.indexOf(groupName);
-    if (currentIndex === -1) return;
+    const activeGroup = groupBySortableId.get(String(active.id));
+    const overGroup = groupBySortableId.get(String(over.id));
+    if (!activeGroup || !overGroup) return;
 
-    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= currentOrder.length) return;
+    const oldIndex = currentOrder.indexOf(activeGroup);
+    const newIndex = currentOrder.indexOf(overGroup);
+    if (oldIndex === -1 || newIndex === -1) return;
 
-    const [moved] = currentOrder.splice(currentIndex, 1);
-    currentOrder.splice(targetIndex, 0, moved);
+    const nextOrder = arrayMove(currentOrder, oldIndex, newIndex);
+    setManualOrderMap((current) => ({ ...current, [selectedScopeKey]: nextOrder }));
 
-    const nextMap = { ...budgetOrderMap, [selectedWorkspace]: currentOrder };
-    setBudgetOrderMap(nextMap);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(BUDGET_ORDER_STORAGE_KEY, JSON.stringify(nextMap));
+    try {
+      await Promise.all(
+        nextOrder.map((group, index) => {
+          const budget = budgetByGroup[group] ?? effectiveBudgetByGroup[group];
+          if (!budget?.id) return Promise.resolve();
+          return updateBudgetMutation.mutateAsync({
+            id: budget.id,
+            data: { order: index },
+          });
+        }),
+      );
+    } catch {
+      toast({
+        title: "No se pudo guardar el nuevo orden",
+        description: "El orden visual no se pudo persistir. Intenta de nuevo.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -916,11 +1011,14 @@ export default function BudgetPage() {
                   <TableHead className="text-right">Real Ejecutado</TableHead>
                   <TableHead className="text-right">Diferencia</TableHead>
                   <TableHead className="text-right">Ejecución</TableHead>
-                  <TableHead className="text-right pr-5">Acción</TableHead>
+                  <TableHead className="text-right">Acción</TableHead>
+                  <TableHead className="text-right pr-5">Orden</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orderedVisibleGroupNames.map((group, index) => {
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={sortableBudgetRowIds} strategy={verticalListSortingStrategy}>
+                {orderedVisibleGroupNames.map((group) => {
                   const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, group);
                   const budget = getVisibleBudgetAmount(group);
                   const actual = actualByGroup[group] ?? 0;
@@ -932,7 +1030,7 @@ export default function BudgetPage() {
                     selectedMonth !== (effectiveBudgetByGroup[group]?.month ?? selectedMonth);
 
                   return (
-                    <TableRow key={group} data-testid={`row-comparison-${group.replace(/\s+/g, "-").toLowerCase()}`}>
+                    <SortableBudgetRow key={group} id={sortableIdByGroup.get(group) ?? `draft:${group}`}>
                       <TableCell className="pl-5">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -1026,28 +1124,8 @@ export default function BudgetPage() {
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right pr-5">
+                      <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                            onClick={() => handleMoveBudgetCategory(group, "up")}
-                            disabled={index === 0}
-                            data-testid={`button-move-up-${group.replace(/\s+/g, "-").toLowerCase()}`}
-                          >
-                            <ArrowUp className="size-4 text-muted-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                            onClick={() => handleMoveBudgetCategory(group, "down")}
-                            disabled={index === orderedVisibleGroupNames.length - 1}
-                            data-testid={`button-move-down-${group.replace(/\s+/g, "-").toLowerCase()}`}
-                          >
-                            <ArrowDown className="size-4 text-muted-foreground" />
-                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -1071,9 +1149,11 @@ export default function BudgetPage() {
                           </Button>
                         </div>
                       </TableCell>
-                    </TableRow>
+                    </SortableBudgetRow>
                   );
                 })}
+                  </SortableContext>
+                </DndContext>
                 <TableRow className="border-t-2 font-semibold">
                   <TableCell className="pl-5 text-sm">{selectedWorkspace === "family" ? "Subtotal" : "Total"}</TableCell>
                   <TableCell className="tabular-nums text-sm">{formatCLP(totalBudget)}</TableCell>
@@ -1104,6 +1184,7 @@ export default function BudgetPage() {
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
+                  <TableCell />
                   <TableCell className="pr-5" />
                 </TableRow>
                 {selectedWorkspace === "family" && (
@@ -1121,6 +1202,8 @@ export default function BudgetPage() {
                           data-testid="input-budget-family-income-javi"
                         />
                       </TableCell>
+                      <TableCell />
+                      <TableCell />
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(familyIncomeJavi)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm text-blue-700 dark:text-blue-300">
                         {formatCLP(familyIncomeJavi)}
@@ -1130,11 +1213,14 @@ export default function BudgetPage() {
                           Ingreso
                         </Badge>
                       </TableCell>
+                      <TableCell />
                       <TableCell className="pr-5" />
                     </TableRow>
                     <TableRow>
                       <TableCell className="pl-5 font-medium text-sm">Ingreso Agencia</TableCell>
                       <TableCell className="tabular-nums text-sm">{formatCLP(businessRemainder)}</TableCell>
+                      <TableCell />
+                      <TableCell />
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(businessRemainder)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm text-blue-700 dark:text-blue-300">
                         {formatCLP(businessRemainder)}
@@ -1144,11 +1230,14 @@ export default function BudgetPage() {
                           Ingreso
                         </Badge>
                       </TableCell>
+                      <TableCell />
                       <TableCell className="pr-5" />
                     </TableRow>
                     <TableRow className="font-semibold">
                       <TableCell className="pl-5 text-sm">Total ingresos</TableCell>
                       <TableCell className="tabular-nums text-sm">{formatCLP(familyIncomeTotal)}</TableCell>
+                      <TableCell />
+                      <TableCell />
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(familyIncomeTotal)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm text-blue-700 dark:text-blue-300">
                         {formatCLP(familyIncomeTotal)}
@@ -1158,6 +1247,7 @@ export default function BudgetPage() {
                           Ingreso
                         </Badge>
                       </TableCell>
+                      <TableCell />
                       <TableCell className="pr-5" />
                     </TableRow>
                     <TableRow className="font-semibold">
@@ -1165,6 +1255,8 @@ export default function BudgetPage() {
                       <TableCell className="tabular-nums text-sm">
                         {formatCLP(familyBalanceAfterBudget)}
                       </TableCell>
+                      <TableCell />
+                      <TableCell />
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalActual)}</TableCell>
                       <TableCell className={`text-right tabular-nums text-sm ${familyBalanceAfterBudget >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                         {formatCLP(familyBalanceAfterBudget)}
@@ -1174,6 +1266,7 @@ export default function BudgetPage() {
                           {familyBalanceAfterBudget >= 0 ? "A favor" : "Negativo"}
                         </Badge>
                       </TableCell>
+                      <TableCell />
                       <TableCell className="pr-5" />
                     </TableRow>
                   </>
@@ -1184,6 +1277,8 @@ export default function BudgetPage() {
                       Sin Agrupadora
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">Asigna ámbito y categoría.</TableCell>
+                    <TableCell />
+                    <TableCell />
                     <TableCell className="text-right tabular-nums text-sm font-medium">
                       {formatCLP(actualByGroup["Sin Agrupadora"])}
                     </TableCell>
@@ -1193,6 +1288,7 @@ export default function BudgetPage() {
                     <TableCell className="text-right">
                       <span className="text-xs text-muted-foreground">—</span>
                     </TableCell>
+                    <TableCell />
                     <TableCell className="text-right pr-5">
                       <span className="text-xs text-muted-foreground">—</span>
                     </TableCell>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useItems,
   useCategories,
@@ -13,7 +13,18 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Plus, Pencil, Trash2, Check, X } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Settings, Plus, Pencil, Trash2, Check, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ItemsManagerPage() {
@@ -22,6 +33,8 @@ export default function ItemsManagerPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
+  const [sortField, setSortField] = useState<"name" | "category">("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const { toast } = useToast();
 
   const { data: items = [] } = useItems();
@@ -30,8 +43,38 @@ export default function ItemsManagerPage() {
   const updateMutation = useUpdateItem();
   const deleteMutation = useDeleteItem();
 
-  // Build a lookup: categoryId → category
   const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c]));
+
+  const sortedItems = useMemo(
+    () =>
+      [...items].sort((left, right) => {
+        const leftValue = sortField === "category" ? (left.categoryId ? categoryMap[left.categoryId]?.name ?? "" : "") : left.name;
+        const rightValue = sortField === "category" ? (right.categoryId ? categoryMap[right.categoryId]?.name ?? "" : "") : right.name;
+        const comparison = leftValue.localeCompare(rightValue);
+        return sortDirection === "asc" ? comparison : -comparison;
+      }),
+    [categoryMap, items, sortDirection, sortField],
+  );
+
+  const toggleSort = (field: "name" | "category") => {
+    setSortField((currentField) => {
+      if (currentField === field) {
+        setSortDirection((currentDirection) => (currentDirection === "asc" ? "desc" : "asc"));
+        return currentField;
+      }
+      setSortDirection("asc");
+      return field;
+    });
+  };
+
+  const renderSortIcon = (field: "name" | "category") => {
+    if (sortField !== field) return <ArrowUpDown className="size-3.5 text-muted-foreground" />;
+    return sortDirection === "asc" ? (
+      <ArrowUp className="size-3.5 text-muted-foreground" />
+    ) : (
+      <ArrowDown className="size-3.5 text-muted-foreground" />
+    );
+  };
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +123,6 @@ export default function ItemsManagerPage() {
         seleccionas primero la categoría y luego la subcategoría.
       </p>
 
-      {/* Add Item Form */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -95,6 +137,7 @@ export default function ItemsManagerPage() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               className="w-64"
+              id="new-item-name"
               data-testid="input-new-item"
             />
             <Select value={newCategoryId} onValueChange={setNewCategoryId}>
@@ -116,7 +159,6 @@ export default function ItemsManagerPage() {
         </CardContent>
       </Card>
 
-      {/* Items Table */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">
@@ -127,13 +169,23 @@ export default function ItemsManagerPage() {
           <Table className="zebra-stripe" data-testid="table-items">
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-5">Subcategoría</TableHead>
-                <TableHead>Categoría Agrupadora</TableHead>
+                <TableHead className="pl-5">
+                  <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort("name")}>
+                    Subcategoría
+                    {renderSortIcon("name")}
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort("category")}>
+                    Categoría Agrupadora
+                    {renderSortIcon("category")}
+                  </button>
+                </TableHead>
                 <TableHead className="text-right pr-5">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item) => (
+              {sortedItems.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell className="pl-5">
                     {editingId === item.id ? (
@@ -197,18 +249,33 @@ export default function ItemsManagerPage() {
                         >
                           <Pencil className="size-3.5 text-muted-foreground" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7"
-                          onClick={() =>
-                            deleteMutation.mutate(item.id, {
-                              onSuccess: () => toast({ title: "Item eliminado" }),
-                            })
-                          }
-                        >
-                          <Trash2 className="size-3.5 text-muted-foreground" />
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="size-7">
+                              <Trash2 className="size-3.5 text-muted-foreground" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Eliminar este elemento?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Se eliminará el item "{item.name}" y ya no aparecerá en las selecciones.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() =>
+                                  deleteMutation.mutate(item.id, {
+                                    onSuccess: () => toast({ title: "Item eliminado" }),
+                                  })
+                                }
+                              >
+                                Eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     )}
                   </TableCell>
@@ -216,8 +283,13 @@ export default function ItemsManagerPage() {
               ))}
               {items.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-sm text-muted-foreground py-6">
-                    No hay items guardados
+                  <TableCell colSpan={3} className="py-8">
+                    <div className="flex flex-col items-center justify-center gap-3 text-center">
+                      <p className="text-sm text-muted-foreground">Aún no hay items guardados.</p>
+                      <Button type="button" variant="outline" onClick={() => document.getElementById("new-item-name")?.focus()}>
+                        Crear el primer item
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}

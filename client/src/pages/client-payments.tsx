@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { ClientPayment } from "@shared/schema";
 import {
   useClientPayments,
   useClients,
@@ -15,8 +16,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { BriefcaseBusiness, Plus, Trash2 } from "lucide-react";
+import { BriefcaseBusiness, Check, Pencil, Plus, Trash2, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
 type PaymentStatus = "projected" | "receivable" | "paid" | "cancelled";
 
@@ -36,12 +48,62 @@ const defaultForm = {
   status: "receivable" as PaymentStatus,
 };
 
+type EditForm = {
+  clientId: string;
+  clientName: string;
+  rut: string;
+  contactName: string;
+  email: string;
+  serviceItem: string;
+  serviceMonth: string;
+  issueDate: string;
+  dueDate: string;
+  netAmount: string;
+  vatAmount: string;
+  totalAmount: string;
+  status: PaymentStatus;
+  notes: string;
+};
+
+function calculateVatAndTotal(netAmount: string) {
+  const net = Number.parseFloat(netAmount || "0");
+  const safeNet = Number.isFinite(net) ? net : 0;
+  const vat = Math.round(safeNet * 0.19);
+  return {
+    vatAmount: String(vat),
+    totalAmount: String(safeNet + vat),
+  };
+}
+
+function buildEditForm(payment: ClientPayment): EditForm {
+  return {
+    clientId: payment.clientId ?? "",
+    clientName: payment.clientName,
+    rut: payment.rut ?? "",
+    contactName: payment.contactName ?? "",
+    email: payment.email ?? "",
+    serviceItem: payment.serviceItem ?? "",
+    serviceMonth: payment.serviceMonth ?? "",
+    issueDate: payment.issueDate ?? "",
+    dueDate: payment.dueDate ?? "",
+    netAmount: String(payment.netAmount ?? 0),
+    vatAmount: String(payment.vatAmount ?? 0),
+    totalAmount: String(payment.totalAmount ?? 0),
+    status: payment.status as PaymentStatus,
+    notes: payment.notes ?? "",
+  };
+}
+
 export default function ClientPaymentsPage() {
   const [form, setForm] = useState(defaultForm);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [showCreateClientForm, setShowCreateClientForm] = useState(false);
   const [newClientName, setNewClientName] = useState("");
   const [newClientRut, setNewClientRut] = useState("");
   const [newClientWorkspace, setNewClientWorkspace] = useState("business");
+  const [sortField, setSortField] = useState<"clientName" | "rut" | "serviceItem" | "serviceMonth" | "issueDate" | "dueDate" | "status" | "netAmount" | "vatAmount" | "totalAmount">("dueDate");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const { toast } = useToast();
 
   const { data: clients = [] } = useClients();
@@ -72,16 +134,59 @@ export default function ClientPaymentsPage() {
     projected: 0,
   }), [payments]);
 
+  const sortedPayments = useMemo(
+    () =>
+      [...payments].sort((left, right) => {
+        const getValue = (payment: ClientPayment) => {
+          switch (sortField) {
+            case "netAmount":
+            case "vatAmount":
+            case "totalAmount":
+              return payment[sortField] ?? 0;
+            default:
+              return String(payment[sortField] ?? "");
+          }
+        };
+
+        const leftValue = getValue(left);
+        const rightValue = getValue(right);
+        const comparison =
+          typeof leftValue === "number" && typeof rightValue === "number"
+            ? leftValue - rightValue
+            : String(leftValue).localeCompare(String(rightValue));
+        return sortDirection === "asc" ? comparison : -comparison;
+      }),
+    [payments, sortDirection, sortField],
+  );
+
+  const toggleSort = (field: typeof sortField) => {
+    setSortField((currentField) => {
+      if (currentField === field) {
+        setSortDirection((currentDirection) => (currentDirection === "asc" ? "desc" : "asc"));
+        return currentField;
+      }
+      setSortDirection("asc");
+      return field;
+    });
+  };
+
+  const renderSortIcon = (field: typeof sortField) => {
+    if (sortField !== field) return <ArrowUpDown className="size-3.5 text-muted-foreground" />;
+    return sortDirection === "asc" ? (
+      <ArrowUp className="size-3.5 text-muted-foreground" />
+    ) : (
+      <ArrowDown className="size-3.5 text-muted-foreground" />
+    );
+  };
+
   const handleChange = (field: keyof typeof defaultForm, value: string) => {
     setForm((current) => {
       const next = { ...current, [field]: value };
-      const net = Number.parseFloat(next.netAmount || "0");
-      const computedVat = Math.round((Number.isFinite(net) ? net : 0) * 0.19);
-      const computedTotal = (Number.isFinite(net) ? net : 0) + computedVat;
 
       if (field === "netAmount") {
-        next.vatAmount = String(computedVat);
-        next.totalAmount = String(computedTotal);
+        const { vatAmount, totalAmount } = calculateVatAndTotal(next.netAmount);
+        next.vatAmount = vatAmount;
+        next.totalAmount = totalAmount;
       }
 
       return next;
@@ -174,6 +279,71 @@ export default function ClientPaymentsPage() {
         paymentDate: status === "paid" ? new Date().toISOString().slice(0, 10) : null,
       },
     });
+  };
+
+  const startEdit = (payment: ClientPayment) => {
+    setEditingPaymentId(payment.id);
+    setEditForm(buildEditForm(payment));
+  };
+
+  const cancelEdit = () => {
+    setEditingPaymentId(null);
+    setEditForm(null);
+  };
+
+  const handleEditChange = (field: keyof EditForm, value: string) => {
+    setEditForm((current) => {
+      if (!current) return current;
+      const next = { ...current, [field]: value };
+      if (field === "netAmount") {
+        const { vatAmount, totalAmount } = calculateVatAndTotal(next.netAmount);
+        next.vatAmount = vatAmount;
+        next.totalAmount = totalAmount;
+      }
+      return next;
+    });
+  };
+
+  const handleEditClientSelection = (clientId: string) => {
+    const selectedClient = clients.find((client) => client.id === clientId);
+    setEditForm((current) => {
+      if (!current || !selectedClient) return current;
+      return {
+        ...current,
+        clientId,
+        clientName: selectedClient.name,
+        rut: selectedClient.rut ?? "",
+        contactName: selectedClient.contactName ?? "",
+        email: selectedClient.email ?? "",
+      };
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingPaymentId || !editForm || !editForm.clientName.trim()) return;
+
+    await updateMutation.mutateAsync({
+      id: editingPaymentId,
+      data: {
+        clientId: editForm.clientId || null,
+        clientName: editForm.clientName.trim(),
+        rut: editForm.rut.trim() || null,
+        contactName: editForm.contactName.trim() || null,
+        email: editForm.email.trim() || null,
+        serviceItem: editForm.serviceItem.trim() || null,
+        serviceMonth: editForm.serviceMonth.trim() || null,
+        issueDate: editForm.issueDate || null,
+        dueDate: editForm.dueDate || null,
+        netAmount: Number.parseFloat(editForm.netAmount || "0"),
+        vatAmount: Number.parseFloat(editForm.vatAmount || "0"),
+        totalAmount: Number.parseFloat(editForm.totalAmount || "0"),
+        status: editForm.status,
+        notes: editForm.notes.trim() || null,
+      },
+    });
+
+    toast({ title: "Ingreso cliente actualizado" });
+    cancelEdit();
   };
 
   if (isLoading) {
@@ -419,66 +589,269 @@ export default function ClientPaymentsPage() {
             <Table data-testid="table-client-payments">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-5">Cliente</TableHead>
-                  <TableHead>RUT</TableHead>
-                  <TableHead>Servicio</TableHead>
-                  <TableHead>Mes</TableHead>
-                  <TableHead>Emisión</TableHead>
-                  <TableHead>Vencimiento</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Neto</TableHead>
-                  <TableHead className="text-right">IVA</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="pl-5">
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort("clientName")}>Cliente{renderSortIcon("clientName")}</button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort("rut")}>RUT{renderSortIcon("rut")}</button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort("serviceItem")}>Servicio{renderSortIcon("serviceItem")}</button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort("serviceMonth")}>Mes{renderSortIcon("serviceMonth")}</button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort("issueDate")}>Emisión{renderSortIcon("issueDate")}</button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort("dueDate")}>Vencimiento{renderSortIcon("dueDate")}</button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort("status")}>Estado{renderSortIcon("status")}</button>
+                  </TableHead>
+                  <TableHead>Notas</TableHead>
+                  <TableHead className="text-right">
+                    <button type="button" className="inline-flex items-center gap-1 ml-auto" onClick={() => toggleSort("netAmount")}>Neto{renderSortIcon("netAmount")}</button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button type="button" className="inline-flex items-center gap-1 ml-auto" onClick={() => toggleSort("vatAmount")}>IVA{renderSortIcon("vatAmount")}</button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button type="button" className="inline-flex items-center gap-1 ml-auto" onClick={() => toggleSort("totalAmount")}>Total{renderSortIcon("totalAmount")}</button>
+                  </TableHead>
                   <TableHead className="text-right pr-5">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {payments.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell className="pl-5 text-sm font-medium">{payment.clientName}</TableCell>
-                    <TableCell className="text-sm">{payment.rut ?? "-"}</TableCell>
-                    <TableCell className="text-sm">{payment.serviceItem ?? "-"}</TableCell>
-                    <TableCell className="text-sm">{payment.serviceMonth ?? "-"}</TableCell>
-                    <TableCell className="text-sm">{payment.issueDate ?? "-"}</TableCell>
-                    <TableCell className="text-sm">{payment.dueDate ?? "-"}</TableCell>
-                    <TableCell>
-                      <Select
-                        value={payment.status}
-                        onValueChange={(value) => handleStatusChange(payment.id, value as PaymentStatus)}
-                      >
-                        <SelectTrigger className="w-36 h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="projected">Proyectado</SelectItem>
-                          <SelectItem value="receivable">Por cobrar</SelectItem>
-                          <SelectItem value="paid">Cobrado</SelectItem>
-                          <SelectItem value="cancelled">Cancelado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">{formatCLP(payment.netAmount)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">{formatCLP(payment.vatAmount)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-sm font-medium">{formatCLP(payment.totalAmount)}</TableCell>
-                    <TableCell className="text-right pr-5">
-                      <div className="flex items-center justify-end gap-2">
-                        <Badge variant={
-                          payment.status === "paid" ? "secondary" : payment.status === "projected" ? "outline" : "outline"
-                        }>
-                          {payment.status === "paid" ? "Cobrado" : payment.status === "receivable" ? "Por cobrar" : payment.status === "projected" ? "Proyectado" : "Cancelado"}
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8"
-                          onClick={() => deleteMutation.mutate(payment.id)}
-                        >
-                          <Trash2 className="size-3.5 text-muted-foreground" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {sortedPayments.map((payment) => {
+                  const isEditing = editingPaymentId === payment.id && editForm;
+
+                  return (
+                    <TableRow key={payment.id}>
+                      <TableCell className="pl-5 text-sm font-medium">
+                        {isEditing ? (
+                          <div className="space-y-2 min-w-[220px]">
+                            <Select value={editForm.clientId || undefined} onValueChange={handleEditClientSelection}>
+                              <SelectTrigger className="h-8">
+                                <SelectValue placeholder="Seleccionar cliente" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {clients.map((client) => (
+                                  <SelectItem key={client.id} value={client.id}>
+                                    {client.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              value={editForm.clientName}
+                              onChange={(e) => handleEditChange("clientName", e.target.value)}
+                              className="h-8"
+                            />
+                          </div>
+                        ) : (
+                          payment.clientName
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {isEditing ? (
+                          <Input
+                            value={editForm.rut}
+                            onChange={(e) => handleEditChange("rut", e.target.value)}
+                            className="h-8 min-w-[130px]"
+                          />
+                        ) : (
+                          payment.rut ?? "-"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {isEditing ? (
+                          <Input
+                            value={editForm.serviceItem}
+                            onChange={(e) => handleEditChange("serviceItem", e.target.value)}
+                            className="h-8 min-w-[140px]"
+                          />
+                        ) : (
+                          payment.serviceItem ?? "-"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {isEditing ? (
+                          <Input
+                            value={editForm.serviceMonth}
+                            onChange={(e) => handleEditChange("serviceMonth", e.target.value)}
+                            className="h-8 min-w-[110px]"
+                          />
+                        ) : (
+                          payment.serviceMonth ?? "-"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {isEditing ? (
+                          <Input
+                            type="date"
+                            value={editForm.issueDate}
+                            onChange={(e) => handleEditChange("issueDate", e.target.value)}
+                            className="h-8 min-w-[150px]"
+                          />
+                        ) : (
+                          payment.issueDate ?? "-"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {isEditing ? (
+                          <Input
+                            type="date"
+                            value={editForm.dueDate}
+                            onChange={(e) => handleEditChange("dueDate", e.target.value)}
+                            className="h-8 min-w-[150px]"
+                          />
+                        ) : (
+                          payment.dueDate ?? "-"
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <Select value={editForm.status} onValueChange={(value) => handleEditChange("status", value)}>
+                            <SelectTrigger className="w-36 h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="projected">Proyectado</SelectItem>
+                              <SelectItem value="receivable">Por cobrar</SelectItem>
+                              <SelectItem value="paid">Cobrado</SelectItem>
+                              <SelectItem value="cancelled">Cancelado</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Select
+                            value={payment.status}
+                            onValueChange={(value) => handleStatusChange(payment.id, value as PaymentStatus)}
+                          >
+                            <SelectTrigger className="w-36 h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="projected">Proyectado</SelectItem>
+                              <SelectItem value="receivable">Por cobrar</SelectItem>
+                              <SelectItem value="paid">Cobrado</SelectItem>
+                              <SelectItem value="cancelled">Cancelado</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {isEditing ? (
+                          <Input
+                            value={editForm.notes}
+                            onChange={(e) => handleEditChange("notes", e.target.value)}
+                            className="h-8 min-w-[160px]"
+                          />
+                        ) : (
+                          payment.notes ?? "-"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            value={editForm.netAmount}
+                            onChange={(e) => handleEditChange("netAmount", e.target.value)}
+                            className="h-8 w-28 ml-auto text-right"
+                          />
+                        ) : (
+                          formatCLP(payment.netAmount)
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">
+                        {isEditing ? formatCLP(Number(editForm.vatAmount || 0)) : formatCLP(payment.vatAmount)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-sm font-medium">
+                        {isEditing ? formatCLP(Number(editForm.totalAmount || 0)) : formatCLP(payment.totalAmount)}
+                      </TableCell>
+                      <TableCell className="text-right pr-5">
+                        <div className="flex items-center justify-end gap-2">
+                          {isEditing ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8"
+                                onClick={handleSaveEdit}
+                                disabled={updateMutation.isPending}
+                              >
+                                <Check className="size-3.5 text-emerald-500" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8"
+                                onClick={cancelEdit}
+                              >
+                                <X className="size-3.5 text-muted-foreground" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Badge variant={
+                                payment.status === "paid" ? "secondary" : payment.status === "projected" ? "outline" : "outline"
+                              }>
+                                {payment.status === "paid" ? "Cobrado" : payment.status === "receivable" ? "Por cobrar" : payment.status === "projected" ? "Proyectado" : "Cancelado"}
+                              </Badge>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8"
+                                onClick={() => startEdit(payment)}
+                              >
+                                <Pencil className="size-3.5 text-muted-foreground" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8"
+                                  >
+                                    <Trash2 className="size-3.5 text-muted-foreground" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Eliminar este elemento?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Se eliminará el ingreso cliente de "{payment.clientName}" y ya no aparecerá en la tabla.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() =>
+                                        deleteMutation.mutate(payment.id, {
+                                          onSuccess: () => toast({ title: "Ingreso cliente eliminado" }),
+                                        })
+                                      }
+                                    >
+                                      Eliminar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                <TableRow className="bg-muted/40 font-medium">
+                  <TableCell colSpan={8} className="pl-5">Total</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCLP(summary.totalNet)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCLP(summary.totalVat)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCLP(summary.totalGross)}</TableCell>
+                  <TableCell className="pr-5" />
+                </TableRow>
               </TableBody>
             </Table>
           </div>

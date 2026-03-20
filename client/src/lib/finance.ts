@@ -1,4 +1,4 @@
-import type { ClientPayment, Transaction } from "@shared/schema";
+import type { Account, ClientPayment, Transaction } from "@shared/schema";
 import { getMonthName } from "./utils";
 import type { MonthlyBalanceMap } from "./monthly-balances";
 
@@ -45,6 +45,43 @@ export interface WorkspaceMetrics {
 }
 
 const DEFAULT_WORKSPACE: Workspace = "business";
+
+function normalizeCardName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function findMatchingCreditCardAccount(creditCardName: string | null | undefined, accounts: Account[] = []) {
+  if (!creditCardName) return null;
+
+  const normalizedCardName = normalizeCardName(creditCardName);
+  const creditCardAccounts = accounts.filter((account) => account.type === "credit_card");
+
+  const exactMatch = creditCardAccounts.find((account) => {
+    const normalizedAccountName = normalizeCardName(account.name);
+    const normalizedBankAndName = normalizeCardName(`${account.bank} ${account.name}`);
+    const normalizedNameAndBank = normalizeCardName(`${account.name} ${account.bank}`);
+
+    return (
+      normalizedCardName === normalizedAccountName ||
+      normalizedCardName === normalizedBankAndName ||
+      normalizedCardName === normalizedNameAndBank
+    );
+  });
+
+  if (exactMatch) return exactMatch;
+
+  return creditCardAccounts.find((account) => {
+    const normalizedAccountName = normalizeCardName(account.name);
+    return (
+      normalizedCardName.includes(normalizedAccountName) ||
+      normalizedAccountName.includes(normalizedCardName)
+    );
+  }) ?? null;
+}
 
 export function getMonthKeyFromDate(date: string) {
   return date.slice(0, 7);
@@ -181,9 +218,25 @@ export function getTransactionCashFlowImpact(tx: Transaction, workspace: Workspa
   return 0;
 }
 
-export function getTransactionCreditCardDebtImpact(tx: Transaction, workspace: WorkspaceFilter = "all") {
+export function getTransactionCreditCardDebtImpact(
+  tx: Transaction,
+  workspace: WorkspaceFilter = "all",
+  accounts: Account[] = [],
+) {
   const normalized = normalizeTransaction(tx);
-  if (!isMatchingScope(normalized, workspace)) return 0;
+
+  if (accounts.length > 0) {
+    const matchedCreditCardAccount = findMatchingCreditCardAccount(normalized.creditCardName, accounts);
+    if (matchedCreditCardAccount) {
+      if (workspace !== "all" && matchedCreditCardAccount.workspace !== workspace) return 0;
+    } else if (workspace !== "all") {
+      // Once cards exist as real accounts, we avoid attributing debt to a workspace
+      // unless the transaction can be matched to a concrete credit-card account.
+      return 0;
+    }
+  } else if (!isMatchingScope(normalized, workspace)) {
+    return 0;
+  }
 
   if (normalized.movementType === "expense" && normalized.paymentMethod === "credit_card") {
     return normalized.amount;
@@ -199,6 +252,7 @@ export function getTransactionCreditCardDebtImpact(tx: Transaction, workspace: W
 export function summarizeWorkspaceTransactions(
   transactions: Transaction[],
   workspace: WorkspaceFilter = "all",
+  accounts: Account[] = [],
 ): WorkspaceMetrics {
   return transactions.reduce<WorkspaceMetrics>((acc, tx) => {
     if (!affectsWorkspace(tx, workspace)) return acc;
@@ -210,7 +264,7 @@ export function summarizeWorkspaceTransactions(
     acc.income += getTransactionIncomeImpact(normalized, workspace);
     acc.expenses += getTransactionExpenseImpact(normalized, workspace);
     acc.cashFlow += getTransactionCashFlowImpact(normalized, workspace);
-    acc.creditCardDebt += getTransactionCreditCardDebtImpact(normalized, workspace);
+    acc.creditCardDebt += getTransactionCreditCardDebtImpact(normalized, workspace, accounts);
 
     if (normalized.movementType === "transfer" && workspace !== "all") {
       if (normalized.workspace === workspace) acc.transfersOut += normalized.amount;
@@ -260,9 +314,10 @@ export function buildCreditCardInstallmentProjectionTransactions(transactions: T
       movementType: "credit_card_payment",
       paymentMethod: "bank_account",
       destinationWorkspace: null,
-      creditCardName: normalized.creditCardName ?? null,
-      installmentCount: null,
-    } satisfies Transaction));
+    creditCardName: normalized.creditCardName ?? null,
+    installmentCount: null,
+    accountId: null,
+  } satisfies Transaction));
   });
 }
 
@@ -291,6 +346,7 @@ export function clientPaymentToIncomeTransaction(payment: ClientPayment): Transa
     paymentMethod: "bank_account",
     destinationWorkspace: null,
     creditCardName: null,
+    accountId: null,
   };
 }
 
@@ -322,6 +378,7 @@ export function buildVatProjectionTransactions(clientPayments: ClientPayment[]):
     paymentMethod: "bank_account",
     destinationWorkspace: null,
     creditCardName: null,
+    accountId: null,
   }));
 }
 

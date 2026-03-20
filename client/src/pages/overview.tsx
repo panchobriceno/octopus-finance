@@ -1,4 +1,7 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable, rectSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { formatCLP, formatDate } from "@/lib/utils";
 import {
   useTransactions,
@@ -10,6 +13,8 @@ import {
   useUpdateTransaction,
   useDeleteTransaction,
   useBulkDeleteTransactions,
+  useDashboardPreferences,
+  useUpdateDashboardPreferences,
 } from "@/lib/hooks";
 import type { Transaction, Category, Item, Account } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,7 +37,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import {
-  DollarSign, TrendingUp, TrendingDown, Wallet, Plus, Trash2, Pencil, X, CreditCard,
+  DollarSign, TrendingUp, TrendingDown, Wallet, Plus, Trash2, Pencil, X, CreditCard, GripVertical, Eye, EyeOff, Settings2, Save,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -81,6 +86,101 @@ function workspaceLabel(workspace: "business" | "family" | "dentist") {
   if (workspace === "business") return "Empresa";
   if (workspace === "family") return "Familia";
   return "Consulta Dentista";
+}
+
+function accountWorkspaceLabel(workspace?: string | null): "business" | "family" | "dentist" {
+  if (workspace === "family") return "family";
+  if (workspace === "dentist") return "dentist";
+  return "business";
+}
+
+function accountDisplayName(account: Account) {
+  return `${account.name} — ${account.bank}`;
+}
+
+const DASHBOARD_CARD_IDS = [
+  "kpi-balance",
+  "kpi-ingresos",
+  "kpi-gastos",
+  "kpi-margen",
+  "caja-empresa",
+  "caja-familia",
+  "caja-dentista",
+  "deuda-tarjetas",
+  "ahorro",
+  "iva-cobrado",
+  "iva-proyectado",
+  "caja-sin-iva",
+  "balance-apertura",
+] as const;
+
+type DashboardCardId = (typeof DASHBOARD_CARD_IDS)[number];
+
+function normalizeDashboardPreferences(preferences: { cardOrder?: string[]; hiddenCards?: string[] } | null) {
+  const knownIds = new Set<string>(DASHBOARD_CARD_IDS);
+  const ordered = (preferences?.cardOrder ?? []).filter((id): id is DashboardCardId => knownIds.has(id));
+  const missing = DASHBOARD_CARD_IDS.filter((id) => !ordered.includes(id));
+  const hiddenCards = (preferences?.hiddenCards ?? []).filter((id): id is DashboardCardId => knownIds.has(id));
+
+  return {
+    cardOrder: [...ordered, ...missing],
+    hiddenCards,
+  };
+}
+
+function SortableDashboardCard({
+  id,
+  hidden,
+  isConfigMode,
+  onToggleHidden,
+  children,
+}: {
+  id: DashboardCardId;
+  hidden: boolean;
+  isConfigMode: boolean;
+  onToggleHidden: (id: DashboardCardId) => void;
+  children: ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  if (!isConfigMode) {
+    return <>{children}</>;
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.7 : hidden ? 0.55 : 1,
+      }}
+      className="relative"
+    >
+      <div className="absolute right-3 top-3 z-10 flex items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={() => onToggleHidden(id)}
+        >
+          {hidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-8 cursor-grab active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-4" />
+        </Button>
+      </div>
+      {children}
+    </div>
+  );
 }
 
 // ── KPI Card ────────────────────────────────────────────────────
@@ -160,6 +260,202 @@ interface TransactionFormProps {
     notes: string;
   }) => void;
   onCancel?: () => void;
+}
+
+function InternalMovementForm({
+  accounts,
+  isPending,
+  onSubmit,
+}: {
+  accounts: Account[];
+  isPending: boolean;
+  onSubmit: (data: {
+    movementType: "transfer" | "credit_card_payment";
+    sourceAccountId: string;
+    destinationAccountId: string;
+    destinationCardName: string;
+    amount: string;
+    date: string;
+    notes: string;
+  }) => void;
+}) {
+  const { toast } = useToast();
+  const [creditCards, setCreditCards] = useState<string[]>([]);
+  const [movementType, setMovementType] = useState<"transfer" | "credit_card_payment">("transfer");
+  const [sourceAccountId, setSourceAccountId] = useState("");
+  const [destinationAccountId, setDestinationAccountId] = useState("");
+  const [destinationCardName, setDestinationCardName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sync = () => setCreditCards(getCreditCards());
+    sync();
+    window.addEventListener("octopus-credit-cards-updated", sync);
+    return () => window.removeEventListener("octopus-credit-cards-updated", sync);
+  }, []);
+
+  const destinationAccounts = useMemo(
+    () => accounts.filter((account) => account.id !== sourceAccountId),
+    [accounts, sourceAccountId],
+  );
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!sourceAccountId) {
+      toast({ title: "Selecciona la cuenta origen", variant: "destructive" });
+      return;
+    }
+
+    if (!amount || Number(amount) <= 0) {
+      toast({ title: "Ingresa un monto válido", variant: "destructive" });
+      return;
+    }
+
+    if (movementType === "transfer" && !destinationAccountId) {
+      toast({ title: "Selecciona la cuenta destino", variant: "destructive" });
+      return;
+    }
+
+    if (movementType === "credit_card_payment" && !destinationCardName.trim()) {
+      toast({ title: "Selecciona la tarjeta destino", variant: "destructive" });
+      return;
+    }
+
+    onSubmit({
+      movementType,
+      sourceAccountId,
+      destinationAccountId,
+      destinationCardName,
+      amount,
+      date,
+      notes,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Tipo</p>
+        <Select
+          value={movementType}
+          onValueChange={(value) => {
+            setMovementType(value as "transfer" | "credit_card_payment");
+            setDestinationAccountId("");
+            setDestinationCardName("");
+          }}
+        >
+          <SelectTrigger data-testid="select-internal-movement-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="transfer">Transferencia entre cuentas</SelectItem>
+            <SelectItem value="credit_card_payment">Pago de tarjeta de crédito</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Cuenta origen</p>
+        <Select value={sourceAccountId} onValueChange={setSourceAccountId}>
+          <SelectTrigger data-testid="select-transfer-source-account">
+            <SelectValue placeholder="Seleccionar cuenta" />
+          </SelectTrigger>
+          <SelectContent>
+            {accounts.map((account) => (
+              <SelectItem key={account.id} value={account.id}>
+                {accountDisplayName(account)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Destino</p>
+        {movementType === "transfer" ? (
+          <Select value={destinationAccountId} onValueChange={setDestinationAccountId}>
+            <SelectTrigger data-testid="select-transfer-destination-account">
+              <SelectValue placeholder="Seleccionar cuenta destino" />
+            </SelectTrigger>
+            <SelectContent>
+              {destinationAccounts.map((account) => (
+                <SelectItem key={account.id} value={account.id}>
+                  {accountDisplayName(account)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : creditCards.length > 0 ? (
+          <Select value={destinationCardName} onValueChange={setDestinationCardName}>
+            <SelectTrigger data-testid="select-transfer-destination-card">
+              <SelectValue placeholder="Seleccionar tarjeta" />
+            </SelectTrigger>
+            <SelectContent>
+              {creditCards.map((card) => (
+                <SelectItem key={card} value={card}>
+                  {card}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input
+            value={destinationCardName}
+            onChange={(e) => setDestinationCardName(e.target.value)}
+            placeholder="Nombre tarjeta"
+            data-testid="input-transfer-destination-card"
+          />
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Monto</p>
+        <Input
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="Monto"
+          data-testid="input-transfer-amount"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Fecha</p>
+        <Input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          data-testid="input-transfer-date"
+        />
+      </div>
+
+      <div className="sm:col-span-2 lg:col-span-3">
+        <Textarea
+          placeholder="Notas (opcional)"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          className="resize-none"
+          data-testid="input-transfer-notes"
+        />
+      </div>
+
+      <div className="sm:col-span-2 lg:col-span-3">
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={isPending}
+          data-testid="button-add-transfer"
+        >
+          {isPending ? "Guardando..." : "Agregar movimiento interno"}
+        </Button>
+      </div>
+    </form>
+  );
 }
 
 function TransactionForm({
@@ -318,8 +614,12 @@ function TransactionForm({
           <SelectContent>
             <SelectItem value="income">Ingreso</SelectItem>
             <SelectItem value="expense">Gasto</SelectItem>
-            <SelectItem value="credit_card_payment">Pago tarjeta</SelectItem>
-            <SelectItem value="transfer">Transferencia</SelectItem>
+            {mode === "edit" ? (
+              <>
+                <SelectItem value="credit_card_payment">Pago tarjeta</SelectItem>
+                <SelectItem value="transfer">Transferencia</SelectItem>
+              </>
+            ) : null}
           </SelectContent>
         </Select>
       </div>
@@ -610,6 +910,11 @@ function TransactionForm({
 
 // ── Main Page ────────────────────────────────────────────────────
 export default function OverviewPage() {
+  const [createFormMode, setCreateFormMode] = useState<"transaction" | "internal">("transaction");
+  const [isConfigMode, setIsConfigMode] = useState(false);
+  const [draftCardOrder, setDraftCardOrder] = useState<DashboardCardId[]>([...DASHBOARD_CARD_IDS]);
+  const [draftHiddenCards, setDraftHiddenCards] = useState<DashboardCardId[]>([]);
+  const [selectedAccountFilter, setSelectedAccountFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
@@ -636,7 +941,10 @@ export default function OverviewPage() {
   const { data: categories = [] } = useCategories();
   const { data: items = [] } = useItems();
   const { data: accounts = [] } = useAccounts();
+  const { data: dashboardPreferences } = useDashboardPreferences();
+  const updateDashboardPreferencesMutation = useUpdateDashboardPreferences();
   const currentMonthKey = getCurrentMonthKey();
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const openingBalance = useMemo(
     () =>
       accounts.reduce(
@@ -678,14 +986,30 @@ export default function OverviewPage() {
       }),
     [accounts],
   );
+  const selectedAccount = useMemo(
+    () => accounts.find((account) => account.id === selectedAccountFilter) ?? null,
+    [accounts, selectedAccountFilter],
+  );
+  const filteredSavingsBalance = selectedAccount
+    ? selectedAccount.type === "savings"
+      ? (selectedAccount.currentBalance ?? 0)
+      : 0
+    : savingsBalance;
+  const normalizedDashboardPreferences = useMemo(
+    () => normalizeDashboardPreferences(dashboardPreferences ?? null),
+    [dashboardPreferences],
+  );
+  const activeCardOrder = isConfigMode ? draftCardOrder : normalizedDashboardPreferences.cardOrder;
+  const activeHiddenCards = isConfigMode ? draftHiddenCards : normalizedDashboardPreferences.hiddenCards;
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
+      if (selectedAccountFilter !== "all" && tx.accountId !== selectedAccountFilter) return false;
       if (filterCategory !== "all" && tx.category !== filterCategory) return false;
       if (filterFromDate && tx.date < filterFromDate) return false;
       if (filterToDate && tx.date > filterToDate) return false;
       return true;
     });
-  }, [transactions, filterCategory, filterFromDate, filterToDate]);
+  }, [transactions, selectedAccountFilter, filterCategory, filterFromDate, filterToDate]);
 
   // Visible transactions (limited to 50)
   const visibleTransactions = filteredTransactions.slice(0, 50);
@@ -701,50 +1025,66 @@ export default function OverviewPage() {
     () => combineFinancialTransactions(transactions, clientPayments),
     [transactions, clientPayments],
   );
+  const filteredFinancialTransactions = useMemo(
+    () =>
+      selectedAccountFilter === "all"
+        ? financialTransactions
+        : financialTransactions.filter((tx) => tx.accountId === selectedAccountFilter),
+    [financialTransactions, selectedAccountFilter],
+  );
   const businessMetrics = useMemo(
-    () => summarizeWorkspaceTransactions(financialTransactions, "business"),
-    [financialTransactions],
+    () => summarizeWorkspaceTransactions(filteredFinancialTransactions, "business", accounts),
+    [accounts, filteredFinancialTransactions],
   );
   const familyMetrics = useMemo(
-    () => summarizeWorkspaceTransactions(financialTransactions, "family"),
-    [financialTransactions],
+    () => summarizeWorkspaceTransactions(filteredFinancialTransactions, "family", accounts),
+    [accounts, filteredFinancialTransactions],
   );
   const dentistMetrics = useMemo(
-    () => summarizeWorkspaceTransactions(financialTransactions, "dentist"),
-    [financialTransactions],
+    () => summarizeWorkspaceTransactions(filteredFinancialTransactions, "dentist", accounts),
+    [accounts, filteredFinancialTransactions],
   );
-  const totalIncome = financialTransactions.reduce((sum, tx) => sum + getTransactionIncomeImpact(tx, "all"), 0);
-  const totalExpenses = financialTransactions.reduce((sum, tx) => sum + getTransactionExpenseImpact(tx, "all"), 0);
+  const totalIncome = filteredFinancialTransactions.reduce((sum, tx) => sum + getTransactionIncomeImpact(tx, "all"), 0);
+  const totalExpenses = filteredFinancialTransactions.reduce((sum, tx) => sum + getTransactionExpenseImpact(tx, "all"), 0);
   const balance = totalIncome - totalExpenses;
+  const filteredClientPayments = useMemo(
+    () => (selectedAccountFilter === "all" ? clientPayments : []),
+    [clientPayments, selectedAccountFilter],
+  );
   const clientPaymentsByMonth = useMemo(
-    () => summarizeClientPaymentsByMonth(clientPayments),
-    [clientPayments],
+    () => summarizeClientPaymentsByMonth(filteredClientPayments),
+    [filteredClientPayments],
   );
   const currentMonthPaidVat = clientPaymentsByMonth[currentMonthKey]?.paidVat ?? 0;
   const nextVatDueDate = getVatProjectionDateForMonth(currentMonthKey);
   const businessAvailableAfterVat = businessMetrics.cashFlow - currentMonthPaidVat;
+  const summaryOpeningBalance = selectedAccount ? (selectedAccount.currentBalance ?? 0) : openingBalance;
   const currentMonthSummary = useMemo(() => {
     const openingBalances = {
       ...getMonthlyBalances(),
-      [currentMonthKey]: openingBalance,
+      [currentMonthKey]: summaryOpeningBalance,
     };
 
-    return buildMonthlySummaries(financialTransactions, openingBalances).find(
+    return buildMonthlySummaries(filteredFinancialTransactions, openingBalances).find(
       (summary) => summary.monthKey === currentMonthKey,
     ) ?? {
       monthKey: currentMonthKey,
       label: "",
-      openingBalance,
+      openingBalance: summaryOpeningBalance,
       realIncome: 0,
       realExpenses: 0,
       plannedIncome: 0,
       plannedExpenses: 0,
-      realEndingBalance: openingBalance,
-      projectedEndingBalance: openingBalance,
+      realEndingBalance: summaryOpeningBalance,
+      projectedEndingBalance: summaryOpeningBalance,
       hasRealData: false,
       hasPlannedData: false,
     };
-  }, [financialTransactions, currentMonthKey, openingBalance]);
+  }, [filteredFinancialTransactions, currentMonthKey, summaryOpeningBalance]);
+  const unassignedCurrentMonthTransactions = useMemo(
+    () => transactions.filter((tx) => tx.date.startsWith(currentMonthKey) && !tx.accountId).length,
+    [currentMonthKey, transactions],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -753,6 +1093,12 @@ export default function OverviewPage() {
     window.addEventListener("octopus-credit-cards-updated", sync);
     return () => window.removeEventListener("octopus-credit-cards-updated", sync);
   }, []);
+
+  useEffect(() => {
+    if (isConfigMode) return;
+    setDraftCardOrder(normalizedDashboardPreferences.cardOrder);
+    setDraftHiddenCards(normalizedDashboardPreferences.hiddenCards);
+  }, [isConfigMode, normalizedDashboardPreferences]);
 
   // Monthly chart data
   const chartData = useMemo(() => {
@@ -778,6 +1124,263 @@ export default function OverviewPage() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, v]) => v);
   }, [financialTransactions]);
+
+  const dashboardCards = useMemo(
+    () =>
+      ({
+        "kpi-balance": {
+          id: "kpi-balance" as DashboardCardId,
+          className: "",
+          content: (
+            <KPICard
+              title="Balance"
+              value={formatCLP(balance)}
+              icon={Wallet}
+              color={balance >= 0 ? "#10b981" : "#ef4444"}
+              trend={`${transactions.length} transacciones`}
+            />
+          ),
+        },
+        "kpi-ingresos": {
+          id: "kpi-ingresos" as DashboardCardId,
+          className: "",
+          content: (
+            <KPICard
+              title="Ingresos"
+              value={formatCLP(totalIncome)}
+              icon={TrendingUp}
+              color="#10b981"
+            />
+          ),
+        },
+        "kpi-gastos": {
+          id: "kpi-gastos" as DashboardCardId,
+          className: "",
+          content: (
+            <KPICard
+              title="Gastos"
+              value={formatCLP(totalExpenses)}
+              icon={TrendingDown}
+              color="#ef4444"
+            />
+          ),
+        },
+        "kpi-margen": {
+          id: "kpi-margen" as DashboardCardId,
+          className: "",
+          content: (
+            <KPICard
+              title="Margen"
+              value={
+                totalIncome > 0
+                  ? `${((balance / totalIncome) * 100).toFixed(1)}%`
+                  : "0%"
+              }
+              icon={DollarSign}
+              color="#3b82f6"
+            />
+          ),
+        },
+        "caja-empresa": {
+          id: "caja-empresa" as DashboardCardId,
+          className: "",
+          content: (
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-muted-foreground">Empresa: caja real</p>
+                <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(businessMetrics.cashFlow)}</p>
+                <p className="text-xs text-muted-foreground mt-1">Ingresos y gastos de empresa, considerando tarjetas</p>
+              </CardContent>
+            </Card>
+          ),
+        },
+        "caja-familia": {
+          id: "caja-familia" as DashboardCardId,
+          className: "",
+          content: (
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-muted-foreground">Familia: caja real</p>
+                <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(familyMetrics.cashFlow)}</p>
+                <p className="text-xs text-muted-foreground mt-1">Incluye transferencias recibidas desde empresa</p>
+              </CardContent>
+            </Card>
+          ),
+        },
+        "caja-dentista": {
+          id: "caja-dentista" as DashboardCardId,
+          className: "",
+          content: (
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-muted-foreground">Consulta Dentista: caja real</p>
+                <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(dentistMetrics.cashFlow)}</p>
+                <p className="text-xs text-muted-foreground mt-1">Ingresos y gastos del ámbito consulta</p>
+              </CardContent>
+            </Card>
+          ),
+        },
+        "deuda-tarjetas": {
+          id: "deuda-tarjetas" as DashboardCardId,
+          className: "",
+          content: (
+            <Card>
+              <CardContent className="pt-5">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="size-4 text-amber-600 dark:text-amber-300" />
+                  <p className="text-sm text-muted-foreground">Deuda tarjetas empresa</p>
+                </div>
+                <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(businessMetrics.creditCardDebt)}</p>
+                <p className="text-xs text-muted-foreground mt-1">Compras TC menos pagos de tarjeta</p>
+              </CardContent>
+            </Card>
+          ),
+        },
+        ahorro: {
+          id: "ahorro" as DashboardCardId,
+          className: "",
+          content: (
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-muted-foreground">Ahorro</p>
+                <p className="text-xl font-semibold tabular-nums mt-1">
+                  {formatCLP(filteredSavingsBalance)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {selectedAccount ? "Saldo de ahorro de la cuenta seleccionada" : "Suma de cuentas de ahorro registradas"}
+                </p>
+              </CardContent>
+            </Card>
+          ),
+        },
+        "iva-cobrado": {
+          id: "iva-cobrado" as DashboardCardId,
+          className: "",
+          content: (
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-muted-foreground">IVA cobrado este mes</p>
+                <p className="text-xl font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">
+                  {formatCLP(currentMonthPaidVat)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Se actualiza a medida que los clientes van pagando</p>
+              </CardContent>
+            </Card>
+          ),
+        },
+        "iva-proyectado": {
+          id: "iva-proyectado" as DashboardCardId,
+          className: "",
+          content: (
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-muted-foreground">IVA proyectado próximo 20</p>
+                <p className="text-xl font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">
+                  {formatCLP(currentMonthPaidVat)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Pago estimado para {formatDate(nextVatDueDate)}</p>
+              </CardContent>
+            </Card>
+          ),
+        },
+        "caja-sin-iva": {
+          id: "caja-sin-iva" as DashboardCardId,
+          className: "",
+          content: (
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-muted-foreground">Caja empresa disponible sin IVA</p>
+                <p className="text-xl font-semibold tabular-nums mt-1">
+                  {formatCLP(businessAvailableAfterVat)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Caja empresa menos IVA cobrado este mes</p>
+              </CardContent>
+            </Card>
+          ),
+        },
+        "balance-apertura": {
+          id: "balance-apertura" as DashboardCardId,
+          className: "md:col-span-2 xl:col-span-4",
+          content: (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">
+                  Balance de Apertura y Proyección del Mes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 lg:grid-cols-[240px_1fr]">
+                <div className="rounded-xl border border-blue-200/70 bg-blue-50/60 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                    Saldo inicial
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1 mb-3">
+                    {selectedAccount ? "Saldo base de la cuenta seleccionada" : "Suma de saldos en cuentas operativas registradas"}
+                  </p>
+                  <p className="text-2xl font-semibold tabular-nums">{formatCLP(summaryOpeningBalance)}</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Mes: {currentMonthKey}
+                  </p>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-xl border border-border bg-muted/30 p-4">
+                    <p className="text-sm text-muted-foreground">Ejecutado</p>
+                    <p className="text-lg font-semibold tabular-nums mt-1">
+                      {formatCLP(currentMonthSummary.realEndingBalance)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {formatCLP(summaryOpeningBalance)} + {formatCLP(currentMonthSummary.realIncome)} - {formatCLP(currentMonthSummary.realExpenses)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/60 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                    <p className="text-sm text-muted-foreground">Ingresos presupuestados</p>
+                    <p className="text-lg font-semibold tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">
+                      {formatCLP(currentMonthSummary.plannedIncome)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      No impactan el saldo real
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
+                    <p className="text-sm text-muted-foreground">Saldo proyectado</p>
+                    <p className="text-lg font-semibold tabular-nums mt-1 text-blue-700 dark:text-blue-300">
+                      {formatCLP(currentMonthSummary.projectedEndingBalance)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Ejecutado + proyectado del resto del mes
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ),
+        },
+      }) satisfies Record<DashboardCardId, { id: DashboardCardId; className: string; content: ReactNode }>,
+    [
+      balance,
+      businessAvailableAfterVat,
+      businessMetrics.cashFlow,
+      businessMetrics.creditCardDebt,
+      currentMonthKey,
+      currentMonthPaidVat,
+      currentMonthSummary.plannedIncome,
+      currentMonthSummary.projectedEndingBalance,
+      currentMonthSummary.realEndingBalance,
+      currentMonthSummary.realExpenses,
+      currentMonthSummary.realIncome,
+      dentistMetrics.cashFlow,
+      filteredSavingsBalance,
+      familyMetrics.cashFlow,
+      nextVatDueDate,
+      openingBalance,
+      savingsBalance,
+      selectedAccount,
+      summaryOpeningBalance,
+      totalExpenses,
+      totalIncome,
+      transactions.length,
+    ],
+  );
 
   // ── Selection logic ──
   const visibleIds = visibleTransactions.map((t) => t.id);
@@ -901,6 +1504,65 @@ export default function OverviewPage() {
     );
   };
 
+  const handleCreateInternalMovement = (formData: {
+    movementType: "transfer" | "credit_card_payment";
+    sourceAccountId: string;
+    destinationAccountId: string;
+    destinationCardName: string;
+    amount: string;
+    date: string;
+    notes: string;
+  }) => {
+    const sourceAccount = accounts.find((account) => account.id === formData.sourceAccountId);
+    if (!sourceAccount) {
+      toast({
+        title: "Cuenta origen no encontrada",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const destinationAccount = formData.movementType === "transfer"
+      ? accounts.find((account) => account.id === formData.destinationAccountId)
+      : null;
+
+    const destinationLabel = formData.movementType === "transfer"
+      ? (destinationAccount ? accountDisplayName(destinationAccount) : "")
+      : formData.destinationCardName.trim();
+
+    if (!destinationLabel) {
+      toast({
+        title: "Falta el destino",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createMutation.mutate(
+      {
+        name: formData.movementType === "transfer" ? `Transferencia a ${destinationLabel}` : `Pago tarjeta ${destinationLabel}`,
+        category: formData.movementType === "transfer" ? "Transferencia" : "Pago tarjeta",
+        amount: Number(formData.amount),
+        type: "expense",
+        date: formData.date,
+        notes: formData.notes || null,
+        subtype: "actual",
+        status: "paid",
+        itemId: null,
+        workspace: accountWorkspaceLabel(sourceAccount.workspace),
+        movementType: formData.movementType,
+        paymentMethod: "bank_account",
+        accountId: sourceAccount.id,
+        destinationWorkspace: destinationLabel,
+        creditCardName: formData.movementType === "credit_card_payment" ? destinationLabel : null,
+        installmentCount: null,
+      },
+      {
+        onSuccess: () => toast({ title: "Movimiento interno creado" }),
+      },
+    );
+  };
+
   const handleEdit = (formData: {
     categoryId: string;
     itemId: string;
@@ -992,6 +1654,43 @@ export default function OverviewPage() {
     };
   };
 
+  const toggleHiddenCard = (cardId: DashboardCardId) => {
+    setDraftHiddenCards((current) =>
+      current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId],
+    );
+  };
+
+  const handleCardDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = draftCardOrder.indexOf(active.id as DashboardCardId);
+    const newIndex = draftCardOrder.indexOf(over.id as DashboardCardId);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    setDraftCardOrder((current) => arrayMove(current, oldIndex, newIndex));
+  };
+
+  const handleStartConfig = () => {
+    setDraftCardOrder(normalizedDashboardPreferences.cardOrder);
+    setDraftHiddenCards(normalizedDashboardPreferences.hiddenCards);
+    setIsConfigMode(true);
+  };
+
+  const handleCancelConfig = () => {
+    setDraftCardOrder(normalizedDashboardPreferences.cardOrder);
+    setDraftHiddenCards(normalizedDashboardPreferences.hiddenCards);
+    setIsConfigMode(false);
+  };
+
+  const handleSaveConfig = async () => {
+    await updateDashboardPreferencesMutation.mutateAsync({
+      cardOrder: draftCardOrder,
+      hiddenCards: draftHiddenCards,
+    });
+    toast({ title: "Resumen actualizado" });
+    setIsConfigMode(false);
+  };
+
   if (txLoading) {
     return (
       <div className="p-6 space-y-6">
@@ -1007,163 +1706,59 @@ export default function OverviewPage() {
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard
-          title="Balance"
-          value={formatCLP(balance)}
-          icon={Wallet}
-          color={balance >= 0 ? "#10b981" : "#ef4444"}
-          trend={`${transactions.length} transacciones`}
-        />
-        <KPICard
-          title="Ingresos"
-          value={formatCLP(totalIncome)}
-          icon={TrendingUp}
-          color="#10b981"
-        />
-        <KPICard
-          title="Gastos"
-          value={formatCLP(totalExpenses)}
-          icon={TrendingDown}
-          color="#ef4444"
-        />
-        <KPICard
-          title="Margen"
-          value={
-            totalIncome > 0
-              ? `${((balance / totalIncome) * 100).toFixed(1)}%`
-              : "0%"
-          }
-          icon={DollarSign}
-          color="#3b82f6"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Empresa: caja real</p>
-            <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(businessMetrics.cashFlow)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Ingresos y gastos de empresa, considerando tarjetas</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Familia: caja real</p>
-            <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(familyMetrics.cashFlow)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Incluye transferencias recibidas desde empresa</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Consulta Dentista: caja real</p>
-            <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(dentistMetrics.cashFlow)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Ingresos y gastos del ámbito consulta</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-2">
-              <CreditCard className="size-4 text-amber-600 dark:text-amber-300" />
-              <p className="text-sm text-muted-foreground">Deuda tarjetas empresa</p>
-            </div>
-            <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(businessMetrics.creditCardDebt)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Compras TC menos pagos de tarjeta</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">IVA cobrado este mes</p>
-            <p className="text-xl font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">
-              {formatCLP(currentMonthPaidVat)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Se actualiza a medida que los clientes van pagando</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">IVA proyectado próximo 20</p>
-            <p className="text-xl font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">
-              {formatCLP(currentMonthPaidVat)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Pago estimado para {formatDate(nextVatDueDate)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Caja empresa disponible sin IVA</p>
-            <p className="text-xl font-semibold tabular-nums mt-1">
-              {formatCLP(businessAvailableAfterVat)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Caja empresa menos IVA cobrado este mes</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Ahorro</p>
-            <p className="text-xl font-semibold tabular-nums mt-1">
-              {formatCLP(savingsBalance)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Suma de cuentas de ahorro registradas</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">
-            Balance de Apertura y Proyección del Mes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 lg:grid-cols-[240px_1fr]">
-          <div className="rounded-xl border border-blue-200/70 bg-blue-50/60 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
-            <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
-              Saldo inicial
-            </p>
-            <p className="text-xs text-muted-foreground mt-1 mb-3">
-              Suma de saldos en cuentas operativas registradas
-            </p>
-            <p className="text-2xl font-semibold tabular-nums">{formatCLP(openingBalance)}</p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Mes: {currentMonthKey}
-            </p>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xl font-semibold">Resumen</h2>
+        {isConfigMode ? (
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={handleCancelConfig}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveConfig}
+              disabled={updateDashboardPreferencesMutation.isPending}
+            >
+              <Save className="size-4" />
+              {updateDashboardPreferencesMutation.isPending ? "Guardando..." : "Guardar"}
+            </Button>
           </div>
+        ) : (
+          <Button type="button" variant="outline" onClick={handleStartConfig}>
+            <Settings2 className="size-4" />
+            Configurar
+          </Button>
+        )}
+      </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-border bg-muted/30 p-4">
-              <p className="text-sm text-muted-foreground">Ejecutado</p>
-              <p className="text-lg font-semibold tabular-nums mt-1">
-                {formatCLP(currentMonthSummary.realEndingBalance)}
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                {formatCLP(openingBalance)} + {formatCLP(currentMonthSummary.realIncome)} - {formatCLP(currentMonthSummary.realExpenses)}
-              </p>
-            </div>
-            <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/60 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-              <p className="text-sm text-muted-foreground">Ingresos presupuestados</p>
-              <p className="text-lg font-semibold tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">
-                {formatCLP(currentMonthSummary.plannedIncome)}
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                No impactan el saldo real
-              </p>
-            </div>
-            <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
-              <p className="text-sm text-muted-foreground">Saldo proyectado</p>
-              <p className="text-lg font-semibold tabular-nums mt-1 text-blue-700 dark:text-blue-300">
-                {formatCLP(currentMonthSummary.projectedEndingBalance)}
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Ejecutado + proyectado del resto del mes
-              </p>
-            </div>
+      {isConfigMode ? (
+        <p className="text-sm text-muted-foreground">
+          Arrastra las tarjetas para reordenarlas y usa el ojo para ocultarlas o volver a mostrarlas.
+        </p>
+      ) : null}
+
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCardDragEnd}>
+        <SortableContext items={activeCardOrder} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {activeCardOrder
+              .filter((cardId) => isConfigMode || !activeHiddenCards.includes(cardId))
+              .map((cardId) => {
+                const card = dashboardCards[cardId];
+                return (
+                  <div key={cardId} className={card.className}>
+                    <SortableDashboardCard
+                      id={cardId}
+                      hidden={activeHiddenCards.includes(cardId)}
+                      isConfigMode={isConfigMode}
+                      onToggleHidden={toggleHiddenCard}
+                    >
+                      {card.content}
+                    </SortableDashboardCard>
+                  </div>
+                );
+              })}
           </div>
-        </CardContent>
-      </Card>
+        </SortableContext>
+      </DndContext>
 
       {/* Chart */}
       <Card>
@@ -1216,12 +1811,33 @@ export default function OverviewPage() {
       {/* Create Transaction Form */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <Plus className="size-4" />
-            Agregar Transacción
-          </CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Plus className="size-4" />
+              Agregar Movimiento
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant={createFormMode === "transaction" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCreateFormMode("transaction")}
+              >
+                Transacción
+              </Button>
+              <Button
+                type="button"
+                variant={createFormMode === "internal" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCreateFormMode("internal")}
+              >
+                Transferencia
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
+          {createFormMode === "transaction" ? (
             <TransactionForm
               mode="create"
               categories={categories}
@@ -1230,6 +1846,13 @@ export default function OverviewPage() {
               isPending={createMutation.isPending}
               onSubmit={handleCreate}
             />
+          ) : (
+            <InternalMovementForm
+              accounts={accounts}
+              isPending={createMutation.isPending}
+              onSubmit={handleCreateInternalMovement}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -1243,7 +1866,28 @@ export default function OverviewPage() {
           </div>
         </CardHeader>
         <CardContent className="px-0">
-          <div className="mx-5 mb-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="mx-5 mb-4 grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Cuenta</p>
+              <Select value={selectedAccountFilter} onValueChange={setSelectedAccountFilter}>
+                <SelectTrigger data-testid="select-account-filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las cuentas</SelectItem>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {accountDisplayName(account)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedAccountFilter !== "all" && unassignedCurrentMonthTransactions > 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  {unassignedCurrentMonthTransactions} transacciones sin cuenta asignada
+                </p>
+              ) : null}
+            </div>
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">Desde</p>
               <Input type="date" value={filterFromDate} onChange={(e) => setFilterFromDate(e.target.value)} />
@@ -1395,12 +2039,22 @@ export default function OverviewPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant={tx.subtype === "planned" ? "outline" : "secondary"}
-                        className="text-xs"
-                      >
-                        {tx.subtype === "planned" ? "Presupuestado" : "Ejecutado"}
-                      </Badge>
+                      {normalized.movementType === "transfer" ? (
+                        <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-900/40 dark:text-blue-300">
+                          Transferencia
+                        </Badge>
+                      ) : normalized.movementType === "credit_card_payment" ? (
+                        <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-900/40 dark:text-amber-300">
+                          Pago TC
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant={tx.subtype === "planned" ? "outline" : "secondary"}
+                          className="text-xs"
+                        >
+                          {tx.subtype === "planned" ? "Presupuestado" : "Ejecutado"}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge

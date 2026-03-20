@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useCategories,
   useCreateCategory,
@@ -12,7 +12,18 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Tags, Plus, Pencil, Trash2, Check, X } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Tags, Plus, Pencil, Trash2, Check, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const FAMILY_SUGGESTED_CATEGORIES = [
@@ -33,6 +44,8 @@ export default function CategoriesPage() {
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
   const [editWorkspace, setEditWorkspace] = useState<"business" | "family" | "dentist">("business");
+  const [sortField, setSortField] = useState<"name" | "workspace" | "color">("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const { toast } = useToast();
 
   const { data: categories = [], isLoading } = useCategories();
@@ -108,6 +121,45 @@ export default function CategoriesPage() {
   const incomeCategories = categories.filter((c) => c.type === "income");
   const expenseCategories = categories.filter((c) => c.type === "expense");
 
+  const toggleSort = (field: "name" | "workspace" | "color") => {
+    setSortField((currentField) => {
+      if (currentField === field) {
+        setSortDirection((currentDirection) => (currentDirection === "asc" ? "desc" : "asc"));
+        return currentField;
+      }
+      setSortDirection("asc");
+      return field;
+    });
+  };
+
+  const renderSortIcon = (field: "name" | "workspace" | "color") => {
+    if (sortField !== field) return <ArrowUpDown className="size-3.5 text-muted-foreground" />;
+    return sortDirection === "asc" ? (
+      <ArrowUp className="size-3.5 text-muted-foreground" />
+    ) : (
+      <ArrowDown className="size-3.5 text-muted-foreground" />
+    );
+  };
+
+  const sortCategories = (cats: Category[]) =>
+    [...cats].sort((left, right) => {
+      const leftValue =
+        sortField === "workspace"
+          ? String(left.workspace ?? "business")
+          : sortField === "color"
+          ? String(left.color ?? "")
+          : left.name;
+      const rightValue =
+        sortField === "workspace"
+          ? String(right.workspace ?? "business")
+          : sortField === "color"
+          ? String(right.color ?? "")
+          : right.name;
+
+      const comparison = leftValue.localeCompare(rightValue);
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+
   const renderTable = (cats: Category[], label: string) => (
     <Card>
       <CardHeader className="pb-3">
@@ -117,14 +169,29 @@ export default function CategoriesPage() {
         <Table className="zebra-stripe">
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-5">Color</TableHead>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Ámbito</TableHead>
+              <TableHead className="pl-5">
+                <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort("color")}>
+                  Color
+                  {renderSortIcon("color")}
+                </button>
+              </TableHead>
+              <TableHead>
+                <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort("name")}>
+                  Nombre
+                  {renderSortIcon("name")}
+                </button>
+              </TableHead>
+              <TableHead>
+                <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort("workspace")}>
+                  Ámbito
+                  {renderSortIcon("workspace")}
+                </button>
+              </TableHead>
               <TableHead className="text-right pr-5">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {cats.map((cat) => (
+            {sortCategories(cats).map((cat) => (
               <TableRow key={cat.id}>
                 <TableCell className="pl-5">
                   {editingId === cat.id ? (
@@ -211,19 +278,38 @@ export default function CategoriesPage() {
                       >
                         <Pencil className="size-3.5 text-muted-foreground" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7"
-                        onClick={() =>
-                          deleteMutation.mutate(cat.id, {
-                            onSuccess: () => toast({ title: "Categoría eliminada" }),
-                          })
-                        }
-                        data-testid={`button-delete-${cat.id}`}
-                      >
-                        <Trash2 className="size-3.5 text-muted-foreground" />
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            data-testid={`button-delete-${cat.id}`}
+                          >
+                            <Trash2 className="size-3.5 text-muted-foreground" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Eliminar este elemento?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Se eliminará la categoría "{cat.name}" y esta acción no se puede deshacer.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() =>
+                                deleteMutation.mutate(cat.id, {
+                                  onSuccess: () => toast({ title: "Categoría eliminada" }),
+                                })
+                              }
+                            >
+                              Eliminar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   )}
                 </TableCell>
@@ -231,8 +317,13 @@ export default function CategoriesPage() {
             ))}
             {cats.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-6">
-                  No hay categorías
+                <TableCell colSpan={4} className="py-8">
+                  <div className="flex flex-col items-center justify-center gap-3 text-center">
+                    <p className="text-sm text-muted-foreground">Aún no hay categorías en esta lista.</p>
+                    <Button type="button" variant="outline" onClick={() => document.getElementById("new-category-name")?.focus()}>
+                      Crear la primera categoría
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
@@ -277,6 +368,7 @@ export default function CategoriesPage() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               className="w-48"
+              id="new-category-name"
               data-testid="input-new-category"
             />
             <Select value={newType} onValueChange={(v) => setNewType(v as "income" | "expense")}>

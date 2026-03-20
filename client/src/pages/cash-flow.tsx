@@ -192,8 +192,8 @@ export default function CashFlowPage() {
   }, [financialTransactions, selectedMonth, openingBalance, workspace]);
 
   const workspaceMetrics = useMemo(
-    () => summarizeWorkspaceTransactions(financialTransactions, workspace),
-    [financialTransactions, workspace],
+    () => summarizeWorkspaceTransactions(financialTransactions, workspace, accounts),
+    [accounts, financialTransactions, workspace],
   );
 
   const availableMonths = useMemo(() => {

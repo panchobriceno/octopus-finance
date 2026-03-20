@@ -6,7 +6,9 @@ import {
   collection,
   doc,
   getDocs,
+  getDoc,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   writeBatch,
@@ -31,6 +33,7 @@ const openingBalancesCol = () => collection(db, "openingBalances");
 const clientPaymentsCol = () => collection(db, "clientPayments");
 const clientsCol = () => collection(db, "clients");
 const accountsCol = () => collection(db, "accounts");
+const preferencesDoc = () => doc(db, "preferences", "dashboard");
 
 // ════════════════════════════════════════════════════════════════
 // TRANSACTIONS
@@ -344,4 +347,21 @@ export async function updateAccount(id: string, data: Record<string, any>) {
 
 export async function deleteAccount(id: string) {
   await deleteDoc(doc(db, "accounts", id));
+}
+
+// ════════════════════════════════════════════════════════════════
+// DASHBOARD PREFERENCES
+// ════════════════════════════════════════════════════════════════
+export async function getDashboardPreferences() {
+  const snapshot = await getDoc(preferencesDoc());
+  if (!snapshot.exists()) return null;
+  return snapshot.data() as { cardOrder?: string[]; hiddenCards?: string[] };
+}
+
+export async function updateDashboardPreferences(data: {
+  cardOrder: string[];
+  hiddenCards: string[];
+}) {
+  await setDoc(preferencesDoc(), data, { merge: true });
+  return data;
 }

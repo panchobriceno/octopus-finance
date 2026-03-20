@@ -4,6 +4,7 @@ import {
   useCreateAccount,
   useUpdateAccount,
   useDeleteAccount,
+  useTransactions,
 } from "@/lib/hooks";
 import type { Account } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +30,7 @@ function formatCLP(value: number) {
 export default function AccountsPage() {
   const { toast } = useToast();
   const { data: accounts = [], isLoading } = useAccounts();
+  const { data: transactions = [] } = useTransactions();
   const createMutation = useCreateAccount();
   const updateMutation = useUpdateAccount();
   const deleteMutation = useDeleteAccount();
@@ -40,7 +42,59 @@ export default function AccountsPage() {
   const [newWorkspace, setNewWorkspace] = useState<AccountWorkspace>("business");
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editBalance, setEditBalance] = useState("");
+  const [editForm, setEditForm] = useState({
+    name: "",
+    bank: "",
+    type: "checking" as AccountType,
+    workspace: "business" as AccountWorkspace,
+    currentBalance: "",
+    notes: "",
+  });
+
+  const calculatedBalanceByAccount = new Map(
+    accounts.map((account) => {
+      const movementDelta = transactions.reduce((sum, tx) => {
+        const status = tx.status ?? "paid";
+        const movementType = tx.movementType ?? (tx.type === "income" ? "income" : "expense");
+
+        if (!(status === "paid" || status === "actual")) {
+          return sum;
+        }
+
+        if (tx.accountId === account.id) {
+          if (tx.type === "income") return sum + tx.amount;
+
+          if (movementType === "transfer") return sum - tx.amount;
+          if (movementType === "credit_card_payment") return sum - tx.amount;
+
+          if (tx.type === "expense") return sum - tx.amount;
+        }
+
+        // Technical debt:
+        // incoming transfers are currently matched by destinationWorkspace using the
+        // destination account name as free text. When we add destinationAccountId,
+        // this should be replaced by an ID-based match.
+        if (movementType === "transfer" && tx.destinationWorkspace === account.name) {
+          return sum + tx.amount;
+        }
+
+        return sum;
+      }, 0);
+
+      return [account.id, account.currentBalance + movementDelta];
+    }),
+  );
+
+  const totals = accounts.reduce(
+    (acc, account) => {
+      const calculatedBalance = calculatedBalanceByAccount.get(account.id) ?? account.currentBalance;
+      acc.base += account.currentBalance ?? 0;
+      acc.calculated += calculatedBalance;
+      acc.difference += calculatedBalance - account.currentBalance;
+      return acc;
+    },
+    { base: 0, calculated: 0, difference: 0 },
+  );
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,19 +131,26 @@ export default function AccountsPage() {
     );
   };
 
-  const startEditBalance = (account: Account) => {
+  const startEditAccount = (account: Account) => {
     setEditingId(account.id);
-    setEditBalance(String(account.currentBalance ?? 0));
+    setEditForm({
+      name: account.name,
+      bank: account.bank,
+      type: (account.type as AccountType) ?? "checking",
+      workspace: (account.workspace as AccountWorkspace) ?? "business",
+      currentBalance: String(account.currentBalance ?? 0),
+      notes: account.notes ?? "",
+    });
   };
 
-  const saveEditBalance = () => {
+  const saveEditAccount = () => {
     if (!editingId) return;
-    const currentBalance = Number(editBalance);
+    const currentBalance = Number(editForm.currentBalance);
 
-    if (Number.isNaN(currentBalance)) {
+    if (!editForm.name.trim() || !editForm.bank.trim() || Number.isNaN(currentBalance)) {
       toast({
-        title: "Saldo inválido",
-        description: "Ingresa un número válido para el saldo.",
+        title: "Datos inválidos",
+        description: "Completa nombre, banco y saldo base con valores válidos.",
         variant: "destructive",
       });
       return;
@@ -99,15 +160,28 @@ export default function AccountsPage() {
       {
         id: editingId,
         data: {
+          name: editForm.name.trim(),
+          bank: editForm.bank.trim(),
+          type: editForm.type,
+          workspace: editForm.workspace,
           currentBalance,
+          isShared: editForm.workspace === "shared",
+          notes: editForm.notes.trim() || null,
           updatedAt: new Date().toISOString().slice(0, 10),
         },
       },
       {
         onSuccess: () => {
           setEditingId(null);
-          setEditBalance("");
-          toast({ title: "Saldo actualizado" });
+          setEditForm({
+            name: "",
+            bank: "",
+            type: "checking",
+            workspace: "business",
+            currentBalance: "",
+            notes: "",
+          });
+          toast({ title: "Cuenta actualizada" });
         },
       },
     );
@@ -122,8 +196,8 @@ export default function AccountsPage() {
 
       <p className="text-sm text-muted-foreground max-w-2xl">
         Aquí puedes llevar tus cuentas bancarias y tarjetas como catálogo base. Por ahora la vista
-        está pensada para crear cuentas nuevas, revisar las existentes y actualizar el saldo actual
-        cuando lo necesites.
+        está pensada para crear cuentas nuevas, revisar las existentes y actualizar tanto sus
+        datos base como el saldo cuando lo necesites.
       </p>
 
       <Card>
@@ -139,6 +213,7 @@ export default function AccountsPage() {
               placeholder="Nombre de la cuenta"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
+              id="new-account-name"
               data-testid="input-account-name"
             />
             <Input
@@ -198,120 +273,241 @@ export default function AccountsPage() {
                 <TableHead>Banco</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Ámbito</TableHead>
-                <TableHead>Saldo actual</TableHead>
+                <TableHead>Saldo base</TableHead>
+                <TableHead>Saldo calculado</TableHead>
+                <TableHead>Diferencia</TableHead>
                 <TableHead>Actualizado</TableHead>
                 <TableHead className="text-right pr-5">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {accounts.map((account) => (
-                <TableRow key={account.id}>
-                  <TableCell className="pl-5">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">{account.name}</p>
-                      {account.notes ? (
-                        <p className="text-xs text-muted-foreground">{account.notes}</p>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell>{account.bank}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="text-xs">
-                      {account.type === "credit_card"
-                        ? "Tarjeta de crédito"
-                        : account.type === "savings"
-                        ? "Ahorro"
-                        : "Cuenta corriente"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      {account.workspace === "family"
-                        ? "Familia"
-                        : account.workspace === "shared"
-                        ? "Compartida"
-                        : "Empresa"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {editingId === account.id ? (
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={editBalance}
-                        onChange={(e) => setEditBalance(e.target.value)}
-                        className="h-8 w-36"
-                        autoFocus
-                        data-testid={`input-edit-balance-${account.id}`}
-                      />
-                    ) : (
-                      <span className="text-sm font-medium">{formatCLP(account.currentBalance)}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {account.updatedAt || "—"}
-                  </TableCell>
-                  <TableCell className="text-right pr-5">
-                    {editingId === account.id ? (
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7"
-                          onClick={saveEditBalance}
-                          data-testid={`button-save-account-${account.id}`}
+              {accounts.map((account) => {
+                const calculatedBalance = calculatedBalanceByAccount.get(account.id) ?? account.currentBalance;
+                const difference = calculatedBalance - account.currentBalance;
+
+                return (
+                  <TableRow key={account.id}>
+                    <TableCell className="pl-5">
+                      {editingId === account.id ? (
+                        <div className="space-y-2">
+                          <Input
+                            value={editForm.name}
+                            onChange={(e) => setEditForm((current) => ({ ...current, name: e.target.value }))}
+                            className="h-8"
+                          />
+                          <Input
+                            value={editForm.notes}
+                            onChange={(e) => setEditForm((current) => ({ ...current, notes: e.target.value }))}
+                            className="h-8"
+                            placeholder="Notas"
+                          />
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">{account.name}</p>
+                          {account.notes ? (
+                            <p className="text-xs text-muted-foreground">{account.notes}</p>
+                          ) : null}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingId === account.id ? (
+                        <Input
+                          value={editForm.bank}
+                          onChange={(e) => setEditForm((current) => ({ ...current, bank: e.target.value }))}
+                          className="h-8 min-w-[140px]"
+                        />
+                      ) : (
+                        account.bank
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingId === account.id ? (
+                        <Select
+                          value={editForm.type}
+                          onValueChange={(value) => setEditForm((current) => ({ ...current, type: value as AccountType }))}
                         >
-                          <Check className="size-3.5 text-emerald-500" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7"
-                          onClick={() => {
-                            setEditingId(null);
-                            setEditBalance("");
-                          }}
+                          <SelectTrigger className="h-8 min-w-[150px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="checking">Cuenta corriente</SelectItem>
+                            <SelectItem value="savings">Cuenta de ahorro</SelectItem>
+                            <SelectItem value="credit_card">Tarjeta de crédito</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs">
+                          {account.type === "credit_card"
+                            ? "Tarjeta de crédito"
+                            : account.type === "savings"
+                            ? "Ahorro"
+                            : "Cuenta corriente"}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingId === account.id ? (
+                        <Select
+                          value={editForm.workspace}
+                          onValueChange={(value) => setEditForm((current) => ({ ...current, workspace: value as AccountWorkspace }))}
                         >
-                          <X className="size-3.5 text-muted-foreground" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7"
-                          onClick={() => startEditBalance(account)}
-                          data-testid={`button-edit-account-${account.id}`}
-                        >
-                          <Pencil className="size-3.5 text-muted-foreground" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7"
-                          onClick={() =>
-                            deleteMutation.mutate(account.id, {
-                              onSuccess: () => toast({ title: "Cuenta eliminada" }),
-                            })
-                          }
-                          data-testid={`button-delete-account-${account.id}`}
-                        >
-                          <Trash2 className="size-3.5 text-muted-foreground" />
-                        </Button>
-                      </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+                          <SelectTrigger className="h-8 min-w-[130px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="business">Empresa</SelectItem>
+                            <SelectItem value="family">Familia</SelectItem>
+                            <SelectItem value="shared">Compartida</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          {account.workspace === "family"
+                            ? "Familia"
+                            : account.workspace === "shared"
+                            ? "Compartida"
+                            : "Empresa"}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingId === account.id ? (
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={editForm.currentBalance}
+                          onChange={(e) => setEditForm((current) => ({ ...current, currentBalance: e.target.value }))}
+                          className="h-8 w-36"
+                          autoFocus
+                          data-testid={`input-edit-balance-${account.id}`}
+                        />
+                      ) : (
+                        <span className="text-sm font-medium">{formatCLP(account.currentBalance)}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-medium">{formatCLP(calculatedBalance)}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`text-sm font-medium ${
+                          difference > 0
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : difference < 0
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {formatCLP(difference)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {account.updatedAt || "—"}
+                    </TableCell>
+                    <TableCell className="text-right pr-5">
+                      {editingId === account.id ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            onClick={saveEditAccount}
+                            data-testid={`button-save-account-${account.id}`}
+                          >
+                            <Check className="size-3.5 text-emerald-500" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            onClick={() => {
+                              setEditingId(null);
+                              setEditForm({
+                                name: "",
+                                bank: "",
+                                type: "checking",
+                                workspace: "business",
+                                currentBalance: "",
+                                notes: "",
+                              });
+                            }}
+                          >
+                            <X className="size-3.5 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            onClick={() => startEditAccount(account)}
+                            data-testid={`button-edit-account-${account.id}`}
+                          >
+                            <Pencil className="size-3.5 text-muted-foreground" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            onClick={() =>
+                              deleteMutation.mutate(account.id, {
+                                onSuccess: () => toast({ title: "Cuenta eliminada" }),
+                              })
+                            }
+                            data-testid={`button-delete-account-${account.id}`}
+                          >
+                            <Trash2 className="size-3.5 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
 
               {!isLoading && accounts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
-                    No hay cuentas creadas todavía
+                  <TableCell colSpan={9} className="py-8">
+                    <div className="flex flex-col items-center justify-center gap-3 text-center">
+                      <p className="text-sm text-muted-foreground">Aún no hay cuentas creadas.</p>
+                      <Button type="button" variant="outline" onClick={() => document.getElementById("new-account-name")?.focus()}>
+                        Crear la primera cuenta
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
-              ) : null}
+              ) : (
+                <TableRow className="bg-muted/30 font-medium">
+                  <TableCell className="pl-5">Total</TableCell>
+                  <TableCell />
+                  <TableCell />
+                  <TableCell />
+                  <TableCell>
+                    <span className="text-sm font-medium">{formatCLP(totals.base)}</span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm font-medium">{formatCLP(totals.calculated)}</span>
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className={`text-sm font-medium ${
+                        totals.difference > 0
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : totals.difference < 0
+                          ? "text-red-600 dark:text-red-400"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {formatCLP(totals.difference)}
+                    </span>
+                  </TableCell>
+                  <TableCell />
+                  <TableCell className="pr-5" />
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
