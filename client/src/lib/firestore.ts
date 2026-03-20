@@ -150,6 +150,90 @@ export async function deleteBudget(id: string) {
   await deleteDoc(doc(db, "budgets", id));
 }
 
+export async function generateMonthlyRecurringTransactions(year: number, month: number, workspace: string) {
+  const budgetsSnap = await getDocs(budgetsCol());
+  const transactionsSnap = await getDocs(transactionsCol());
+  const budgets = snapToArray<any>(budgetsSnap);
+  const transactions = snapToArray<any>(transactionsSnap);
+
+  const candidateBudgets = budgets
+    .filter((budget) => {
+      const budgetWorkspace = budget.workspace ?? "business";
+      if (budgetWorkspace !== workspace) return false;
+      if (budget.year > year) return false;
+      if (budget.year === year && budget.month > month) return false;
+      return true;
+    })
+    .sort((left, right) => {
+      if (left.categoryGroup !== right.categoryGroup) {
+        return String(left.categoryGroup).localeCompare(String(right.categoryGroup));
+      }
+      if (left.year !== right.year) return right.year - left.year;
+      return right.month - left.month;
+    });
+
+  const latestBudgetByGroup = new Map<string, any>();
+  for (const budget of candidateBudgets) {
+    if (!latestBudgetByGroup.has(budget.categoryGroup)) {
+      latestBudgetByGroup.set(budget.categoryGroup, budget);
+    }
+  }
+
+  const recurringBudgets = Array.from(latestBudgetByGroup.values()).filter((budget) => budget.isRecurring);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
+  const batch = writeBatch(db);
+  let created = 0;
+
+  for (const budget of recurringBudgets) {
+    const alreadyExists = transactions.some((transaction) => {
+      const transactionWorkspace = transaction.workspace ?? "business";
+      return (
+        transactionWorkspace === workspace &&
+        transaction.subtype === "planned" &&
+        transaction.status === "pending" &&
+        transaction.category === budget.categoryGroup &&
+        String(transaction.date ?? "").startsWith(monthPrefix)
+      );
+    });
+
+    if (alreadyExists) continue;
+
+    const dueDay = Math.min(Math.max(Number(budget.dayOfMonth ?? 1), 1), daysInMonth);
+    const date = `${monthPrefix}-${String(dueDay).padStart(2, "0")}`;
+    const ref = doc(transactionsCol());
+
+    batch.set(ref, {
+      name: budget.categoryGroup,
+      category: budget.categoryGroup,
+      amount: Number(budget.amount) || 0,
+      type: "expense",
+      date,
+      notes: "Generado automáticamente desde presupuesto recurrente",
+      subtype: "planned",
+      status: "pending",
+      itemId: null,
+      workspace,
+      movementType: "expense",
+      paymentMethod: "bank_account",
+      destinationWorkspace: null,
+      creditCardName: null,
+      installmentCount: null,
+      accountId: null,
+      importBatchId: null,
+      importBatchLabel: null,
+      importedAt: null,
+    });
+    created += 1;
+  }
+
+  if (created > 0) {
+    await batch.commit();
+  }
+
+  return { created };
+}
+
 // ════════════════════════════════════════════════════════════════
 // OPENING BALANCES (saldo inicial mensual)
 // ════════════════════════════════════════════════════════════════

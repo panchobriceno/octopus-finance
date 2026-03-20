@@ -170,6 +170,17 @@ export function useDeleteBudget() {
   });
 }
 
+export function useGenerateMonthlyRecurringTransactions() {
+  return useMutation({
+    mutationFn: ({ year, month, workspace }: { year: number; month: number; workspace: string }) =>
+      fs.generateMonthlyRecurringTransactions(year, month, workspace),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+    },
+  });
+}
+
 // ── Client Payments ────────────────────────────────────────────
 export function useClientPayments() {
   return useQuery<ClientPayment[]>({

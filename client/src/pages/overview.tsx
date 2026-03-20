@@ -5,12 +5,13 @@ import {
   useClientPayments,
   useCategories,
   useItems,
+  useAccounts,
   useCreateTransaction,
   useUpdateTransaction,
   useDeleteTransaction,
   useBulkDeleteTransactions,
 } from "@/lib/hooks";
-import type { Transaction, Category, Item } from "@shared/schema";
+import type { Transaction, Category, Item, Account } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,8 +46,7 @@ import {
   summarizeClientPaymentsByMonth,
   summarizeWorkspaceTransactions,
 } from "@/lib/finance";
-import { getMonthlyBalances, useOpeningBalance } from "@/lib/monthly-balances";
-import { getFamilyIncomeJaviMap, setFamilyIncomeJavi } from "@/lib/family-income";
+import { getMonthlyBalances } from "@/lib/monthly-balances";
 import { getCreditCards } from "@/lib/credit-cards";
 
 const FAMILY_CATEGORY_HINTS = [
@@ -125,6 +125,7 @@ interface TransactionFormProps {
   mode: "create" | "edit";
   categories: Category[];
   items: Item[];
+  accounts: Account[];
   initialValues?: {
     categoryId: string;
     itemId: string;
@@ -135,6 +136,7 @@ interface TransactionFormProps {
     workspace: "business" | "family" | "dentist";
     movementType: "income" | "expense" | "transfer" | "credit_card_payment";
     paymentMethod: "cash" | "bank_account" | "credit_card";
+    accountId: string;
     destinationWorkspace: "business" | "family" | "dentist";
     creditCardName: string;
     installmentCount: string;
@@ -151,6 +153,7 @@ interface TransactionFormProps {
     workspace: "business" | "family" | "dentist";
     movementType: "income" | "expense" | "transfer" | "credit_card_payment";
     paymentMethod: "cash" | "bank_account" | "credit_card";
+    accountId: string;
     destinationWorkspace: "business" | "family" | "dentist";
     creditCardName: string;
     installmentCount: string;
@@ -163,6 +166,7 @@ function TransactionForm({
   mode,
   categories,
   items,
+  accounts,
   initialValues,
   isPending,
   onSubmit,
@@ -180,6 +184,7 @@ function TransactionForm({
     workspace: "business" as const,
     movementType: "income" as const,
     paymentMethod: "bank_account" as const,
+    accountId: "",
     destinationWorkspace: "family" as const,
     creditCardName: "",
     installmentCount: "1",
@@ -195,6 +200,7 @@ function TransactionForm({
   const [formWorkspace, setFormWorkspace] = useState(defaults.workspace);
   const [formMovementType, setFormMovementType] = useState(defaults.movementType);
   const [formPaymentMethod, setFormPaymentMethod] = useState(defaults.paymentMethod);
+  const [formAccountId, setFormAccountId] = useState(defaults.accountId);
   const [formDestinationWorkspace, setFormDestinationWorkspace] = useState(defaults.destinationWorkspace);
   const [formCreditCardName, setFormCreditCardName] = useState(defaults.creditCardName);
   const [formInstallmentCount, setFormInstallmentCount] = useState(defaults.installmentCount);
@@ -204,6 +210,15 @@ function TransactionForm({
   const filteredCategories = categories.filter((c) => c.type === effectiveType);
   const filteredItems = items.filter((i) => i.categoryId === formCategoryId);
   const categoryRequired = formMovementType === "income" || formMovementType === "expense";
+  const selectableBankAccounts = useMemo(
+    () =>
+      accounts.filter((account) => {
+        const isBankType = account.type === "checking" || account.type === "savings";
+        const isActive = (account as Account & { isActive?: boolean }).isActive ?? true;
+        return isBankType && isActive;
+      }),
+    [accounts],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -253,6 +268,7 @@ function TransactionForm({
       workspace: formWorkspace,
       movementType: formMovementType,
       paymentMethod: formPaymentMethod,
+      accountId: formPaymentMethod === "bank_account" && formMovementType !== "transfer" ? formAccountId : "",
       destinationWorkspace: formDestinationWorkspace,
       creditCardName: formCreditCardName,
       installmentCount: formInstallmentCount,
@@ -290,6 +306,9 @@ function TransactionForm({
               setFormPaymentMethod("bank_account");
             } else {
               setFormPaymentMethod("bank_account");
+            }
+            if (movementType === "credit_card_payment") {
+              setFormAccountId("");
             }
           }}
         >
@@ -409,7 +428,13 @@ function TransactionForm({
         {formMovementType === "expense" ? (
           <Select
             value={formPaymentMethod}
-            onValueChange={(v) => setFormPaymentMethod(v as "cash" | "bank_account" | "credit_card")}
+            onValueChange={(v) => {
+              const paymentMethod = v as "cash" | "bank_account" | "credit_card";
+              setFormPaymentMethod(paymentMethod);
+              if (paymentMethod !== "bank_account") {
+                setFormAccountId("");
+              }
+            }}
             data-testid="select-payment-method"
           >
             <SelectTrigger>
@@ -426,6 +451,26 @@ function TransactionForm({
             value={formMovementType === "income" ? "No aplica" : formMovementType === "transfer" ? "Transferencia" : "Pago tarjeta"}
             readOnly
           />
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Cuenta</p>
+        {formMovementType !== "transfer" && formMovementType !== "credit_card_payment" && formPaymentMethod === "bank_account" ? (
+          <Select value={formAccountId} onValueChange={setFormAccountId}>
+            <SelectTrigger data-testid="select-account">
+              <SelectValue placeholder="Seleccionar cuenta" />
+            </SelectTrigger>
+            <SelectContent>
+              {selectableBankAccounts.map((account) => (
+                <SelectItem key={account.id} value={account.id}>
+                  {account.name} — {account.bank}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input value="No aplica" readOnly />
         )}
       </div>
 
@@ -569,22 +614,45 @@ export default function OverviewPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
+  const [creditCards, setCreditCards] = useState<string[]>([]);
+  const [payDialog, setPayDialog] = useState<{
+    tx: Transaction;
+    amount: string;
+    paymentMethod: "cash" | "bank_account" | "credit_card";
+    accountId: string;
+    creditCardName: string;
+    installmentCount: string;
+  } | null>(null);
   const [bulkEditCategory, setBulkEditCategory] = useState("__keep__");
   const [bulkEditWorkspace, setBulkEditWorkspace] = useState("__keep__");
   const [bulkEditStatus, setBulkEditStatus] = useState("__keep__");
   const [filterFromDate, setFilterFromDate] = useState("");
   const [filterToDate, setFilterToDate] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [familyIncomeJaviMap, setFamilyIncomeJaviMap] = useState<Record<string, number>>({});
   const { toast } = useToast();
 
   const { data: transactions = [], isLoading: txLoading } = useTransactions();
   const { data: clientPayments = [] } = useClientPayments();
   const { data: categories = [] } = useCategories();
   const { data: items = [] } = useItems();
+  const { data: accounts = [] } = useAccounts();
   const currentMonthKey = getCurrentMonthKey();
-  const { amount: openingBalance, update: updateOpeningBalance } = useOpeningBalance(currentMonthKey);
-  const familyIncomeJavi = familyIncomeJaviMap[currentMonthKey] ?? 0;
+  const openingBalance = useMemo(
+    () =>
+      accounts.reduce(
+        (sum, account) => sum + (account.type !== "savings" ? (account.currentBalance ?? 0) : 0),
+        0,
+      ),
+    [accounts],
+  );
+  const savingsBalance = useMemo(
+    () =>
+      accounts.reduce(
+        (sum, account) => sum + (account.type === "savings" ? (account.currentBalance ?? 0) : 0),
+        0,
+      ),
+    [accounts],
+  );
 
   // Lookup maps
   const categoryMap = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c])), [categories]);
@@ -600,6 +668,15 @@ export default function OverviewPage() {
   const transactionCategoryOptions = useMemo(
     () => Array.from(new Set(transactions.map((tx) => tx.category))).sort((a, b) => a.localeCompare(b)),
     [transactions],
+  );
+  const activeBankAccounts = useMemo(
+    () =>
+      accounts.filter((account) => {
+        const isBankType = account.type === "checking" || account.type === "savings";
+        const isActive = (account as Account & { isActive?: boolean }).isActive ?? true;
+        return isBankType && isActive;
+      }),
+    [accounts],
   );
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
@@ -646,7 +723,6 @@ export default function OverviewPage() {
   const currentMonthPaidVat = clientPaymentsByMonth[currentMonthKey]?.paidVat ?? 0;
   const nextVatDueDate = getVatProjectionDateForMonth(currentMonthKey);
   const businessAvailableAfterVat = businessMetrics.cashFlow - currentMonthPaidVat;
-  const familyAvailableWithJavi = familyMetrics.cashFlow + familyIncomeJavi;
   const currentMonthSummary = useMemo(() => {
     const openingBalances = {
       ...getMonthlyBalances(),
@@ -672,10 +748,10 @@ export default function OverviewPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const sync = () => setFamilyIncomeJaviMap(getFamilyIncomeJaviMap());
+    const sync = () => setCreditCards(getCreditCards());
     sync();
-    window.addEventListener("octopus-family-income-updated", sync);
-    return () => window.removeEventListener("octopus-family-income-updated", sync);
+    window.addEventListener("octopus-credit-cards-updated", sync);
+    return () => window.removeEventListener("octopus-credit-cards-updated", sync);
   }, []);
 
   // Monthly chart data
@@ -766,6 +842,7 @@ export default function OverviewPage() {
     workspace: "business" | "family" | "dentist";
     movementType: "income" | "expense" | "transfer" | "credit_card_payment";
     paymentMethod: "cash" | "bank_account" | "credit_card";
+    accountId: string;
     destinationWorkspace: "business" | "family" | "dentist";
     creditCardName: string;
     installmentCount: string;
@@ -807,6 +884,9 @@ export default function OverviewPage() {
         workspace: formData.workspace,
         movementType: formData.movementType,
         paymentMethod: formData.paymentMethod,
+        accountId: formData.paymentMethod === "bank_account" && formData.movementType !== "transfer"
+          ? formData.accountId || null
+          : null,
         destinationWorkspace: formData.movementType === "transfer" ? formData.destinationWorkspace : null,
         creditCardName: formData.paymentMethod === "credit_card" || formData.movementType === "credit_card_payment"
           ? formData.creditCardName || null
@@ -831,6 +911,7 @@ export default function OverviewPage() {
     workspace: "business" | "family" | "dentist";
     movementType: "income" | "expense" | "transfer" | "credit_card_payment";
     paymentMethod: "cash" | "bank_account" | "credit_card";
+    accountId: string;
     destinationWorkspace: "business" | "family" | "dentist";
     creditCardName: string;
     installmentCount: string;
@@ -867,6 +948,9 @@ export default function OverviewPage() {
           workspace: formData.workspace,
           movementType: formData.movementType,
           paymentMethod: formData.paymentMethod,
+          accountId: formData.paymentMethod === "bank_account" && formData.movementType !== "transfer"
+            ? formData.accountId || null
+            : null,
           destinationWorkspace: formData.movementType === "transfer" ? formData.destinationWorkspace : null,
           creditCardName: formData.paymentMethod === "credit_card" || formData.movementType === "credit_card_payment"
             ? formData.creditCardName || null
@@ -900,6 +984,7 @@ export default function OverviewPage() {
       workspace: normalized.workspace,
       movementType: normalized.movementType,
       paymentMethod: normalized.paymentMethod,
+      accountId: tx.accountId ?? "",
       destinationWorkspace: normalized.destinationWorkspace ?? (normalized.workspace === "business" ? "family" : "business"),
       creditCardName: normalized.creditCardName ?? "",
       installmentCount: String((tx.installmentCount ?? 1)),
@@ -989,31 +1074,6 @@ export default function OverviewPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Ingreso Javi del mes</p>
-            <Input
-              type="number"
-              value={String(familyIncomeJavi)}
-              onChange={(e) => setFamilyIncomeJaviMap(setFamilyIncomeJavi(currentMonthKey, Number(e.target.value || 0)))}
-              className="mt-3"
-              data-testid="input-overview-family-income-javi"
-            />
-            <p className="text-xs text-muted-foreground mt-2">Se sincroniza con Presupuesto Familia</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Familia disponible con Ingreso Javi</p>
-            <p className="text-xl font-semibold tabular-nums mt-1 text-blue-700 dark:text-blue-300">
-              {formatCLP(familyAvailableWithJavi)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Caja real familia más ingreso manual del mes</p>
-          </CardContent>
-        </Card>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-5">
@@ -1042,6 +1102,15 @@ export default function OverviewPage() {
             <p className="text-xs text-muted-foreground mt-1">Caja empresa menos IVA cobrado este mes</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <p className="text-sm text-muted-foreground">Ahorro</p>
+            <p className="text-xl font-semibold tabular-nums mt-1">
+              {formatCLP(savingsBalance)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Suma de cuentas de ahorro registradas</p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -1056,14 +1125,9 @@ export default function OverviewPage() {
               Saldo inicial
             </p>
             <p className="text-xs text-muted-foreground mt-1 mb-3">
-              Guardado por mes en este navegador
+              Suma de saldos en cuentas operativas registradas
             </p>
-            <Input
-              type="number"
-              value={String(openingBalance)}
-              onChange={(e) => updateOpeningBalance(Number(e.target.value || 0))}
-              data-testid="input-opening-balance"
-            />
+            <p className="text-2xl font-semibold tabular-nums">{formatCLP(openingBalance)}</p>
             <p className="text-xs text-muted-foreground mt-2">
               Mes: {currentMonthKey}
             </p>
@@ -1158,13 +1222,14 @@ export default function OverviewPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <TransactionForm
-            mode="create"
-            categories={categories}
-            items={items}
-            isPending={createMutation.isPending}
-            onSubmit={handleCreate}
-          />
+            <TransactionForm
+              mode="create"
+              categories={categories}
+              items={items}
+              accounts={accounts}
+              isPending={createMutation.isPending}
+              onSubmit={handleCreate}
+            />
         </CardContent>
       </Card>
 
@@ -1362,6 +1427,26 @@ export default function OverviewPage() {
                     </TableCell>
                     <TableCell className="text-right pr-5">
                       <div className="flex items-center justify-end gap-0.5">
+                        {tx.subtype === "planned" && tx.status === "pending" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8"
+                            onClick={() =>
+                              setPayDialog({
+                              tx,
+                              amount: String(tx.amount),
+                              paymentMethod: "bank_account",
+                              accountId: tx.accountId ?? "",
+                              creditCardName: normalized.creditCardName ?? "",
+                              installmentCount: String(tx.installmentCount ?? 1),
+                            })
+                          }
+                            data-testid={`button-pay-${tx.id}`}
+                          >
+                            Pagar
+                          </Button>
+                        ) : null}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1441,6 +1526,7 @@ export default function OverviewPage() {
               mode="edit"
               categories={categories}
               items={items}
+              accounts={accounts}
               initialValues={getEditValues(editingTx)}
               isPending={updateMutation.isPending}
               onSubmit={handleEdit}
@@ -1514,6 +1600,200 @@ export default function OverviewPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!payDialog} onOpenChange={(open) => { if (!open) setPayDialog(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Marcar pagado</DialogTitle>
+            <DialogDescription>
+              Confirma el pago y el método usado para convertir este compromiso en una transacción pagada.
+            </DialogDescription>
+          </DialogHeader>
+          {payDialog ? (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">{payDialog.tx.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {payDialog.tx.category} · {formatDate(payDialog.tx.date)}
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">Monto</p>
+                <Input
+                  type="number"
+                  value={payDialog.amount}
+                  onChange={(e) =>
+                    setPayDialog((current) => (current ? { ...current, amount: e.target.value } : current))
+                  }
+                  data-testid="input-pay-amount"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">Método de pago</p>
+                <Select
+                  value={payDialog.paymentMethod}
+                  onValueChange={(value) =>
+                    setPayDialog((current) =>
+                      current
+                        ? {
+                            ...current,
+                            paymentMethod: value as "cash" | "bank_account" | "credit_card",
+                            accountId: value === "bank_account" ? current.accountId : "",
+                            creditCardName: value === "credit_card" ? current.creditCardName : "",
+                            installmentCount: value === "credit_card" ? current.installmentCount || "1" : "1",
+                          }
+                        : current,
+                    )
+                  }
+                >
+                  <SelectTrigger data-testid="select-pay-payment-method">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bank_account">Banco</SelectItem>
+                    <SelectItem value="credit_card">Tarjeta de crédito</SelectItem>
+                    <SelectItem value="cash">Efectivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {payDialog.paymentMethod === "bank_account" ? (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">Cuenta</p>
+                  <Select
+                    value={payDialog.accountId}
+                    onValueChange={(value) =>
+                      setPayDialog((current) => (current ? { ...current, accountId: value } : current))
+                    }
+                  >
+                    <SelectTrigger data-testid="select-pay-account">
+                      <SelectValue placeholder="Seleccionar cuenta" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeBankAccounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.name} — {account.bank}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              {payDialog.paymentMethod === "credit_card" ? (
+                <>
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">Tarjeta</p>
+                    {creditCards.length > 0 ? (
+                      <Select
+                        value={payDialog.creditCardName}
+                        onValueChange={(value) =>
+                          setPayDialog((current) => (current ? { ...current, creditCardName: value } : current))
+                        }
+                      >
+                        <SelectTrigger data-testid="select-pay-credit-card">
+                          <SelectValue placeholder="Seleccionar tarjeta" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {creditCards.map((card) => (
+                            <SelectItem key={card} value={card}>
+                              {card}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={payDialog.creditCardName}
+                        onChange={(e) =>
+                          setPayDialog((current) => (current ? { ...current, creditCardName: e.target.value } : current))
+                        }
+                        placeholder="Nombre tarjeta"
+                        data-testid="input-pay-credit-card-name"
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">Número de cuotas</p>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={payDialog.installmentCount}
+                      onChange={(e) =>
+                        setPayDialog((current) => {
+                          if (!current) return current;
+                          const raw = e.target.value;
+                          const parsed = Number(raw);
+                          return {
+                            ...current,
+                            installmentCount: !raw || !Number.isFinite(parsed) || parsed < 1 ? "1" : String(Math.floor(parsed)),
+                          };
+                        })
+                      }
+                      data-testid="input-pay-installment-count"
+                    />
+                  </div>
+                  {Number(payDialog.installmentCount || "1") > 1 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Cuota mensual:{" "}
+                      <span className="font-medium">
+                        {formatCLP(
+                          Number(payDialog.amount || 0) / Number(payDialog.installmentCount || "1"),
+                        )}
+                      </span>
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setPayDialog(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!payDialog) return;
+                    if (payDialog.paymentMethod === "credit_card" && !payDialog.creditCardName.trim()) {
+                      toast({
+                        title: "Falta la tarjeta",
+                        description: "Selecciona o escribe la tarjeta de crédito usada para pagar.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    updateMutation.mutate(
+                      {
+                        id: payDialog.tx.id,
+                        data: {
+                          amount: Number(payDialog.amount || payDialog.tx.amount),
+                          status: "paid",
+                          subtype: "actual",
+                          paymentMethod: payDialog.paymentMethod,
+                          accountId: payDialog.paymentMethod === "bank_account"
+                            ? payDialog.accountId || null
+                            : null,
+                          creditCardName: payDialog.paymentMethod === "credit_card"
+                            ? payDialog.creditCardName || null
+                            : null,
+                          installmentCount: payDialog.paymentMethod === "credit_card" && Number(payDialog.installmentCount || "1") > 1
+                            ? Number(payDialog.installmentCount || "1")
+                            : null,
+                        },
+                      },
+                      {
+                        onSuccess: () => {
+                          setPayDialog(null);
+                          toast({ title: "Transacción marcada como pagada" });
+                        },
+                      },
+                    );
+                  }}
+                  disabled={updateMutation.isPending}
+                >
+                  {updateMutation.isPending ? "Guardando..." : "Confirmar pago"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>

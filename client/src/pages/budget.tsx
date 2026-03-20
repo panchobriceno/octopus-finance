@@ -9,6 +9,7 @@ import {
   useUpdateBudget,
   useDeleteBudget,
   useCreateCategory,
+  useGenerateMonthlyRecurringTransactions,
 } from "@/lib/hooks";
 import { formatCLP } from "@/lib/utils";
 import type { Transaction, Budget, Category, Item } from "@shared/schema";
@@ -16,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,12 +28,25 @@ import { getFamilyIncomeJaviMap, setFamilyIncomeJavi } from "@/lib/family-income
 
 type BudgetWorkspace = "business" | "family";
 const BUDGET_ORDER_STORAGE_KEY = "octopus_budget_order";
+const ITEM_BUDGET_PREFIX = "item:";
 
 // ── Month names ──────────────────────────────────────────────────
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
+
+function getBudgetStateKey(monthKey: string, workspace: BudgetWorkspace, groupName: string) {
+  return `${monthKey}::${workspace}::${groupName}`;
+}
+
+function getItemBudgetKey(itemId: string) {
+  return `${ITEM_BUDGET_PREFIX}${itemId}`;
+}
+
+function isItemBudgetKey(value: string) {
+  return value.startsWith(ITEM_BUDGET_PREFIX);
+}
 
 function normalizeCategoryName(value: string) {
   return value
@@ -45,23 +60,9 @@ function matchesWorkspace(category: Category, workspace: BudgetWorkspace) {
     return category.workspace === workspace;
   }
 
-  const normalizedName = normalizeCategoryName(category.name);
-  const fallbackFamilyNames = [
-    "dividendo",
-    "gastos comunes",
-    "gastos basicos",
-    "auto",
-    "comida",
-    "tarjeta de credito",
-    "farmacia",
-    "seguros",
-    "educacion",
-    "salud",
-    "digital",
-    "ocio",
-  ];
-  const isFamilyCategory = fallbackFamilyNames.some((name) => normalizedName.includes(name));
-  return workspace === "family" ? isFamilyCategory : !isFamilyCategory;
+  // If a category was created before we started assigning explicit workspaces,
+  // keep it available in both views so it doesn't disappear from the budget UI.
+  return true;
 }
 
 // ── Component ────────────────────────────────────────────────────
@@ -73,6 +74,8 @@ export default function BudgetPage() {
 
   // Local input state for each group's budget amount (keyed by category name)
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
+  const [recurringValues, setRecurringValues] = useState<Record<string, boolean>>({});
+  const [dayOfMonthValues, setDayOfMonthValues] = useState<Record<string, string>>({});
   const [savingGroup, setSavingGroup] = useState<string | null>(null);
   const [newBudgetCategory, setNewBudgetCategory] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -89,6 +92,7 @@ export default function BudgetPage() {
   const updateBudgetMutation = useUpdateBudget();
   const deleteBudgetMutation = useDeleteBudget();
   const createCategoryMutation = useCreateCategory();
+  const generateRecurringMutation = useGenerateMonthlyRecurringTransactions();
   const [familyIncomeJaviMap, setFamilyIncomeJaviMap] = useState<Record<string, number>>({});
 
   const selectedMonthKey = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
@@ -157,6 +161,15 @@ export default function BudgetPage() {
     }
     return map;
   }, [items]);
+
+  const workspaceBudgetItems = useMemo(() => {
+    return items.filter((item) => {
+      if (!item.categoryId) return false;
+      const category = categoryById[item.categoryId];
+      if (!category || category.type !== "expense") return false;
+      return matchesWorkspace(category, selectedWorkspace);
+    });
+  }, [items, categoryById, selectedWorkspace]);
 
   /** Map a transaction to its category group. */
   const getGroupForTransaction = useMemo(() => {
@@ -244,19 +257,27 @@ export default function BudgetPage() {
 
   const visibleGroupNames = useMemo(() => {
     const names = new Set<string>();
+    const prefix = `${selectedMonthKey}::${selectedWorkspace}::`;
+    const savedOrder = budgetOrderMap[selectedWorkspace] ?? [];
 
     for (const budget of periodBudgets) {
       names.add(budget.categoryGroup);
     }
 
-    for (const [group, value] of Object.entries(inputValues)) {
+    for (const group of savedOrder) {
+      names.add(group);
+    }
+
+    for (const [stateKey, value] of Object.entries(inputValues)) {
+      if (!stateKey.startsWith(prefix)) continue;
+      const group = stateKey.slice(prefix.length);
       if (value !== "" || names.has(group)) {
         names.add(group);
       }
     }
 
     return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [inputValues, periodBudgets]);
+  }, [budgetOrderMap, inputValues, periodBudgets, selectedMonthKey, selectedWorkspace]);
 
   const orderedVisibleGroupNames = useMemo(() => {
     const savedOrder = budgetOrderMap[selectedWorkspace] ?? [];
@@ -276,45 +297,113 @@ export default function BudgetPage() {
   }, [budgetOrderMap, selectedWorkspace, visibleGroupNames]);
 
   const availableCategoryOptions = useMemo(
-    () => expenseCategories
-      .map((category) => category.name)
-      .filter((name) => !visibleGroupNames.includes(name))
-      .sort((a, b) => a.localeCompare(b)),
-    [expenseCategories, visibleGroupNames],
+    () => [
+      ...expenseCategories
+        .filter((category) => matchesWorkspace(category, selectedWorkspace))
+        .map((category) => ({
+          value: category.name,
+          label: category.name,
+        })),
+      ...workspaceBudgetItems.map((item) => ({
+        value: getItemBudgetKey(item.id),
+        label: `${item.name} · ${categoryById[item.categoryId!]?.name ?? "Sin categoría"}`,
+      })),
+    ]
+      .filter((option) => !visibleGroupNames.includes(option.value))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+    [categoryById, expenseCategories, selectedWorkspace, visibleGroupNames, workspaceBudgetItems],
   );
 
   // Sync input values when period or budgets change
   useEffect(() => {
     const vals: Record<string, string> = {};
+    const recurring: Record<string, boolean> = {};
+    const days: Record<string, string> = {};
     for (const group of orderedVisibleGroupNames) {
+      const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, group);
       const existing = effectiveBudgetByGroup[group];
-      vals[group] = existing ? String(existing.amount) : "";
+      vals[stateKey] = existing ? String(existing.amount) : "";
+      recurring[stateKey] = Boolean(existing?.isRecurring);
+      days[stateKey] = existing?.dayOfMonth ? String(existing.dayOfMonth) : "";
     }
-    setInputValues((current) => ({ ...vals, ...current }));
-  }, [effectiveBudgetByGroup, orderedVisibleGroupNames]);
+    setInputValues((current) => {
+      const next = { ...current };
+      for (const [key, value] of Object.entries(vals)) {
+        if (next[key] === undefined) {
+          next[key] = value;
+        }
+      }
+      return next;
+    });
+    setRecurringValues((current) => {
+      const next = { ...current };
+      for (const [key, value] of Object.entries(recurring)) {
+        if (next[key] === undefined) {
+          next[key] = value;
+        }
+      }
+      return next;
+    });
+    setDayOfMonthValues((current) => {
+      const next = { ...current };
+      for (const [key, value] of Object.entries(days)) {
+        if (next[key] === undefined) {
+          next[key] = value;
+        }
+      }
+      return next;
+    });
+  }, [effectiveBudgetByGroup, orderedVisibleGroupNames, selectedMonthKey, selectedWorkspace]);
 
   // Calculate actuals per group
   const actualByGroup = useMemo(() => {
     const map: Record<string, number> = {};
+    const visibleItemBudgetIds = new Set(
+      orderedVisibleGroupNames
+        .filter(isItemBudgetKey)
+        .map((group) => group.replace(ITEM_BUDGET_PREFIX, "")),
+    );
     for (const group of orderedVisibleGroupNames) {
       map[group] = 0;
     }
     map["Sin Agrupadora"] = 0;
 
     for (const tx of periodTransactions) {
-      const group = getGroupForTransaction(tx);
+      const itemGroup = tx.itemId ? getItemBudgetKey(tx.itemId) : null;
+      let group = getGroupForTransaction(tx);
+
+      if (itemGroup && map[itemGroup] !== undefined) {
+        group = itemGroup;
+      } else if (tx.itemId && visibleItemBudgetIds.has(tx.itemId)) {
+        continue;
+      }
+
       map[group] = (map[group] ?? 0) + tx.amount;
     }
     return map;
   }, [orderedVisibleGroupNames, periodTransactions, getGroupForTransaction]);
 
   const getVisibleBudgetAmount = (group: string) => {
-    const raw = inputValues[group];
+    const raw = inputValues[getBudgetStateKey(selectedMonthKey, selectedWorkspace, group)];
     if (raw !== undefined && raw !== "") {
       const parsed = Number(raw);
       return Number.isFinite(parsed) ? parsed : 0;
     }
     return effectiveBudgetByGroup[group]?.amount ?? 0;
+  };
+
+  const getBudgetEntryLabel = (group: string) => {
+    if (!isItemBudgetKey(group)) return group;
+    const itemId = group.replace(ITEM_BUDGET_PREFIX, "");
+    return itemById[itemId]?.name ?? group;
+  };
+
+  const getBudgetEntryMeta = (group: string) => {
+    if (!isItemBudgetKey(group)) return null;
+    const itemId = group.replace(ITEM_BUDGET_PREFIX, "");
+    const item = itemById[itemId];
+    if (!item?.categoryId) return "Subcategoría";
+    return categoryById[item.categoryId]?.name ?? "Subcategoría";
   };
 
   // Totals
@@ -326,7 +415,8 @@ export default function BudgetPage() {
   const totalDiff = totalBudget - totalActual;
 
   const handleSave = async (groupName: string) => {
-    const rawValue = inputValues[groupName];
+    const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, groupName);
+    const rawValue = inputValues[stateKey];
     const amount = parseFloat(rawValue || "0");
     if (isNaN(amount) || amount < 0) return;
 
@@ -335,7 +425,16 @@ export default function BudgetPage() {
     try {
       const existing = budgetByGroup[groupName];
       if (existing) {
-        await updateBudgetMutation.mutateAsync({ id: existing.id, data: { amount } });
+        await updateBudgetMutation.mutateAsync({
+          id: existing.id,
+          data: {
+            amount,
+            isRecurring: recurringValues[stateKey] ?? false,
+            dayOfMonth: recurringValues[stateKey]
+              ? Math.max(1, Math.min(31, Number(dayOfMonthValues[stateKey] || 1)))
+              : null,
+          },
+        });
       } else {
         await createBudgetMutation.mutateAsync({
           year: selectedYear,
@@ -343,6 +442,10 @@ export default function BudgetPage() {
           categoryGroup: groupName,
           amount,
           workspace: selectedWorkspace,
+          isRecurring: recurringValues[stateKey] ?? false,
+          dayOfMonth: recurringValues[stateKey]
+            ? Math.max(1, Math.min(31, Number(dayOfMonthValues[stateKey] || 1)))
+            : null,
         });
       }
       toast({
@@ -375,36 +478,29 @@ export default function BudgetPage() {
   };
   const familyIncomeJavi = familyIncomeJaviMap[selectedMonthKey] ?? 0;
   const getEffectiveBudgetTotalForWorkspace = (workspace: BudgetWorkspace) => {
-    const names = expenseCategories
-      .filter((category) => matchesWorkspace(category, workspace))
-      .map((category) => category.name);
-
-    return names.reduce((sum, group) => {
-      const exact = allBudgets.find(
+    const relevantBudgets = allBudgets
+      .filter(
         (budget) =>
-          budget.categoryGroup === group &&
           (budget.workspace ?? "business") === workspace &&
-          budget.year === selectedYear &&
-          budget.month === selectedMonth,
-      );
+          (budget.year < selectedYear ||
+            (budget.year === selectedYear && budget.month <= selectedMonth)),
+      )
+      .sort((left, right) => {
+        if (left.categoryGroup !== right.categoryGroup) {
+          return left.categoryGroup.localeCompare(right.categoryGroup);
+        }
+        if (left.year !== right.year) return right.year - left.year;
+        return right.month - left.month;
+      });
 
-      if (exact) return sum + exact.amount;
+    const latestByGroup = new Map<string, Budget>();
+    for (const budget of relevantBudgets) {
+      if (!latestByGroup.has(budget.categoryGroup)) {
+        latestByGroup.set(budget.categoryGroup, budget);
+      }
+    }
 
-      const historical = allBudgets
-        .filter(
-          (budget) =>
-            budget.categoryGroup === group &&
-            (budget.workspace ?? "business") === workspace &&
-            (budget.year < selectedYear ||
-              (budget.year === selectedYear && budget.month < selectedMonth)),
-        )
-        .sort((left, right) => {
-          if (left.year !== right.year) return right.year - left.year;
-          return right.month - left.month;
-        })[0];
-
-      return sum + (historical?.amount ?? 0);
-    }, 0);
+    return Array.from(latestByGroup.values()).reduce((sum, budget) => sum + budget.amount, 0);
   };
   const businessBudgetTotal = getEffectiveBudgetTotalForWorkspace("business");
   const familyBudgetTotal = getEffectiveBudgetTotalForWorkspace("family");
@@ -431,9 +527,18 @@ export default function BudgetPage() {
 
   const handleAddBudgetCategory = () => {
     if (!newBudgetCategory) return;
+    const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, newBudgetCategory);
     setInputValues((current) => ({
       ...current,
-      [newBudgetCategory]: current[newBudgetCategory] ?? "0",
+      [stateKey]: current[stateKey] ?? "0",
+    }));
+    setRecurringValues((current) => ({
+      ...current,
+      [stateKey]: current[stateKey] ?? false,
+    }));
+    setDayOfMonthValues((current) => ({
+      ...current,
+      [stateKey]: current[stateKey] ?? "",
     }));
     const nextOrder = [...orderedVisibleGroupNames, newBudgetCategory];
     const nextMap = { ...budgetOrderMap, [selectedWorkspace]: nextOrder };
@@ -447,6 +552,7 @@ export default function BudgetPage() {
   const handleCreateCategoryFromBudget = async () => {
     const trimmedName = newCategoryName.trim();
     if (!trimmedName) return;
+    const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, trimmedName);
 
     const alreadyExists = expenseCategories.some(
       (category) => category.name.toLowerCase() === trimmedName.toLowerCase(),
@@ -463,7 +569,15 @@ export default function BudgetPage() {
 
     setInputValues((current) => ({
       ...current,
-      [trimmedName]: current[trimmedName] ?? "0",
+      [stateKey]: current[stateKey] ?? "0",
+    }));
+    setRecurringValues((current) => ({
+      ...current,
+      [stateKey]: current[stateKey] ?? false,
+    }));
+    setDayOfMonthValues((current) => ({
+      ...current,
+      [stateKey]: current[stateKey] ?? "",
     }));
     setNewCategoryName("");
     toast({
@@ -473,6 +587,7 @@ export default function BudgetPage() {
   };
 
   const handleRemoveBudgetCategory = async (groupName: string) => {
+    const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, groupName);
     const existing = budgetByGroup[groupName];
     if (existing) {
       await deleteBudgetMutation.mutateAsync(existing.id);
@@ -480,7 +595,17 @@ export default function BudgetPage() {
 
     setInputValues((current) => {
       const next = { ...current };
-      delete next[groupName];
+      delete next[stateKey];
+      return next;
+    });
+    setRecurringValues((current) => {
+      const next = { ...current };
+      delete next[stateKey];
+      return next;
+    });
+    setDayOfMonthValues((current) => {
+      const next = { ...current };
+      delete next[stateKey];
       return next;
     });
     const nextOrder = orderedVisibleGroupNames.filter((name) => name !== groupName);
@@ -707,20 +832,20 @@ export default function BudgetPage() {
         <CardContent className="px-0 space-y-4">
           <div className="px-5 grid gap-3 lg:grid-cols-[minmax(0,320px)_auto_minmax(0,320px)_auto] lg:items-end">
             <div className="w-full md:max-w-sm space-y-1.5">
-              <p className="text-xs text-muted-foreground">Agregar categoría al presupuesto</p>
+              <p className="text-xs text-muted-foreground">Agregar categoría o subcategoría al presupuesto</p>
               <Select value={newBudgetCategory} onValueChange={setNewBudgetCategory}>
                 <SelectTrigger data-testid="select-add-budget-category">
-                  <SelectValue placeholder="Elegir categoría" />
+                  <SelectValue placeholder="Elegir categoría o subcategoría" />
                 </SelectTrigger>
                 <SelectContent>
                   {availableCategoryOptions.length === 0 ? (
                     <div className="px-3 py-2 text-xs text-muted-foreground">
-                      No hay más categorías disponibles
+                      No hay más opciones disponibles
                     </div>
                   ) : (
-                    availableCategoryOptions.map((categoryName) => (
-                      <SelectItem key={categoryName} value={categoryName}>
-                        {categoryName}
+                    availableCategoryOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))
                   )}
@@ -754,12 +879,40 @@ export default function BudgetPage() {
             </Button>
           </div>
 
+          <div className="px-5">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() =>
+                generateRecurringMutation.mutate(
+                  { year: selectedYear, month: selectedMonth, workspace: selectedWorkspace },
+                  {
+                    onSuccess: (result) => {
+                      toast({
+                        title: "Compromisos generados",
+                        description: result.created > 0
+                          ? `${result.created} compromiso(s) creados para el mes`
+                          : "No había compromisos nuevos por crear",
+                      });
+                    },
+                  },
+                )
+              }
+              disabled={generateRecurringMutation.isPending}
+              data-testid="button-generate-recurring-transactions"
+            >
+              {generateRecurringMutation.isPending ? "Generando..." : "Generar compromisos del mes"}
+            </Button>
+          </div>
+
           <div className="overflow-x-auto">
             <Table className="zebra-stripe" data-testid="table-budget-comparison">
               <TableHeader>
                 <TableRow>
                   <TableHead className="pl-5">Categoría Agrupadora</TableHead>
                   <TableHead className="w-44">Presupuesto</TableHead>
+                  <TableHead className="text-center">Recurrente</TableHead>
+                  <TableHead className="w-32">Día de pago</TableHead>
                   <TableHead className="text-right">Real Ejecutado</TableHead>
                   <TableHead className="text-right">Diferencia</TableHead>
                   <TableHead className="text-right">Ejecución</TableHead>
@@ -768,6 +921,7 @@ export default function BudgetPage() {
               </TableHeader>
               <TableBody>
                 {orderedVisibleGroupNames.map((group, index) => {
+                  const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, group);
                   const budget = getVisibleBudgetAmount(group);
                   const actual = actualByGroup[group] ?? 0;
                   const diff = budget - actual;
@@ -779,7 +933,19 @@ export default function BudgetPage() {
 
                   return (
                     <TableRow key={group} data-testid={`row-comparison-${group.replace(/\s+/g, "-").toLowerCase()}`}>
-                      <TableCell className="pl-5 font-medium text-sm">{group}</TableCell>
+                      <TableCell className="pl-5">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{getBudgetEntryLabel(group)}</span>
+                            {isItemBudgetKey(group) ? (
+                              <Badge variant="outline" className="text-[10px]">Subcategoría</Badge>
+                            ) : null}
+                          </div>
+                          {getBudgetEntryMeta(group) ? (
+                            <p className="text-[11px] text-muted-foreground">{getBudgetEntryMeta(group)}</p>
+                          ) : null}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="space-y-1">
                           <Input
@@ -788,9 +954,9 @@ export default function BudgetPage() {
                             step="1000"
                             placeholder="0"
                             className="h-8 w-36 tabular-nums"
-                            value={inputValues[group] ?? ""}
+                            value={inputValues[stateKey] ?? ""}
                             onChange={(e) =>
-                              setInputValues((prev) => ({ ...prev, [group]: e.target.value }))
+                              setInputValues((prev) => ({ ...prev, [stateKey]: e.target.value }))
                             }
                             onKeyDown={(e) => {
                               if (e.key === "Enter") handleSave(group);
@@ -803,6 +969,35 @@ export default function BudgetPage() {
                             </p>
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center">
+                          <Switch
+                            checked={recurringValues[stateKey] ?? false}
+                            onCheckedChange={(checked) =>
+                              setRecurringValues((prev) => ({ ...prev, [stateKey]: checked }))
+                            }
+                            data-testid={`switch-recurring-${group.replace(/\s+/g, "-").toLowerCase()}`}
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {(recurringValues[stateKey] ?? false) ? (
+                          <Input
+                            type="number"
+                            min="1"
+                            max="31"
+                            placeholder="Día"
+                            className="h-8 w-24"
+                            value={dayOfMonthValues[stateKey] ?? ""}
+                            onChange={(e) =>
+                              setDayOfMonthValues((prev) => ({ ...prev, [stateKey]: e.target.value }))
+                            }
+                            data-testid={`input-day-of-month-${group.replace(/\s+/g, "-").toLowerCase()}`}
+                          />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-sm font-medium">
                         {actual > 0 ? formatCLP(actual) : <span className="text-muted-foreground">$0</span>}
@@ -882,6 +1077,8 @@ export default function BudgetPage() {
                 <TableRow className="border-t-2 font-semibold">
                   <TableCell className="pl-5 text-sm">{selectedWorkspace === "family" ? "Subtotal" : "Total"}</TableCell>
                   <TableCell className="tabular-nums text-sm">{formatCLP(totalBudget)}</TableCell>
+                  <TableCell />
+                  <TableCell />
                   <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalActual)}</TableCell>
                   <TableCell
                     className={`text-right tabular-nums text-sm ${

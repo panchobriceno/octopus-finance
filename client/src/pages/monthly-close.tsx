@@ -7,7 +7,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { formatCLP } from "@/lib/utils";
 import { useBudgets, useCategories, useClientPayments, useTransactions } from "@/lib/hooks";
-import { getFamilyIncomeJaviMap } from "@/lib/family-income";
 import { getTransactionExpenseImpact, isExecutedTransaction, normalizeTransaction, summarizeClientPaymentsByMonth } from "@/lib/finance";
 import type { Budget, Category } from "@shared/schema";
 
@@ -91,20 +90,11 @@ export default function MonthlyClosePage() {
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
-  const [familyIncomeMap, setFamilyIncomeMap] = useState<Record<string, number>>({});
 
   const { data: transactions = [], isLoading: txLoading } = useTransactions();
   const { data: clientPayments = [], isLoading: clientLoading } = useClientPayments();
   const { data: budgets = [], isLoading: budgetsLoading } = useBudgets();
   const { data: categories = [], isLoading: categoriesLoading } = useCategories();
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const sync = () => setFamilyIncomeMap(getFamilyIncomeJaviMap());
-    sync();
-    window.addEventListener("octopus-family-income-updated", sync);
-    return () => window.removeEventListener("octopus-family-income-updated", sync);
-  }, []);
 
   const selectedMonthKey = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
 
@@ -161,11 +151,25 @@ export default function MonthlyClosePage() {
     [prefix, transactions],
   );
 
-  const incomeJavi = familyIncomeMap[selectedMonthKey] ?? 0;
+  const familyRealIncome = useMemo(
+    () => transactions.reduce((sum, tx) => {
+      const normalized = normalizeTransaction(tx);
+      if (
+        normalized.date.startsWith(prefix) &&
+        isExecutedTransaction(normalized) &&
+        normalized.workspace === "family" &&
+        normalized.type === "income"
+      ) {
+        return sum + normalized.amount;
+      }
+      return sum;
+    }, 0),
+    [prefix, transactions],
+  );
   const businessRemainderBudget = businessIncome.net - businessBudget;
   const businessRemainderActual = businessIncome.net - businessActual;
-  const familyIncomeTotalBudget = businessRemainderBudget + incomeJavi;
-  const familyIncomeTotalActual = businessRemainderActual + incomeJavi;
+  const familyIncomeTotalBudget = businessRemainderBudget + familyRealIncome;
+  const familyIncomeTotalActual = businessRemainderActual + familyRealIncome;
   const familyBalanceBudget = familyIncomeTotalBudget - familyBudget;
   const familyBalanceActual = familyIncomeTotalActual - familyActual;
 
@@ -288,9 +292,9 @@ export default function MonthlyClosePage() {
                   <TableCell className="text-right tabular-nums text-sm pr-5">{formatCLP(businessRemainderActual)}</TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="pl-5 font-medium text-sm">Ingreso Javi</TableCell>
-                  <TableCell className="text-right tabular-nums text-sm">{formatCLP(incomeJavi)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-sm pr-5">{formatCLP(incomeJavi)}</TableCell>
+                  <TableCell className="pl-5 font-medium text-sm">Ingresos familia reales</TableCell>
+                  <TableCell className="text-right tabular-nums text-sm">{formatCLP(familyRealIncome)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-sm pr-5">{formatCLP(familyRealIncome)}</TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell className="pl-5 font-medium text-sm">Ingreso familiar total</TableCell>

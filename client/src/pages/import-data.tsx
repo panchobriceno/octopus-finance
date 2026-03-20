@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useCategories, useBulkCreateTransactions, useBulkDeleteTransactions, useCreateCategory, useTransactions } from "@/lib/hooks";
+import { useAccounts, useCategories, useBulkCreateTransactions, useBulkDeleteTransactions, useCreateCategory, useTransactions, useUpdateTransaction } from "@/lib/hooks";
+import type { Account } from "@shared/schema";
 import { getCreditCards } from "@/lib/credit-cards";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -345,23 +347,37 @@ export default function ImportDataPage() {
   const [mapping, setMapping] = useState<ColumnMapping>({ date: "", description: "", amount: "", installments: "" });
   const [savedCards, setSavedCards] = useState<string[]>([]);
   const [selectedCard, setSelectedCard] = useState("");
+  const [selectedAccountId, setSelectedAccountId] = useState("");
   const [defaultImportWorkspace, setDefaultImportWorkspace] = useState<ImportWorkspace>("family");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryWorkspace, setNewCategoryWorkspace] = useState<"business" | "family" | "dentist">("family");
   const [batchToDelete, setBatchToDelete] = useState<ImportBatchSummary | null>(null);
+  const [detailBatchId, setDetailBatchId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: categories = [] } = useCategories();
   const { data: transactions = [] } = useTransactions();
+  const { data: accounts = [] } = useAccounts();
   const importMutation = useBulkCreateTransactions();
   const createCategoryMutation = useCreateCategory();
   const deleteImportMutation = useBulkDeleteTransactions();
+  const updateTransactionMutation = useUpdateTransaction();
 
   const existingKeys = useMemo(() => new Set(
     transactions
       .filter((tx) => tx.status !== "cancelled")
       .map((tx) => `${tx.date}__${tx.name.trim().toLowerCase()}__${tx.type}__${tx.amount}`),
   ), [transactions]);
+
+  const bankAccounts = useMemo(
+    () =>
+      accounts.filter((account) => {
+        const isBankType = account.type === "checking" || account.type === "savings";
+        const isActive = (account as Account & { isActive?: boolean }).isActive ?? true;
+        return isBankType && isActive;
+      }),
+    [accounts],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -526,6 +542,7 @@ export default function ImportDataPage() {
       destinationWorkspace: null,
       creditCardName: accountType === "credit" ? selectedCard.trim() : null,
       installmentCount: accountType === "credit" && row.type === "expense" ? row.installmentCount : null,
+      accountId: accountType === "bank" ? selectedAccountId || null : null,
       importBatchId: batchId,
       importBatchLabel: batchLabel,
       importedAt,
@@ -542,6 +559,7 @@ export default function ImportDataPage() {
         setPreviewRows([]);
         setIgnoredRowIds(new Set());
         setFileName("");
+        setSelectedAccountId("");
       },
     });
   };
@@ -743,6 +761,24 @@ export default function ImportDataPage() {
   }, [transactions]);
 
   const latestImportBatchId = importBatches[0]?.id ?? null;
+  const detailBatch = useMemo(
+    () => importBatches.find((batch) => batch.id === detailBatchId) ?? null,
+    [detailBatchId, importBatches],
+  );
+  const detailBatchTransactions = useMemo(
+    () =>
+      transactions
+        .filter((transaction) => transaction.importBatchId === detailBatchId)
+        .sort((left, right) => {
+          if (left.date !== right.date) return right.date.localeCompare(left.date);
+          return left.name.localeCompare(right.name);
+        }),
+    [detailBatchId, transactions],
+  );
+  const accountById = useMemo(
+    () => Object.fromEntries(accounts.map((account) => [account.id, account])),
+    [accounts],
+  );
 
   const deleteImportBatch = (batch: ImportBatchSummary) => {
     const ids = transactions
@@ -762,6 +798,22 @@ export default function ImportDataPage() {
         });
       },
     });
+  };
+
+  const updateImportedTransaction = (
+    id: string,
+    data: Partial<{ category: string; workspace: "business" | "family" | "dentist"; status: "paid" | "pending" }>,
+  ) => {
+    updateTransactionMutation.mutate(
+      { id, data },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Movimiento actualizado",
+          });
+        },
+      },
+    );
   };
 
   return (
@@ -881,6 +933,24 @@ export default function ImportDataPage() {
                   <SelectItem value="family">Familia</SelectItem>
                   <SelectItem value="business">Empresa</SelectItem>
                   <SelectItem value="dentist">Consulta Dentista</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+
+          {accountType === "bank" ? (
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">¿De qué cuenta es esta cartola?</p>
+              <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                <SelectTrigger data-testid="select-import-bank-account">
+                  <SelectValue placeholder="Opcional" />
+                </SelectTrigger>
+                <SelectContent>
+                  {bankAccounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name} — {account.bank}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1016,25 +1086,23 @@ export default function ImportDataPage() {
                     <TableCell className="text-right tabular-nums">{batch.rows}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatCLP(batch.totalAmount)}</TableCell>
                     <TableCell className="text-right">
-                      {isLatest ? (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteImportBatch(batch)}
-                          disabled={deleteImportMutation.isPending}
-                        >
-                          {deleteImportMutation.isPending ? "Eliminando..." : "Deshacer"}
-                        </Button>
-                      ) : (
+                      <div className="flex items-center justify-end gap-2">
                         <Button
                           variant="outline"
+                          size="sm"
+                          onClick={() => setDetailBatchId(batch.id)}
+                        >
+                          Ver detalle
+                        </Button>
+                        <Button
+                          variant={isLatest ? "destructive" : "outline"}
                           size="sm"
                           onClick={() => setBatchToDelete(batch)}
                           disabled={deleteImportMutation.isPending}
                         >
-                          Eliminar con alerta
+                          Eliminar lote
                         </Button>
-                      )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -1086,9 +1154,11 @@ export default function ImportDataPage() {
       <AlertDialog open={!!batchToDelete} onOpenChange={(open) => { if (!open) setBatchToDelete(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar una carga anterior</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar lote importado</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta no es la última importación. Si la eliminas, también se borrarán sus transacciones de Resumen, Panel de Tarjetas y demás vistas. Úsalo solo si estás segura de que quieres revertir esa carga antigua.
+              {batchToDelete
+                ? `¿Eliminar ${batchToDelete.rows} transacciones de este lote? También desaparecerán de Resumen y de las demás vistas que usan esas transacciones.`
+                : "Confirma la eliminación del lote."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1104,6 +1174,111 @@ export default function ImportDataPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!detailBatch} onOpenChange={(open) => { if (!open) setDetailBatchId(null); }}>
+        <DialogContent className="max-w-6xl">
+          <DialogHeader>
+            <DialogTitle>Detalle del lote</DialogTitle>
+            <DialogDescription>
+              {detailBatch
+                ? `${detailBatch.label} · ${detailBatch.rows} transacción${detailBatch.rows === 1 ? "" : "es"}`
+                : "Revisa y edita los movimientos de esta importación."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="overflow-x-auto">
+            <Table className="zebra-stripe">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Categoría</TableHead>
+                  <TableHead>Ámbito</TableHead>
+                  <TableHead className="text-right">Monto</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Cuenta/tarjeta</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {detailBatchTransactions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                      Este lote no tiene transacciones disponibles.
+                    </TableCell>
+                  </TableRow>
+                ) : detailBatchTransactions.map((transaction) => {
+                  const linkedAccount = transaction.accountId ? accountById[transaction.accountId] : null;
+                  const accountOrCardLabel = linkedAccount
+                    ? `${linkedAccount.name} — ${linkedAccount.bank}`
+                    : transaction.creditCardName ?? "-";
+
+                  return (
+                    <TableRow key={transaction.id}>
+                      <TableCell className="tabular-nums text-sm">{transaction.date}</TableCell>
+                      <TableCell className="text-sm font-medium">{transaction.name}</TableCell>
+                      <TableCell>
+                        <Select
+                          value={transaction.category}
+                          onValueChange={(value) => updateImportedTransaction(transaction.id, { category: value })}
+                        >
+                          <SelectTrigger className="w-44 h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((category) => (
+                              <SelectItem key={category.id} value={category.name}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={transaction.workspace ?? "business"}
+                          onValueChange={(value) =>
+                            updateImportedTransaction(transaction.id, { workspace: value as "business" | "family" | "dentist" })
+                          }
+                        >
+                          <SelectTrigger className="w-36 h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="business">Empresa</SelectItem>
+                            <SelectItem value="family">Familia</SelectItem>
+                            <SelectItem value="dentist">Consulta Dentista</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className={`text-right tabular-nums text-sm font-medium ${transaction.type === "income" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                        {transaction.type === "income" ? "+" : "-"}
+                        {formatCLP(transaction.amount)}
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={transaction.status}
+                          onValueChange={(value) =>
+                            updateImportedTransaction(transaction.id, { status: value as "paid" | "pending" })
+                          }
+                        >
+                          <SelectTrigger className="w-32 h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="paid">Pagado</SelectItem>
+                            <SelectItem value="pending">Pendiente</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="text-sm">{accountOrCardLabel}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {previewRows.length > 0 && (
         <Card>

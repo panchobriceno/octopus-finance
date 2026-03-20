@@ -185,6 +185,8 @@ export interface Budget {
   categoryGroup: string;
   amount: number;
   workspace?: string; // "business" | "family"
+  isRecurring?: boolean;
+  dayOfMonth?: number;
 }
 
 export interface InsertBudget {
@@ -193,6 +195,8 @@ export interface InsertBudget {
   categoryGroup: string;
   amount: number;
   workspace?: string;
+  isRecurring?: boolean;
+  dayOfMonth?: number;
 }
 
 // ── Opening Balances ────────────────────────────────────────────
@@ -244,6 +248,8 @@ export const insertBudgetSchema = z.object({
   categoryGroup: z.string().min(1),
   amount: z.number(),
   workspace: z.string().optional(),
+  isRecurring: z.boolean().optional(),
+  dayOfMonth: z.number().int().optional(),
 });
 
 export const insertClientPaymentSchema = z.object({
