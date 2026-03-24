@@ -11,7 +11,7 @@ import {
   summarizeWorkspaceTransactions,
   type WorkspaceFilter,
 } from "@/lib/finance";
-import { getMonthlyBalances, useOpeningBalance } from "@/lib/monthly-balances";
+import { useMonthlyBalances, useOpeningBalance } from "@/lib/monthly-balances";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -173,6 +173,7 @@ export default function CashFlowPage() {
     description: string;
     items: WeeklyDetailItem[];
   } | null>(null);
+  const { balances: openingBalancesMap } = useMonthlyBalances();
   const { amount: openingBalance, update: updateOpeningBalance } = useOpeningBalance(selectedMonth);
   const financialTransactions = useMemo(
     () => combineFinancialTransactions(transactions, clientPayments),
@@ -185,11 +186,11 @@ export default function CashFlowPage() {
 
   const monthlySummaries = useMemo(() => {
     const openingBalances = {
-      ...getMonthlyBalances(),
+      ...openingBalancesMap,
       [selectedMonth]: openingBalance,
     };
     return buildMonthlySummaries(financialTransactions, openingBalances, workspace);
-  }, [financialTransactions, selectedMonth, openingBalance, workspace]);
+  }, [financialTransactions, openingBalancesMap, selectedMonth, openingBalance, workspace]);
 
   const workspaceMetrics = useMemo(
     () => summarizeWorkspaceTransactions(financialTransactions, workspace, accounts),

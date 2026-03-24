@@ -6,7 +6,17 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "./queryClient";
 import * as fs from "./firestore";
-import type { Transaction, Category, Item, Budget, ClientPayment, Client, Account, CreditCardSetting } from "@shared/schema";
+import type {
+  Transaction,
+  Category,
+  Item,
+  Budget,
+  ClientPayment,
+  Client,
+  Account,
+  CreditCardSetting,
+  OpeningBalance,
+} from "@shared/schema";
 
 // ── Transactions ────────────────────────────────────────────────
 export function useTransactions() {
@@ -177,6 +187,24 @@ export function useGenerateMonthlyRecurringTransactions() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
+    },
+  });
+}
+
+// ── Opening Balances ───────────────────────────────────────────
+export function useOpeningBalances() {
+  return useQuery<OpeningBalance[]>({
+    queryKey: ["opening-balances"],
+    queryFn: () => fs.listOpeningBalances(),
+  });
+}
+
+export function useSetOpeningBalance() {
+  return useMutation({
+    mutationFn: ({ monthKey, amount }: { monthKey: string; amount: number }) =>
+      fs.setOpeningBalance(monthKey, amount),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["opening-balances"] });
     },
   });
 }

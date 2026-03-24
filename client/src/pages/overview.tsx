@@ -51,7 +51,7 @@ import {
   summarizeClientPaymentsByMonth,
   summarizeWorkspaceTransactions,
 } from "@/lib/finance";
-import { getMonthlyBalances } from "@/lib/monthly-balances";
+import { useMonthlyBalances } from "@/lib/monthly-balances";
 import { getCreditCards } from "@/lib/credit-cards";
 
 const FAMILY_CATEGORY_HINTS = [
@@ -1007,6 +1007,7 @@ export default function OverviewPage() {
   const { data: categories = [] } = useCategories();
   const { data: items = [] } = useItems();
   const { data: accounts = [] } = useAccounts();
+  const { balances: openingBalancesMap } = useMonthlyBalances();
   const { data: dashboardPreferences } = useDashboardPreferences();
   const updateDashboardPreferencesMutation = useUpdateDashboardPreferences();
   const currentMonthKey = getCurrentMonthKey();
@@ -1261,7 +1262,7 @@ export default function OverviewPage() {
   const summaryOpeningBalance = selectedAccount ? (selectedAccount.currentBalance ?? 0) : openingBalance;
   const currentMonthSummary = useMemo(() => {
     const openingBalances = {
-      ...getMonthlyBalances(),
+      ...openingBalancesMap,
       [currentMonthKey]: summaryOpeningBalance,
     };
 
@@ -1280,7 +1281,7 @@ export default function OverviewPage() {
       hasRealData: false,
       hasPlannedData: false,
     };
-  }, [filteredFinancialTransactions, currentMonthKey, summaryOpeningBalance]);
+  }, [filteredFinancialTransactions, currentMonthKey, openingBalancesMap, summaryOpeningBalance]);
   const unassignedCurrentMonthTransactions = useMemo(
     () => transactions.filter((tx) => tx.date.startsWith(currentMonthKey) && !tx.accountId).length,
     [currentMonthKey, transactions],

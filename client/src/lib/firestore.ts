@@ -14,6 +14,8 @@ import {
   writeBatch,
   query,
   orderBy,
+  where,
+  limit,
   type QuerySnapshot,
   type DocumentData,
 } from "firebase/firestore/lite";
@@ -246,6 +248,26 @@ export async function getOpeningBalances() {
   return snapToArray<any>(snap);
 }
 
+export async function listOpeningBalances() {
+  return getOpeningBalances();
+}
+
+export async function getOpeningBalance(monthKey: string) {
+  const [yearPart, monthPart] = monthKey.split("-").map(Number);
+  if (!Number.isInteger(yearPart) || !Number.isInteger(monthPart)) return null;
+
+  const snap = await getDocs(
+    query(
+      openingBalancesCol(),
+      where("year", "==", yearPart),
+      where("month", "==", monthPart),
+      limit(1),
+    ),
+  );
+
+  return snap.empty ? null : ({ id: snap.docs[0].id, ...snap.docs[0].data() } as any);
+}
+
 export async function createOpeningBalance(data: Record<string, any>) {
   const ref = await addDoc(openingBalancesCol(), data);
   return { id: ref.id, ...data };
@@ -255,6 +277,26 @@ export async function updateOpeningBalance(id: string, data: Record<string, any>
   const ref = doc(db, "openingBalances", id);
   await updateDoc(ref, data);
   return { id, ...data };
+}
+
+export async function setOpeningBalance(monthKey: string, amount: number) {
+  const [yearPart, monthPart] = monthKey.split("-").map(Number);
+  if (!Number.isInteger(yearPart) || !Number.isInteger(monthPart)) {
+    throw new Error(`Invalid monthKey for opening balance: ${monthKey}`);
+  }
+
+  const existing = await getOpeningBalance(monthKey);
+  const normalizedAmount = Number.isFinite(amount) ? amount : 0;
+
+  if (existing) {
+    return updateOpeningBalance(existing.id, { amount: normalizedAmount });
+  }
+
+  return createOpeningBalance({
+    year: yearPart,
+    month: monthPart,
+    amount: normalizedAmount,
+  });
 }
 
 // ════════════════════════════════════════════════════════════════
