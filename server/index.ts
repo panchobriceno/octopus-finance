@@ -6,6 +6,15 @@ import { createServer } from "http";
 const app = express();
 const httpServer = createServer(app);
 
+const defaultFirebaseConfig = {
+  VITE_FIREBASE_API_KEY: "AIzaSyDFkNHHxpcRNB_2n_JaDJxD0sCI_cY2skA",
+  VITE_FIREBASE_AUTH_DOMAIN: "my-cash-flow-bcb24.firebaseapp.com",
+  VITE_FIREBASE_PROJECT_ID: "my-cash-flow-bcb24",
+  VITE_FIREBASE_STORAGE_BUCKET: "my-cash-flow-bcb24.firebasestorage.app",
+  VITE_FIREBASE_MESSAGING_SENDER_ID: "660839296094",
+  VITE_FIREBASE_APP_ID: "1:660839296094:f0e9e5bd5a9518cf",
+};
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
@@ -24,12 +33,16 @@ app.use(express.urlencoded({ extended: false }));
 
 app.get("/app-config.js", (_req, res) => {
   const firebaseConfig = {
-    VITE_FIREBASE_API_KEY: process.env.VITE_FIREBASE_API_KEY ?? "",
-    VITE_FIREBASE_AUTH_DOMAIN: process.env.VITE_FIREBASE_AUTH_DOMAIN ?? "",
-    VITE_FIREBASE_PROJECT_ID: process.env.VITE_FIREBASE_PROJECT_ID ?? "",
-    VITE_FIREBASE_STORAGE_BUCKET: process.env.VITE_FIREBASE_STORAGE_BUCKET ?? "",
-    VITE_FIREBASE_MESSAGING_SENDER_ID: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "",
-    VITE_FIREBASE_APP_ID: process.env.VITE_FIREBASE_APP_ID ?? "",
+    VITE_FIREBASE_API_KEY: process.env.VITE_FIREBASE_API_KEY || defaultFirebaseConfig.VITE_FIREBASE_API_KEY,
+    VITE_FIREBASE_AUTH_DOMAIN:
+      process.env.VITE_FIREBASE_AUTH_DOMAIN || defaultFirebaseConfig.VITE_FIREBASE_AUTH_DOMAIN,
+    VITE_FIREBASE_PROJECT_ID:
+      process.env.VITE_FIREBASE_PROJECT_ID || defaultFirebaseConfig.VITE_FIREBASE_PROJECT_ID,
+    VITE_FIREBASE_STORAGE_BUCKET:
+      process.env.VITE_FIREBASE_STORAGE_BUCKET || defaultFirebaseConfig.VITE_FIREBASE_STORAGE_BUCKET,
+    VITE_FIREBASE_MESSAGING_SENDER_ID:
+      process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || defaultFirebaseConfig.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    VITE_FIREBASE_APP_ID: process.env.VITE_FIREBASE_APP_ID || defaultFirebaseConfig.VITE_FIREBASE_APP_ID,
   };
 
   res.setHeader("Content-Type", "application/javascript; charset=utf-8");
