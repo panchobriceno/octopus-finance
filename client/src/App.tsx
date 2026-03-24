@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Switch, Route, Router } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
@@ -21,6 +22,8 @@ import ClientPaymentsPage from "@/pages/client-payments";
 import SettingsPage from "@/pages/settings";
 import MonthlyClosePage from "@/pages/monthly-close";
 import CreditCardsPanelPage from "@/pages/credit-cards-panel";
+import { getCurrentMonthKey } from "@/lib/finance";
+import { autoCarryForwardOpeningBalance } from "@/lib/monthly-balances";
 
 function AppRouter() {
   return (
@@ -48,6 +51,10 @@ const sidebarStyle = {
 };
 
 function App() {
+  useEffect(() => {
+    void autoCarryForwardOpeningBalance(getCurrentMonthKey());
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { OpeningBalance } from "@shared/schema";
-import { setOpeningBalance as persistOpeningBalance } from "./firestore";
+import {
+  getClientPayments,
+  getOpeningBalance as getStoredOpeningBalance,
+  getTransactions,
+  listOpeningBalances,
+  setOpeningBalance as persistOpeningBalance,
+} from "./firestore";
 import { useOpeningBalances, useSetOpeningBalance } from "./hooks";
 import { queryClient } from "./queryClient";
+import { buildMonthlySummaries, combineFinancialTransactions } from "./finance";
 
 const STORAGE_KEY = "octopus_monthly_balance";
 const MIGRATION_KEY = "octopus_monthly_balance_firestore_migrated_v1";
@@ -33,6 +40,14 @@ function parseMonthKey(monthKey: string) {
   const [year, month] = monthKey.split("-").map(Number);
   if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null;
   return { year, month };
+}
+
+function getPreviousMonthKey(monthKey: string) {
+  const parsedMonth = parseMonthKey(monthKey);
+  if (!parsedMonth) return null;
+
+  const previousMonth = new Date(parsedMonth.year, parsedMonth.month - 2, 1);
+  return formatMonthKey(previousMonth.getFullYear(), previousMonth.getMonth() + 1);
 }
 
 function formatMonthKey(year: number, month: number) {
@@ -87,6 +102,50 @@ export async function setOpeningBalance(monthKey: string, amount: number) {
   broadcastOpeningBalanceUpdate();
   await persistOpeningBalance(monthKey, normalizedAmount);
   await queryClient.invalidateQueries({ queryKey: ["opening-balances"] });
+}
+
+async function autoCarryForwardOpeningBalanceInternal(monthKey: string, visited: Set<string>) {
+  if (visited.has(monthKey)) return false;
+  visited.add(monthKey);
+
+  const existingOpeningBalance = await getStoredOpeningBalance(monthKey);
+  if (existingOpeningBalance) return false;
+
+  const previousMonthKey = getPreviousMonthKey(monthKey);
+  if (!previousMonthKey) return false;
+
+  const previousStoredOpeningBalance = await getStoredOpeningBalance(previousMonthKey);
+  if (!previousStoredOpeningBalance) {
+    await autoCarryForwardOpeningBalanceInternal(previousMonthKey, visited);
+  }
+
+  const currentOpeningBalance = await getStoredOpeningBalance(monthKey);
+  if (currentOpeningBalance) return false;
+
+  const [transactions, clientPayments, openingBalances] = await Promise.all([
+    getTransactions(),
+    getClientPayments(),
+    listOpeningBalances(),
+  ]);
+
+  const previousMonthSummary = buildMonthlySummaries(
+    combineFinancialTransactions(transactions, clientPayments),
+    toBalanceMap(openingBalances),
+  ).find((summary) => summary.monthKey === previousMonthKey);
+
+  if (!previousMonthSummary?.hasRealData || !Number.isFinite(previousMonthSummary.realEndingBalance)) {
+    return false;
+  }
+
+  await setOpeningBalance(monthKey, previousMonthSummary.realEndingBalance);
+  return true;
+}
+
+export async function autoCarryForwardOpeningBalance(currentMonthKey: string) {
+  const parsedMonth = parseMonthKey(currentMonthKey);
+  if (!parsedMonth) return false;
+
+  return autoCarryForwardOpeningBalanceInternal(currentMonthKey, new Set<string>());
 }
 
 export function useMonthlyBalances() {
