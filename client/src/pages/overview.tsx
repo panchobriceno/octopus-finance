@@ -88,6 +88,25 @@ function workspaceLabel(workspace: "business" | "family" | "dentist") {
   return "Consulta Dentista";
 }
 
+type TransactionStatusFilter = "all" | "paid" | "pending" | "cancelled" | "planned" | "actual";
+type TransactionWorkspaceFilter = "all" | "business" | "family" | "shared";
+type TransactionSortField = "date" | "name" | "amount" | "status" | "workspace";
+
+function transactionWorkspaceLabel(workspace?: string | null) {
+  if (workspace === "family") return "Familia";
+  if (workspace === "shared" || workspace === "dentist") return "Compartido";
+  return "Empresa";
+}
+
+function matchesTransactionWorkspaceFilter(
+  workspace: string | null | undefined,
+  filter: TransactionWorkspaceFilter,
+) {
+  if (filter === "all") return true;
+  if (filter === "shared") return workspace === "shared" || workspace === "dentist";
+  return workspace === filter;
+}
+
 function accountWorkspaceLabel(workspace?: string | null): "business" | "family" | "dentist" {
   if (workspace === "family") return "family";
   if (workspace === "dentist") return "dentist";
@@ -977,6 +996,10 @@ export default function OverviewPage() {
   const [filterFromDate, setFilterFromDate] = useState("");
   const [filterToDate, setFilterToDate] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [filterStatus, setFilterStatus] = useState<TransactionStatusFilter>("all");
+  const [filterWorkspace, setFilterWorkspace] = useState<TransactionWorkspaceFilter>("all");
+  const [transactionSortField, setTransactionSortField] = useState<TransactionSortField>("date");
+  const [transactionSortDirection, setTransactionSortDirection] = useState<"asc" | "desc">("desc");
   const { toast } = useToast();
 
   const { data: transactions = [], isLoading: txLoading } = useTransactions();
@@ -1065,16 +1088,79 @@ export default function OverviewPage() {
   const activeHiddenCards = isConfigMode ? draftHiddenCards : normalizedDashboardPreferences.hiddenCards;
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
+      const normalized = normalizeTransaction(tx);
       if (selectedAccountFilter !== "all" && tx.accountId !== selectedAccountFilter) return false;
       if (filterCategory !== "all" && tx.category !== filterCategory) return false;
       if (filterFromDate && tx.date < filterFromDate) return false;
       if (filterToDate && tx.date > filterToDate) return false;
+      if (filterStatus === "planned" || filterStatus === "actual") {
+        if (normalized.subtype !== filterStatus) return false;
+      } else if (filterStatus !== "all" && normalized.status !== filterStatus) {
+        return false;
+      }
+      if (!matchesTransactionWorkspaceFilter(normalized.workspace, filterWorkspace)) return false;
       return true;
     });
-  }, [transactions, selectedAccountFilter, filterCategory, filterFromDate, filterToDate]);
+  }, [transactions, selectedAccountFilter, filterCategory, filterFromDate, filterToDate, filterStatus, filterWorkspace]);
+
+  const sortedTransactions = useMemo(() => {
+    const sorted = [...filteredTransactions];
+    const directionMultiplier = transactionSortDirection === "asc" ? 1 : -1;
+
+    sorted.sort((left, right) => {
+      const leftNormalized = normalizeTransaction(left);
+      const rightNormalized = normalizeTransaction(right);
+      let comparison = 0;
+
+      switch (transactionSortField) {
+        case "date":
+          comparison = left.date.localeCompare(right.date);
+          break;
+        case "name":
+          comparison = left.name.localeCompare(right.name, "es");
+          break;
+        case "amount":
+          comparison = left.amount - right.amount;
+          break;
+        case "status": {
+          const leftLabel =
+            leftNormalized.status === "paid" ? "Pagado" : leftNormalized.status === "pending" ? "Pendiente" : "Cancelado";
+          const rightLabel =
+            rightNormalized.status === "paid" ? "Pagado" : rightNormalized.status === "pending" ? "Pendiente" : "Cancelado";
+          comparison = leftLabel.localeCompare(rightLabel, "es");
+          break;
+        }
+        case "workspace":
+          comparison = transactionWorkspaceLabel(leftNormalized.workspace).localeCompare(
+            transactionWorkspaceLabel(rightNormalized.workspace),
+            "es",
+          );
+          break;
+      }
+
+      if (comparison === 0) {
+        comparison = left.date.localeCompare(right.date);
+      }
+
+      return comparison * directionMultiplier;
+    });
+
+    return sorted;
+  }, [filteredTransactions, transactionSortDirection, transactionSortField]);
 
   // Visible transactions (limited to 50)
-  const visibleTransactions = filteredTransactions.slice(0, 50);
+  const visibleTransactions = sortedTransactions.slice(0, 50);
+  const toggleTransactionSort = (field: TransactionSortField) => {
+    if (transactionSortField === field) {
+      setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setTransactionSortField(field);
+    setTransactionSortDirection(field === "date" ? "desc" : "asc");
+  };
+  const getTransactionSortArrow = (field: TransactionSortField) =>
+    transactionSortField === field ? (transactionSortDirection === "asc" ? "↑" : "↓") : null;
 
   // ── Mutations ──
   const createMutation = useCreateTransaction();
@@ -2008,7 +2094,7 @@ export default function OverviewPage() {
           </div>
         </CardHeader>
         <CardContent className="px-0">
-          <div className="mx-5 mb-4 grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="mx-5 mb-4 grid grid-cols-1 md:grid-cols-3 xl:grid-cols-7 gap-3">
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">Cuenta</p>
               <Select value={selectedAccountFilter} onValueChange={setSelectedAccountFilter}>
@@ -2054,6 +2140,36 @@ export default function OverviewPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Estado</p>
+              <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as TransactionStatusFilter)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los estados</SelectItem>
+                  <SelectItem value="paid">Pagado</SelectItem>
+                  <SelectItem value="pending">Pendiente</SelectItem>
+                  <SelectItem value="cancelled">Cancelado</SelectItem>
+                  <SelectItem value="planned">Presupuestado</SelectItem>
+                  <SelectItem value="actual">Ejecutado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Ámbito</p>
+              <Select value={filterWorkspace} onValueChange={(value) => setFilterWorkspace(value as TransactionWorkspaceFilter)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los ámbitos</SelectItem>
+                  <SelectItem value="business">Empresa</SelectItem>
+                  <SelectItem value="family">Familia</SelectItem>
+                  <SelectItem value="shared">Compartido</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex items-end">
               <Button
                 type="button"
@@ -2063,6 +2179,8 @@ export default function OverviewPage() {
                   setFilterFromDate("");
                   setFilterToDate("");
                   setFilterCategory("all");
+                  setFilterStatus("all");
+                  setFilterWorkspace("all");
                 }}
               >
                 Limpiar filtros
@@ -2121,14 +2239,43 @@ export default function OverviewPage() {
                       aria-label="Seleccionar todas"
                     />
                   </TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Nombre</TableHead>
+                  <TableHead>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleTransactionSort("date")}>
+                      <span>Fecha</span>
+                      {getTransactionSortArrow("date") ? <span className="text-xs">{getTransactionSortArrow("date")}</span> : null}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleTransactionSort("name")}>
+                      <span>Nombre</span>
+                      {getTransactionSortArrow("name") ? <span className="text-xs">{getTransactionSortArrow("name")}</span> : null}
+                    </button>
+                  </TableHead>
                   <TableHead>Categoría</TableHead>
-                  <TableHead>Ámbito</TableHead>
+                  <TableHead>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleTransactionSort("workspace")}>
+                      <span>Ámbito</span>
+                      {getTransactionSortArrow("workspace") ? <span className="text-xs">{getTransactionSortArrow("workspace")}</span> : null}
+                    </button>
+                  </TableHead>
                   <TableHead>Pago</TableHead>
                   <TableHead>Ejecutado/Presup.</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
+                  <TableHead>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleTransactionSort("status")}>
+                      <span>Estado</span>
+                      {getTransactionSortArrow("status") ? <span className="text-xs">{getTransactionSortArrow("status")}</span> : null}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button
+                      type="button"
+                      className="ml-auto inline-flex items-center gap-1"
+                      onClick={() => toggleTransactionSort("amount")}
+                    >
+                      <span>Monto</span>
+                      {getTransactionSortArrow("amount") ? <span className="text-xs">{getTransactionSortArrow("amount")}</span> : null}
+                    </button>
+                  </TableHead>
                   <TableHead className="text-right pr-5">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -2164,7 +2311,7 @@ export default function OverviewPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs">
-                        {workspaceLabel(normalized.workspace)}
+                        {transactionWorkspaceLabel(normalized.workspace)}
                       </Badge>
                     </TableCell>
                     <TableCell>

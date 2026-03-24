@@ -97,6 +97,20 @@ function calculateVatAndTotal(netAmount: string) {
   };
 }
 
+function getMonthKeyFromDate(date: string | null | undefined) {
+  return date ? date.slice(0, 7) : "";
+}
+
+function formatMonthKeyLabel(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const label = new Intl.DateTimeFormat("es-CL", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(year, month - 1, 1));
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function normalizeText(value: string | null | undefined) {
   return String(value ?? "")
     .normalize("NFD")
@@ -145,6 +159,7 @@ export default function ClientPaymentsPage() {
   const [newClientName, setNewClientName] = useState("");
   const [newClientRut, setNewClientRut] = useState("");
   const [newClientWorkspace, setNewClientWorkspace] = useState("business");
+  const [selectedMonthFilter, setSelectedMonthFilter] = useState("all");
   const [sortField, setSortField] = useState<"clientName" | "rut" | "serviceItem" | "serviceMonth" | "issueDate" | "dueDate" | "status" | "netAmount" | "vatAmount" | "totalAmount">("dueDate");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const { toast } = useToast();
@@ -181,7 +196,32 @@ export default function ClientPaymentsPage() {
     [payments],
   );
 
-  const summary = useMemo(() => payments.reduce((acc, payment) => {
+  const monthOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          payments
+            .map((payment) => getMonthKeyFromDate(payment.dueDate))
+            .filter((monthKey) => Boolean(monthKey)),
+        ),
+      )
+        .sort((left, right) => right.localeCompare(left))
+        .map((monthKey) => ({
+          value: monthKey,
+          label: formatMonthKeyLabel(monthKey),
+        })),
+    [payments],
+  );
+
+  const filteredPayments = useMemo(
+    () =>
+      selectedMonthFilter === "all"
+        ? payments
+        : payments.filter((payment) => getMonthKeyFromDate(payment.dueDate) === selectedMonthFilter),
+    [payments, selectedMonthFilter],
+  );
+
+  const summary = useMemo(() => filteredPayments.reduce((acc, payment) => {
     if (payment.status === "cancelled") return acc;
 
     acc.totalNet += payment.netAmount;
@@ -202,11 +242,11 @@ export default function ClientPaymentsPage() {
     invoiced: 0,
     receivable: 0,
     projected: 0,
-  }), [payments]);
+  }), [filteredPayments]);
 
   const sortedPayments = useMemo(
     () =>
-      [...payments].sort((left, right) => {
+      [...filteredPayments].sort((left, right) => {
         const getValue = (payment: ClientPayment) => {
           switch (sortField) {
             case "netAmount":
@@ -226,7 +266,7 @@ export default function ClientPaymentsPage() {
             : String(leftValue).localeCompare(String(rightValue));
         return sortDirection === "asc" ? comparison : -comparison;
       }),
-    [payments, sortDirection, sortField],
+    [filteredPayments, sortDirection, sortField],
   );
 
   const toggleSort = (field: typeof sortField) => {
@@ -855,7 +895,25 @@ export default function ClientPaymentsPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">Clientes y pagos</CardTitle>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <CardTitle className="text-base font-semibold">Clientes y pagos</CardTitle>
+            <div className="w-full md:w-64 space-y-1.5">
+              <p className="text-xs text-muted-foreground">Mes</p>
+              <Select value={selectedMonthFilter} onValueChange={setSelectedMonthFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los meses</SelectItem>
+                  {monthOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="px-0">
           <div className="overflow-x-auto">
