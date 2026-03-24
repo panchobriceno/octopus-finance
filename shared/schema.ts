@@ -151,6 +151,22 @@ export interface InsertAccount {
   updatedAt?: string;
 }
 
+// ── Credit Card Settings ──────────────────────────────────────
+export interface CreditCardSetting {
+  id: string;
+  cardName: string;
+  defaultPaymentAccountId: string | null;
+  workspace: string; // "business" | "family" | "shared"
+  isActive: boolean;
+}
+
+export interface InsertCreditCardSetting {
+  cardName: string;
+  defaultPaymentAccountId?: string | null;
+  workspace?: string;
+  isActive?: boolean;
+}
+
 // ── Categories ──────────────────────────────────────────────────
 export interface Category {
   id: string;
@@ -302,4 +318,11 @@ export const insertAccountSchema = z.object({
   isShared: z.boolean().optional(),
   notes: z.string().nullable().optional(),
   updatedAt: z.string().optional(),
+});
+
+export const insertCreditCardSettingSchema = z.object({
+  cardName: z.string().min(1),
+  defaultPaymentAccountId: z.string().nullable().optional(),
+  workspace: z.enum(["business", "family", "shared"]).optional(),
+  isActive: z.boolean().optional(),
 });

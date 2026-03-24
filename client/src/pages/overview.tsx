@@ -98,6 +98,16 @@ function accountDisplayName(account: Account) {
   return `${account.name} — ${account.bank}`;
 }
 
+function isCreditCardPurchaseMovement({
+  movementType,
+  paymentMethod,
+}: {
+  movementType: "income" | "expense" | "transfer" | "credit_card_payment";
+  paymentMethod: "cash" | "bank_account" | "credit_card";
+}) {
+  return movementType === "expense" && paymentMethod === "credit_card";
+}
+
 const DASHBOARD_CARD_IDS = [
   "kpi-balance",
   "kpi-ingresos",
@@ -198,19 +208,24 @@ function KPICard({
   color: string;
 }) {
   return (
-    <Card data-testid={`kpi-${title.toLowerCase().replace(/\s/g, "-")}`}>
-      <CardContent className="pt-5 pb-4 px-5">
+    <Card
+      data-testid={`kpi-${title.toLowerCase().replace(/\s/g, "-")}`}
+      className="glass glow-card overflow-hidden rounded-xl border-white/5 bg-[#1a172a]/85"
+    >
+      <CardContent className="px-5 pb-5 pt-5">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-xl font-semibold tabular-nums mt-1">{value}</p>
+            <p className="text-sm font-medium text-[#aea8be]">{title}</p>
+            <p className="glow-text-primary mt-2 text-2xl font-extrabold tracking-tight tabular-nums text-[#ece5fc]">
+              {value}
+            </p>
             {trend && (
-              <p className="text-xs text-muted-foreground mt-1">{trend}</p>
+              <p className="mt-2 text-xs text-[#aea8be]">{trend}</p>
             )}
           </div>
           <div
-            className="p-2.5 rounded-lg"
-            style={{ backgroundColor: `${color}15` }}
+            className="rounded-xl border border-white/5 p-3"
+            style={{ backgroundColor: `${color}18` }}
           >
             <Icon className="size-5" style={{ color }} />
           </div>
@@ -501,6 +516,11 @@ function TransactionForm({
   const [formCreditCardName, setFormCreditCardName] = useState(defaults.creditCardName);
   const [formInstallmentCount, setFormInstallmentCount] = useState(defaults.installmentCount);
   const [formNotes, setFormNotes] = useState(defaults.notes);
+  const isCreditCardPurchase = isCreditCardPurchaseMovement({
+    movementType: formMovementType,
+    paymentMethod: formPaymentMethod,
+  });
+  const canKeepPaidCreditCardPurchase = mode === "edit" && defaults.status === "paid";
 
   const effectiveType = formMovementType === "income" ? "income" : "expense";
   const filteredCategories = categories.filter((c) => c.type === effectiveType);
@@ -536,6 +556,14 @@ function TransactionForm({
     setFormWorkspace(isFamilyCategory ? "family" : "business");
   }, [categories, categoryRequired, formCategoryId]);
 
+  useEffect(() => {
+    if (!isCreditCardPurchase) return;
+    if (formStatus !== "paid") return;
+    if (canKeepPaidCreditCardPurchase) return;
+
+    setFormStatus("pending");
+  }, [canKeepPaidCreditCardPurchase, formStatus, isCreditCardPurchase]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formAmount) {
@@ -552,6 +580,14 @@ function TransactionForm({
     }
     if ((formMovementType === "credit_card_payment" || formPaymentMethod === "credit_card") && !formCreditCardName.trim()) {
       toast({ title: "Escribe el nombre de la tarjeta", variant: "destructive" });
+      return;
+    }
+    if (isCreditCardPurchase && formStatus === "paid" && !canKeepPaidCreditCardPurchase) {
+      toast({
+        title: "Usa Pago TC para liquidar compras con tarjeta",
+        description: "Las compras hechas con tarjeta se registran como pendientes y se liquidan con un Pago TC separado.",
+        variant: "destructive",
+      });
       return;
     }
     onSubmit({
@@ -795,10 +831,17 @@ function TransactionForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="pending">Pendiente</SelectItem>
-            <SelectItem value="paid">Pagado</SelectItem>
+            <SelectItem value="paid" disabled={isCreditCardPurchase && !canKeepPaidCreditCardPurchase}>
+              Pagado
+            </SelectItem>
             <SelectItem value="cancelled">Cancelado</SelectItem>
           </SelectContent>
         </Select>
+        {isCreditCardPurchase ? (
+          <p className="text-[11px] text-muted-foreground">
+            Las compras con tarjeta se liquidan mediante un Pago TC, no cambiando esta fila a pagado.
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-1.5">
@@ -986,6 +1029,10 @@ export default function OverviewPage() {
       }),
     [accounts],
   );
+  const accountById = useMemo(
+    () => new Map(accounts.map((account) => [account.id, account])),
+    [accounts],
+  );
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === selectedAccountFilter) ?? null,
     [accounts, selectedAccountFilter],
@@ -995,6 +1042,21 @@ export default function OverviewPage() {
       ? (selectedAccount.currentBalance ?? 0)
       : 0
     : savingsBalance;
+  const selectedTransactionsForBulkEdit = useMemo(
+    () => transactions.filter((tx) => selectedIds.has(tx.id)),
+    [selectedIds, transactions],
+  );
+  const bulkEditIncludesCreditCardPurchases = useMemo(
+    () =>
+      selectedTransactionsForBulkEdit.some((tx) => {
+        const normalized = normalizeTransaction(tx);
+        return isCreditCardPurchaseMovement({
+          movementType: normalized.movementType,
+          paymentMethod: normalized.paymentMethod,
+        }) && tx.status !== "paid";
+      }),
+    [selectedTransactionsForBulkEdit],
+  );
   const normalizedDashboardPreferences = useMemo(
     () => normalizeDashboardPreferences(dashboardPreferences ?? null),
     [dashboardPreferences],
@@ -1197,23 +1259,23 @@ export default function OverviewPage() {
           id: "kpi-ingresos" as DashboardCardId,
           className: "",
           content: (
-            <Card data-testid="kpi-ingresos">
-              <CardContent className="pt-5 pb-4 px-5">
+            <Card data-testid="kpi-ingresos" className="glass glow-card overflow-hidden rounded-xl border-white/5 bg-[#1a172a]/85">
+              <CardContent className="px-5 pb-5 pt-5">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Ingresos</p>
-                    <p className="text-xl font-semibold tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">
+                    <p className="text-sm font-medium text-[#aea8be]">Ingresos</p>
+                    <p className="glow-text-primary mt-2 text-2xl font-extrabold tracking-tight tabular-nums text-[#bcffe0]">
                       {formatCLP(currentMonthRealIncome)}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="mt-2 text-xs text-[#aea8be]">
                       Proyectado: {formatCLP(currentMonthProjectedIncome)}
                     </p>
                   </div>
                   <div
-                    className="p-2.5 rounded-lg"
-                    style={{ backgroundColor: `${"#10b981"}15` }}
+                    className="rounded-xl border border-white/5 p-3"
+                    style={{ backgroundColor: `${"#bcffe0"}15` }}
                   >
-                    <TrendingUp className="size-5" style={{ color: "#10b981" }} />
+                    <TrendingUp className="size-5" style={{ color: "#bcffe0" }} />
                   </div>
                 </div>
               </CardContent>
@@ -1252,11 +1314,11 @@ export default function OverviewPage() {
           id: "caja-empresa" as DashboardCardId,
           className: "",
           content: (
-            <Card>
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-muted-foreground">Empresa: caja real</p>
-                <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(businessMetrics.cashFlow)}</p>
-                <p className="text-xs text-muted-foreground mt-1">Ingresos y gastos de empresa, considerando tarjetas</p>
+                <p className="text-sm text-[#aea8be]">Empresa: caja real</p>
+                <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">{formatCLP(businessMetrics.cashFlow)}</p>
+                <p className="mt-2 text-xs text-[#aea8be]">Ingresos y gastos de empresa, considerando tarjetas</p>
               </CardContent>
             </Card>
           ),
@@ -1265,11 +1327,11 @@ export default function OverviewPage() {
           id: "caja-familia" as DashboardCardId,
           className: "",
           content: (
-            <Card>
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-muted-foreground">Familia: caja real</p>
-                <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(familyMetrics.cashFlow)}</p>
-                <p className="text-xs text-muted-foreground mt-1">Incluye transferencias recibidas desde empresa</p>
+                <p className="text-sm text-[#aea8be]">Familia: caja real</p>
+                <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">{formatCLP(familyMetrics.cashFlow)}</p>
+                <p className="mt-2 text-xs text-[#aea8be]">Incluye transferencias recibidas desde empresa</p>
               </CardContent>
             </Card>
           ),
@@ -1278,11 +1340,11 @@ export default function OverviewPage() {
           id: "caja-dentista" as DashboardCardId,
           className: "",
           content: (
-            <Card>
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-muted-foreground">Consulta Dentista: caja real</p>
-                <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(dentistMetrics.cashFlow)}</p>
-                <p className="text-xs text-muted-foreground mt-1">Ingresos y gastos del ámbito consulta</p>
+                <p className="text-sm text-[#aea8be]">Consulta Dentista: caja real</p>
+                <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">{formatCLP(dentistMetrics.cashFlow)}</p>
+                <p className="mt-2 text-xs text-[#aea8be]">Ingresos y gastos del ámbito consulta</p>
               </CardContent>
             </Card>
           ),
@@ -1291,14 +1353,14 @@ export default function OverviewPage() {
           id: "deuda-tarjetas" as DashboardCardId,
           className: "",
           content: (
-            <Card>
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
               <CardContent className="pt-5">
                 <div className="flex items-center gap-2">
-                  <CreditCard className="size-4 text-amber-600 dark:text-amber-300" />
-                  <p className="text-sm text-muted-foreground">Deuda tarjetas empresa</p>
+                  <CreditCard className="size-4 text-[#ff6e84]" />
+                  <p className="text-sm text-[#aea8be]">Deuda tarjetas empresa</p>
                 </div>
-                <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(businessMetrics.creditCardDebt)}</p>
-                <p className="text-xs text-muted-foreground mt-1">Compras TC menos pagos de tarjeta</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-[#ff6e84]">{formatCLP(businessMetrics.creditCardDebt)}</p>
+                <p className="mt-2 text-xs text-[#aea8be]">Compras TC menos pagos de tarjeta</p>
               </CardContent>
             </Card>
           ),
@@ -1307,13 +1369,13 @@ export default function OverviewPage() {
           id: "ahorro" as DashboardCardId,
           className: "",
           content: (
-            <Card>
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-muted-foreground">Ahorro</p>
-                <p className="text-xl font-semibold tabular-nums mt-1">
+                <p className="text-sm text-[#aea8be]">Ahorro</p>
+                <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">
                   {formatCLP(filteredSavingsBalance)}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="mt-2 text-xs text-[#aea8be]">
                   {selectedAccount ? "Saldo de ahorro de la cuenta seleccionada" : "Suma de cuentas de ahorro registradas"}
                 </p>
               </CardContent>
@@ -1324,13 +1386,13 @@ export default function OverviewPage() {
           id: "iva-cobrado" as DashboardCardId,
           className: "",
           content: (
-            <Card>
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-muted-foreground">IVA cobrado este mes</p>
-                <p className="text-xl font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">
+                <p className="text-sm text-[#aea8be]">IVA cobrado este mes</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-[#bb9eff]">
                   {formatCLP(currentMonthPaidVat)}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Se actualiza a medida que los clientes van pagando</p>
+                <p className="mt-2 text-xs text-[#aea8be]">Se actualiza a medida que los clientes van pagando</p>
               </CardContent>
             </Card>
           ),
@@ -1339,13 +1401,13 @@ export default function OverviewPage() {
           id: "iva-proyectado" as DashboardCardId,
           className: "",
           content: (
-            <Card>
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-muted-foreground">IVA proyectado próximo 20</p>
-                <p className="text-xl font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">
+                <p className="text-sm text-[#aea8be]">IVA proyectado próximo 20</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-[#bb9eff]">
                   {formatCLP(currentMonthPaidVat)}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Pago estimado para {formatDate(nextVatDueDate)}</p>
+                <p className="mt-2 text-xs text-[#aea8be]">Pago estimado para {formatDate(nextVatDueDate)}</p>
               </CardContent>
             </Card>
           ),
@@ -1354,13 +1416,13 @@ export default function OverviewPage() {
           id: "caja-sin-iva" as DashboardCardId,
           className: "",
           content: (
-            <Card>
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-muted-foreground">Caja empresa disponible sin IVA</p>
-                <p className="text-xl font-semibold tabular-nums mt-1">
+                <p className="text-sm text-[#aea8be]">Caja empresa disponible sin IVA</p>
+                <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">
                   {formatCLP(businessAvailableAfterVat)}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Caja empresa menos IVA cobrado este mes</p>
+                <p className="mt-2 text-xs text-[#aea8be]">Caja empresa menos IVA cobrado este mes</p>
               </CardContent>
             </Card>
           ),
@@ -1369,51 +1431,51 @@ export default function OverviewPage() {
           id: "balance-apertura" as DashboardCardId,
           className: "md:col-span-2 xl:col-span-4",
           content: (
-            <Card>
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/88">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold">
+                <CardTitle className="text-base font-semibold text-[#ece5fc]">
                   Balance de Apertura y Proyección del Mes
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 lg:grid-cols-[240px_1fr]">
-                <div className="rounded-xl border border-blue-200/70 bg-blue-50/60 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                <div className="rounded-xl border border-white/5 bg-[#211d32]/90 p-4">
+                  <p className="text-sm font-medium text-[#bb9eff]">
                     Saldo inicial
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1 mb-3">
+                  <p className="mb-3 mt-1 text-xs text-[#aea8be]">
                     {selectedAccount ? "Saldo base de la cuenta seleccionada" : "Suma de saldos en cuentas operativas registradas"}
                   </p>
-                  <p className="text-2xl font-semibold tabular-nums">{formatCLP(summaryOpeningBalance)}</p>
-                  <p className="text-xs text-muted-foreground mt-2">
+                  <p className="glow-text-primary text-3xl font-extrabold tracking-tight tabular-nums text-[#ece5fc]">{formatCLP(summaryOpeningBalance)}</p>
+                  <p className="mt-2 text-xs text-[#aea8be]">
                     Mes: {currentMonthKey}
                   </p>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl border border-border bg-muted/30 p-4">
-                    <p className="text-sm text-muted-foreground">Ejecutado</p>
-                    <p className="text-lg font-semibold tabular-nums mt-1">
+                  <div className="rounded-xl border border-white/5 bg-[#211d32]/80 p-4">
+                    <p className="text-sm text-[#aea8be]">Ejecutado</p>
+                    <p className="mt-2 text-xl font-bold tabular-nums text-[#ece5fc]">
                       {formatCLP(currentMonthSummary.realEndingBalance)}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="mt-2 text-xs text-[#aea8be]">
                       {formatCLP(summaryOpeningBalance)} + {formatCLP(currentMonthSummary.realIncome)} - {formatCLP(currentMonthSummary.realExpenses)}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/60 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-                    <p className="text-sm text-muted-foreground">Ingresos presupuestados</p>
-                    <p className="text-lg font-semibold tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">
+                  <div className="rounded-xl border border-white/5 bg-[#211d32]/80 p-4">
+                    <p className="text-sm text-[#aea8be]">Ingresos presupuestados</p>
+                    <p className="mt-2 text-xl font-bold tabular-nums text-[#bcffe0]">
                       {formatCLP(currentMonthSummary.plannedIncome)}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="mt-2 text-xs text-[#aea8be]">
                       No impactan el saldo real
                     </p>
                   </div>
-                  <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
-                    <p className="text-sm text-muted-foreground">Saldo proyectado</p>
-                    <p className="text-lg font-semibold tabular-nums mt-1 text-blue-700 dark:text-blue-300">
+                  <div className="rounded-xl border border-white/5 bg-[#211d32]/80 p-4">
+                    <p className="text-sm text-[#aea8be]">Saldo proyectado</p>
+                    <p className="mt-2 text-xl font-bold tabular-nums text-[#bb9eff]">
                       {formatCLP(currentMonthSummary.projectedEndingBalance)}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="mt-2 text-xs text-[#aea8be]">
                       Ejecutado + proyectado del resto del mes
                     </p>
                   </div>
@@ -1481,6 +1543,15 @@ export default function OverviewPage() {
   const handleBulkEdit = async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
+
+    if (bulkEditStatus === "paid" && bulkEditIncludesCreditCardPurchases) {
+      toast({
+        title: "Usa Pago TC para liquidar compras con tarjeta",
+        description: "La edición masiva no puede marcar compras con tarjeta como pagadas. Registra un Pago TC separado.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const updateData: Record<string, string> = {};
     if (bulkEditCategory !== "__keep__") updateData.category = bulkEditCategory;
@@ -2097,17 +2168,47 @@ export default function OverviewPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {normalized.movementType === "transfer"
-                          ? "Transfer."
-                          : normalized.movementType === "credit_card_payment"
-                          ? "Pago TC"
-                          : normalized.paymentMethod === "credit_card"
-                          ? `TC${normalized.creditCardName ? `: ${normalized.creditCardName}` : ""}`
-                          : normalized.paymentMethod === "cash"
-                          ? "Efectivo"
-                          : "Banco"}
-                      </Badge>
+                      <div className="space-y-1">
+                        <Badge variant="outline" className="text-xs">
+                          {normalized.movementType === "transfer"
+                            ? "Transfer."
+                            : normalized.movementType === "credit_card_payment"
+                            ? "Pago TC"
+                            : normalized.paymentMethod === "credit_card"
+                            ? `TC${normalized.creditCardName ? `: ${normalized.creditCardName}` : ""}`
+                            : normalized.paymentMethod === "cash"
+                            ? "Efectivo"
+                            : "Banco"}
+                        </Badge>
+                        {(() => {
+                          const sourceAccount = normalized.accountId ? accountById.get(normalized.accountId) : null;
+                          const sourceLabel = sourceAccount ? accountDisplayName(sourceAccount) : "Sin cuenta origen vinculada";
+
+                          if (
+                            normalized.movementType === "credit_card_payment"
+                          ) {
+                            return (
+                              <div className="text-[11px] text-muted-foreground">
+                                {sourceLabel}
+                                {normalized.creditCardName ? ` -> ${normalized.creditCardName}` : ""}
+                              </div>
+                            );
+                          }
+
+                          if (
+                            normalized.movementType === "transfer"
+                          ) {
+                            return (
+                              <div className="text-[11px] text-muted-foreground">
+                                {sourceLabel}
+                                {normalized.destinationWorkspace ? ` -> ${normalized.destinationWorkspace}` : ""}
+                              </div>
+                            );
+                          }
+
+                          return null;
+                        })()}
+                      </div>
                     </TableCell>
                     <TableCell>
                       {normalized.movementType === "transfer" ? (
@@ -2314,6 +2415,11 @@ export default function OverviewPage() {
                     <SelectItem value="cancelled">Cancelado</SelectItem>
                   </SelectContent>
                 </Select>
+                {bulkEditIncludesCreditCardPurchases ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Las compras con tarjeta se liquidan mediante un Pago TC, no marcándolas como pagadas en lote.
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="flex justify-end gap-2">

@@ -20,7 +20,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useBulkDeleteTransactions, useCategories, useDeleteTransaction, useTransactions, useUpdateTransaction } from "@/lib/hooks";
+import {
+  useAccounts,
+  useBulkDeleteTransactions,
+  useCategories,
+  useCreateCreditCardSetting,
+  useCreditCardSettings,
+  useDeleteTransaction,
+  useTransactions,
+  useUpdateCreditCardSetting,
+  useUpdateTransaction,
+} from "@/lib/hooks";
 import { buildCreditCardInstallmentProjectionTransactions, getMonthKeyFromDate, isExecutedTransaction, normalizeTransaction } from "@/lib/finance";
 import { getCreditCards } from "@/lib/credit-cards";
 import { formatCLP } from "@/lib/utils";
@@ -54,6 +64,10 @@ type ImportBatchSummary = {
   totalAmount: number;
 };
 
+function accountDisplayName(account: { name: string; bank: string }) {
+  return `${account.name} — ${account.bank}`;
+}
+
 export default function CreditCardsPanelPage() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -69,12 +83,17 @@ export default function CreditCardsPanelPage() {
   const [editAmount, setEditAmount] = useState("");
   const [editDate, setEditDate] = useState("");
   const [editInstallments, setEditInstallments] = useState("1");
+  const [paymentAccountDrafts, setPaymentAccountDrafts] = useState<Record<string, string>>({});
 
   const { data: transactions = [], isLoading } = useTransactions();
   const { data: categories = [] } = useCategories();
+  const { data: accounts = [] } = useAccounts();
+  const { data: creditCardSettings = [] } = useCreditCardSettings();
   const updateMutation = useUpdateTransaction();
   const deleteMutation = useDeleteTransaction();
   const bulkDeleteMutation = useBulkDeleteTransactions();
+  const createCreditCardSettingMutation = useCreateCreditCardSetting();
+  const updateCreditCardSettingMutation = useUpdateCreditCardSetting();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -86,6 +105,20 @@ export default function CreditCardsPanelPage() {
   }, []);
 
   const selectedMonthKey = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+
+  const bankAccounts = useMemo(
+    () =>
+      accounts.filter((account) => {
+        const isBankType = account.type === "checking" || account.type === "savings";
+        const isActive = (account as { isActive?: boolean }).isActive ?? true;
+        return isBankType && isActive;
+      }),
+    [accounts],
+  );
+  const accountById = useMemo(
+    () => new Map(accounts.map((account) => [account.id, account])),
+    [accounts],
+  );
 
   const creditCardTransactions = useMemo(
     () =>
@@ -123,6 +156,16 @@ export default function CreditCardsPanelPage() {
       left.localeCompare(right, "es"),
     );
   }, [creditCardTransactions, savedCards]);
+
+  useEffect(() => {
+    const nextDrafts = Object.fromEntries(
+      cardNames.map((cardName) => {
+        const matchedSetting = creditCardSettings.find((setting) => setting.cardName === cardName);
+        return [cardName, matchedSetting?.defaultPaymentAccountId ?? "none"];
+      }),
+    );
+    setPaymentAccountDrafts(nextDrafts);
+  }, [cardNames, creditCardSettings]);
 
   useEffect(() => {
     if (selectedCard !== "all" && !cardNames.includes(selectedCard)) {
@@ -431,6 +474,42 @@ export default function CreditCardsPanelPage() {
     },
   );
 
+  const handleSavePaymentAccount = (cardName: string) => {
+    const selectedAccountId = paymentAccountDrafts[cardName];
+    const matchedSetting = creditCardSettings.find((setting) => setting.cardName === cardName);
+    const linkedAccount = bankAccounts.find((account) => account.id === selectedAccountId);
+    const payload = {
+      cardName,
+      defaultPaymentAccountId: selectedAccountId && selectedAccountId !== "none" ? selectedAccountId : null,
+      workspace: linkedAccount?.workspace ?? matchedSetting?.workspace ?? "family",
+      isActive: true,
+    };
+
+    if (matchedSetting) {
+      updateCreditCardSettingMutation.mutate(
+        { id: matchedSetting.id, data: payload },
+        {
+          onSuccess: () => {
+            toast({
+              title: "Cuenta vinculada",
+              description: `La tarjeta ${cardName} ya tiene cuenta de pago por defecto guardada.`,
+            });
+          },
+        },
+      );
+      return;
+    }
+
+    createCreditCardSettingMutation.mutate(payload, {
+      onSuccess: () => {
+        toast({
+          title: "Vinculación creada",
+          description: `La tarjeta ${cardName} ya quedó asociada a su cuenta de pago por defecto.`,
+        });
+      },
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="p-6 space-y-6">
@@ -512,6 +591,69 @@ export default function CreditCardsPanelPage() {
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Cuenta de pago por tarjeta</CardTitle>
+          <CardDescription>
+            Esta relación se usa para que los pagos TC importados queden vinculados automáticamente a la cuenta corriente desde la que salen.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tarjeta</TableHead>
+                <TableHead>Cuenta por defecto</TableHead>
+                <TableHead className="text-right">Acción</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cardNames.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
+                    Aún no hay tarjetas registradas para vincular.
+                  </TableCell>
+                </TableRow>
+              ) : cardNames.map((cardName) => (
+                <TableRow key={cardName}>
+                  <TableCell className="font-medium">{cardName}</TableCell>
+                  <TableCell>
+                    <Select
+                      value={paymentAccountDrafts[cardName] ?? "none"}
+                      onValueChange={(value) =>
+                        setPaymentAccountDrafts((current) => ({ ...current, [cardName]: value }))
+                      }
+                    >
+                      <SelectTrigger className="w-full max-w-md">
+                        <SelectValue placeholder="Seleccionar cuenta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin cuenta por defecto</SelectItem>
+                        {bankAccounts.map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {account.name} — {account.bank}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleSavePaymentAccount(cardName)}
+                      disabled={createCreditCardSettingMutation.isPending || updateCreditCardSettingMutation.isPending}
+                    >
+                      Guardar vínculo
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
@@ -710,33 +852,40 @@ export default function CreditCardsPanelPage() {
                   <TableHead>Tarjeta</TableHead>
                   <TableHead>Detalle</TableHead>
                   <TableHead>Ámbito</TableHead>
+                  <TableHead>Cuenta origen</TableHead>
                   <TableHead className="text-right">Monto</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {monthPayments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
                       No hay pagos de tarjeta en este período.
                     </TableCell>
                   </TableRow>
                 ) : monthPayments
                   .sort((left, right) => left.date.localeCompare(right.date))
-                  .map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell>{transaction.date}</TableCell>
-                      <TableCell>{transaction.creditCardName}</TableCell>
-                      <TableCell>{transaction.name}</TableCell>
-                      <TableCell>
-                        {transaction.workspace === "business"
-                          ? "Empresa"
-                          : transaction.workspace === "family"
-                            ? "Familia"
-                            : "Consulta Dentista"}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatCLP(transaction.amount)}</TableCell>
-                    </TableRow>
-                  ))}
+                  .map((transaction) => {
+                    const sourceAccount = transaction.accountId ? accountById.get(transaction.accountId) : null;
+                    return (
+                      <TableRow key={transaction.id}>
+                        <TableCell>{transaction.date}</TableCell>
+                        <TableCell>{transaction.creditCardName}</TableCell>
+                        <TableCell>{transaction.name}</TableCell>
+                        <TableCell>
+                          {transaction.workspace === "business"
+                            ? "Empresa"
+                            : transaction.workspace === "family"
+                              ? "Familia"
+                              : "Consulta Dentista"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {sourceAccount ? accountDisplayName(sourceAccount) : "Sin cuenta vinculada"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCLP(transaction.amount)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
               </TableBody>
             </Table>
           </CardContent>

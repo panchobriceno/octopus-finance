@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAccounts, useCategories, useBulkCreateTransactions, useBulkDeleteTransactions, useCreateCategory, useTransactions, useUpdateTransaction } from "@/lib/hooks";
-import type { Account } from "@shared/schema";
+import { useAccounts, useCategories, useBulkCreateTransactions, useBulkDeleteTransactions, useCreateCategory, useCreditCardSettings, useTransactions, useUpdateTransaction } from "@/lib/hooks";
+import type { Account, Transaction } from "@shared/schema";
 import { getCreditCards } from "@/lib/credit-cards";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,16 @@ import { Input } from "@/components/ui/input";
 
 type AccountType = "bank" | "credit";
 
+type CcMovementType = "purchase" | "tc_payment" | "reversal";
+
+const TC_PAYMENT_KEYWORDS = [
+  "pago pesos tef",
+  "pago pap",
+  "pago cuenta corriente",
+  "pago pesos",
+  "pago pac",
+];
+
 const SUGGESTED_FAMILY_EXPENSE_CATEGORIES = [
   "Comida",
   "Seguros",
@@ -47,6 +57,7 @@ interface ParsedPreviewRow {
   installmentsLabel: string;
   installmentCount: number | null;
   duplicate: boolean;
+  ccMovementType?: CcMovementType;
   error?: string;
 }
 
@@ -194,15 +205,27 @@ function getDefaultExpenseCategoryOptions() {
 }
 
 function suggestWorkspace(
+  description: string,
   category: string,
   type: "income" | "expense" | "credit_card_payment",
   accountType: AccountType,
   defaultWorkspace: ImportWorkspace,
 ): ImportWorkspace {
   const normalizedCategory = normalizeText(category);
+  const normalizedDescription = normalizeText(description);
 
   if (type === "income") {
     return "business" as const;
+  }
+
+  if (
+    accountType === "credit" &&
+    (
+      normalizedDescription.includes("uber eats") ||
+      normalizedDescription.includes("uber trip")
+    )
+  ) {
+    return "family" as const;
   }
 
   if (normalizedCategory === "empresa") {
@@ -281,6 +304,13 @@ function parseDateValue(value: string) {
 }
 
 function parseAmountValue(value: string) {
+  const raw = value.trim();
+
+  // Avoid treating installment ratios like "01/12" or "1 / 0" as monetary amounts.
+  if (/^\d+\s*\/\s*\d+$/.test(raw)) {
+    return NaN;
+  }
+
   const normalized = value
     .replace(/\s/g, "")
     .replace(/\$/g, "")
@@ -309,15 +339,199 @@ function parseInstallmentsValue(value: string) {
   };
 }
 
-function inferMapping(headers: string[]): ColumnMapping {
+function detectMovementType(
+  name: string,
+  rawAmount: number,
+  date: string,
+  allRawRows: Array<{ name: string; rawAmount: number; date: string }>,
+): CcMovementType {
+  const normalized = normalizeText(name);
+  if (TC_PAYMENT_KEYWORDS.some((kw) => normalized.includes(normalizeText(kw)))) {
+    return "tc_payment";
+  }
+  if (rawAmount > 0) {
+    const rowDate = new Date(date);
+    if (!Number.isNaN(rowDate.getTime())) {
+      const hasMatchingNegative = allRawRows.some((other) => {
+        if (Math.abs(other.rawAmount + rawAmount) > 0.01) return false;
+        const otherDate = new Date(other.date);
+        if (Number.isNaN(otherDate.getTime())) return false;
+        const daysDiff = Math.abs((rowDate.getTime() - otherDate.getTime()) / (1000 * 60 * 60 * 24));
+        return daysDiff <= 7;
+      });
+      if (hasMatchingNegative) return "reversal";
+    }
+  }
+  return "purchase";
+}
+
+function getCreditPreviewType(ccMovementType?: CcMovementType): "expense" | "credit_card_payment" {
+  return ccMovementType === "tc_payment" ? "credit_card_payment" : "expense";
+}
+
+function getDateDistanceInDays(left: string, right: string) {
+  const leftDate = new Date(left);
+  const rightDate = new Date(right);
+
+  if (Number.isNaN(leftDate.getTime()) || Number.isNaN(rightDate.getTime())) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return Math.abs((leftDate.getTime() - rightDate.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function isSimilarCreditCardPayment(
+  tx: Pick<Transaction, "type" | "movementType" | "status" | "creditCardName" | "amount" | "date">,
+  cardName: string,
+  amount: number,
+  date: string,
+) {
+  if ((tx.status ?? "paid") === "cancelled") return false;
+
+  const movementType = tx.movementType ?? (tx.type === "income" ? "income" : "expense");
+  if (movementType !== "credit_card_payment") return false;
+
+  if (normalizeText(tx.creditCardName ?? "") !== normalizeText(cardName)) return false;
+  if (Math.abs((tx.amount ?? 0) - amount) > 0.01) return false;
+
+  return getDateDistanceInDays(tx.date, date) <= 3;
+}
+
+function findSimilarCreditCardPayment(
+  transactions: Transaction[],
+  cardName: string,
+  amount: number,
+  date: string,
+) {
+  const matches = transactions
+    .filter((tx) => isSimilarCreditCardPayment(tx, cardName, amount, date))
+    .sort((left, right) => {
+      const leftNeedsAccount = left.accountId ? 1 : 0;
+      const rightNeedsAccount = right.accountId ? 1 : 0;
+      if (leftNeedsAccount !== rightNeedsAccount) return leftNeedsAccount - rightNeedsAccount;
+
+      const leftDistance = getDateDistanceInDays(left.date, date);
+      const rightDistance = getDateDistanceInDays(right.date, date);
+      return leftDistance - rightDistance;
+    });
+
+  return matches[0] ?? null;
+}
+
+function extractDueDate(lines: string[], delimiter: string): string | null {
+  for (const line of lines) {
+    const cells = splitCsvLine(line, delimiter);
+    for (let i = 0; i < cells.length - 1; i++) {
+      if (normalizeText(cells[i]).includes("pagar hasta")) {
+        const dateStr = parseDateValue(cells[i + 1].trim());
+        if (dateStr) return dateStr;
+      }
+    }
+  }
+  return null;
+}
+
+function isLikelyCreditCardImport(headers: string[], lines: string[]) {
+  const normalizedHeaders = headers.map((header) => normalizeText(header));
+  const normalizedText = normalizeText(lines.slice(0, 20).join(" "));
+
+  return (
+    normalizedHeaders.some((header) => header.includes("cuota")) ||
+    normalizedHeaders.some((header) => header.includes("tipo de tarjeta")) ||
+    normalizedText.includes("pagar hasta") ||
+    normalizedText.includes("movimientos facturados") ||
+    normalizedText.includes("movimientos no facturados") ||
+    normalizedText.includes("tipo de tarjeta")
+  );
+}
+
+function scoreAmountColumn(header: string, rows: Record<string, string>[]) {
+  const normalizedHeader = normalizeText(header);
+  let score = 0;
+
+  if (
+    normalizedHeader.includes("monto") ||
+    normalizedHeader.includes("amount") ||
+    normalizedHeader.includes("importe") ||
+    normalizedHeader.includes("valor")
+  ) {
+    score += 8;
+  }
+
+  if (
+    normalizedHeader.includes("cuota") ||
+    normalizedHeader.includes("installment")
+  ) {
+    score -= 8;
+  }
+
+  const sampleRows = rows.slice(0, 30);
+  for (const row of sampleRows) {
+    const value = (row[header] ?? "").trim();
+    if (!value) continue;
+
+    if (/^\d+\s*\/\s*\d+$/.test(value)) {
+      score -= 4;
+      continue;
+    }
+
+    const parsed = parseAmountValue(value);
+    if (!Number.isNaN(parsed)) {
+      score += 3;
+      if (Math.abs(parsed) >= 1000) score += 2;
+      if (/[-$.,]/.test(value)) score += 1;
+    }
+  }
+
+  return score;
+}
+
+function scoreInstallmentsColumn(header: string, rows: Record<string, string>[]) {
+  const normalizedHeader = normalizeText(header);
+  let score = 0;
+
+  if (
+    normalizedHeader.includes("cuota") ||
+    normalizedHeader.includes("installment")
+  ) {
+    score += 8;
+  }
+
+  const sampleRows = rows.slice(0, 30);
+  for (const row of sampleRows) {
+    const value = (row[header] ?? "").trim();
+    if (!value) continue;
+
+    if (/^\d+\s*\/\s*\d+$/.test(value)) {
+      score += 4;
+      continue;
+    }
+
+    if (!Number.isNaN(parseAmountValue(value))) {
+      score -= 1;
+    }
+  }
+
+  return score;
+}
+
+function inferMapping(headers: string[], rows: Record<string, string>[]): ColumnMapping {
   const match = (patterns: string[]) =>
-    headers.find((header) => patterns.some((pattern) => header.toLowerCase().includes(pattern))) ?? headers[0] ?? "";
+    headers.find((header) => patterns.some((pattern) => normalizeText(header).includes(pattern))) ?? headers[0] ?? "";
+
+  const amountHeader = headers
+    .map((header) => ({ header, score: scoreAmountColumn(header, rows) }))
+    .sort((left, right) => right.score - left.score)[0]?.header ?? "";
+
+  const installmentsHeader = headers
+    .map((header) => ({ header, score: scoreInstallmentsColumn(header, rows) }))
+    .sort((left, right) => right.score - left.score)[0]?.header ?? "";
 
   return {
     date: match(["fecha", "date"]),
     description: match(["descripcion", "descripción", "detalle", "glosa", "nombre", "description"]),
-    amount: match(["monto", "amount", "importe", "valor"]),
-    installments: match(["cuota", "cuotas", "installment"]),
+    amount: amountHeader,
+    installments: installmentsHeader,
   };
 }
 
@@ -353,11 +567,13 @@ export default function ImportDataPage() {
   const [newCategoryWorkspace, setNewCategoryWorkspace] = useState<"business" | "family" | "dentist">("family");
   const [batchToDelete, setBatchToDelete] = useState<ImportBatchSummary | null>(null);
   const [detailBatchId, setDetailBatchId] = useState<string | null>(null);
+  const [importDueDate, setImportDueDate] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: categories = [] } = useCategories();
   const { data: transactions = [] } = useTransactions();
   const { data: accounts = [] } = useAccounts();
+  const { data: creditCardSettings = [] } = useCreditCardSettings();
   const importMutation = useBulkCreateTransactions();
   const createCategoryMutation = useCreateCategory();
   const deleteImportMutation = useBulkDeleteTransactions();
@@ -369,6 +585,15 @@ export default function ImportDataPage() {
       .map((tx) => `${tx.date}__${tx.name.trim().toLowerCase()}__${tx.type}__${tx.amount}`),
   ), [transactions]);
 
+  const existingCreditCardPayments = useMemo(
+    () =>
+      transactions.filter((tx) => {
+        const movementType = tx.movementType ?? (tx.type === "income" ? "income" : "expense");
+        return movementType === "credit_card_payment" && tx.status !== "cancelled";
+      }),
+    [transactions],
+  );
+
   const bankAccounts = useMemo(
     () =>
       accounts.filter((account) => {
@@ -379,12 +604,27 @@ export default function ImportDataPage() {
     [accounts],
   );
 
+  const selectedCreditCardSetting = useMemo(
+    () =>
+      creditCardSettings.find((setting) =>
+        (setting.isActive ?? true) &&
+        normalizeText(setting.cardName) === normalizeText(selectedCard),
+      ) ?? null,
+    [creditCardSettings, selectedCard],
+  );
+
+  const selectedCreditCardDefaultAccount = useMemo(
+    () =>
+      bankAccounts.find((account) => account.id === selectedCreditCardSetting?.defaultPaymentAccountId) ?? null,
+    [bankAccounts, selectedCreditCardSetting],
+  );
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const syncCards = () => {
       const cards = getCreditCards();
       setSavedCards(cards);
-      setSelectedCard((current) => current || cards[0] || "");
+      setSelectedCard((current) => (current && cards.includes(current) ? current : ""));
     };
     syncCards();
     window.addEventListener("octopus-credit-cards-updated", syncCards);
@@ -392,10 +632,24 @@ export default function ImportDataPage() {
   }, []);
 
   useEffect(() => {
+    // Rebuild preview from scratch when switching between bank and credit logic.
+    setPreviewRows([]);
+  }, [accountType]);
+
+  useEffect(() => {
     if (!csvRows.length || !mapping.date || !mapping.description || !mapping.amount) {
       setPreviewRows([]);
       return;
     }
+
+    // Pre-compute raw rows for reversal detection (credit only)
+    const allRawRows = accountType === "credit"
+      ? csvRows.map((row) => ({
+          name: (row[mapping.description] ?? "").trim(),
+          rawAmount: parseAmountValue(row[mapping.amount] ?? ""),
+          date: parseDateValue(row[mapping.date] ?? ""),
+        }))
+      : [];
 
     const nextRows = csvRows.map((row, index): ParsedPreviewRow | null => {
       const rowId = `${index}`;
@@ -422,16 +676,25 @@ export default function ImportDataPage() {
         };
       }
 
-      const normalizedAmount = accountType === "credit" ? rawAmount : rawAmount;
-      const inferredType =
+      const ccMovementType: CcMovementType | undefined =
         accountType === "credit"
-          ? "expense"
-          : normalizedAmount >= 0
-            ? "income"
-            : "expense";
-      const type = suggestRowType(name, inferredType);
-      const amount = Math.abs(normalizedAmount);
-      const key = `${date}__${name.toLowerCase()}__${type}__${amount}`;
+          ? detectMovementType(name, rawAmount, date, allRawRows)
+          : undefined;
+
+      const type: "income" | "expense" | "credit_card_payment" =
+        accountType === "credit"
+          ? getCreditPreviewType(ccMovementType)
+          : suggestRowType(name, rawAmount >= 0 ? "income" : "expense");
+      const amount = Math.abs(rawAmount);
+      const storageType = accountType === "credit" ? "expense" : type;
+      const key = `${date}__${name.toLowerCase()}__${storageType}__${amount}`;
+      const duplicateTcPayment =
+        accountType === "credit" &&
+        ccMovementType === "tc_payment" &&
+        Boolean(selectedCard.trim()) &&
+        existingCreditCardPayments.some((tx) =>
+          isSimilarCreditCardPayment(tx, selectedCard.trim(), amount, date),
+        );
 
       return {
         id: rowId,
@@ -440,10 +703,11 @@ export default function ImportDataPage() {
         amount,
         type,
         category: suggestRowCategory(name, type, categories),
-        workspace: suggestWorkspace(suggestRowCategory(name, type, categories), type, accountType, defaultImportWorkspace),
+        workspace: suggestWorkspace(name, suggestRowCategory(name, type, categories), type, accountType, defaultImportWorkspace),
         installmentsLabel: installments.label,
         installmentCount: installments.count,
-        duplicate: existingKeys.has(key),
+        duplicate: existingKeys.has(key) || duplicateTcPayment,
+        ccMovementType,
       };
     }).filter((row): row is ParsedPreviewRow => row !== null);
 
@@ -451,7 +715,8 @@ export default function ImportDataPage() {
     const dedupedRows = nextRows.map((row) => {
       if (row.error) return row;
 
-      const key = `${row.date}__${row.name.trim().toLowerCase()}__${row.type}__${row.amount}`;
+      const storageType = accountType === "credit" ? "expense" : row.type;
+      const key = `${row.date}__${row.name.trim().toLowerCase()}__${storageType}__${row.amount}`;
       const duplicateInFile = seenInFile.has(key);
       seenInFile.add(key);
 
@@ -466,37 +731,75 @@ export default function ImportDataPage() {
         const previous = current.find((item) => item.id === row.id);
         if (!previous) return row;
 
-        const preservedType = row.type;
+        const preservedCcMovementType =
+          accountType === "credit"
+            ? (previous.ccMovementType ?? row.ccMovementType)
+            : row.ccMovementType;
+        const preservedType =
+          accountType === "credit"
+            ? getCreditPreviewType(preservedCcMovementType)
+            : row.type;
+        const preservedStorageType = accountType === "credit" ? "expense" : preservedType;
+        const duplicateTcPayment =
+          accountType === "credit" &&
+          preservedCcMovementType === "tc_payment" &&
+          Boolean(selectedCard.trim()) &&
+          existingCreditCardPayments.some((tx) =>
+            isSimilarCreditCardPayment(tx, selectedCard.trim(), row.amount, row.date),
+          );
         const duplicate = existingKeys.has(
-          `${row.date}__${row.name.trim().toLowerCase()}__${preservedType}__${row.amount}`,
-        );
+          `${row.date}__${row.name.trim().toLowerCase()}__${preservedStorageType}__${row.amount}`,
+        ) || duplicateTcPayment;
         const shouldResuggestCategory =
-          previous.type !== row.type ||
+          previous.type !== preservedType ||
           !previous.category ||
           previous.category === "Sin categoría" ||
-          !categoryMatchesType(previous.category, row.type, categories);
+          !categoryMatchesType(previous.category, preservedType, categories);
+
+        const nextCategory = shouldResuggestCategory
+          ? suggestRowCategory(row.name, preservedType, categories)
+          : (previous.category || suggestRowCategory(row.name, preservedType, categories));
 
         return {
           ...row,
-          category: shouldResuggestCategory
-            ? suggestRowCategory(row.name, row.type, categories)
-            : (previous.category || suggestRowCategory(row.name, row.type, categories)),
-          workspace: previous.workspace ?? suggestWorkspace(row.category, row.type, accountType, defaultImportWorkspace),
+          category: nextCategory,
+          workspace: previous.workspace ?? suggestWorkspace(row.name, nextCategory, preservedType, accountType, defaultImportWorkspace),
           installmentsLabel: previous.installmentsLabel || row.installmentsLabel,
           installmentCount: previous.installmentCount ?? row.installmentCount,
           type: preservedType,
           duplicate: row.duplicate || duplicate,
+          ccMovementType: preservedCcMovementType,
         };
       }),
     );
-  }, [csvRows, mapping, accountType, existingKeys, ignoredRowIds, categories, defaultImportWorkspace]);
+  }, [csvRows, mapping, accountType, existingKeys, existingCreditCardPayments, ignoredRowIds, categories, defaultImportWorkspace, selectedCard]);
 
-  const handleImport = () => {
-    const importableRows = previewRows.filter((row) => !row.error && !row.duplicate);
+  const handleImport = async () => {
+    const importableRows = previewRows.filter(
+      (row) => !row.error && !row.duplicate && row.ccMovementType !== "reversal",
+    );
+    const enrichableTcPayments = previewRows
+      .filter((row) =>
+        !row.error &&
+        row.duplicate &&
+        row.ccMovementType === "tc_payment" &&
+        Boolean(selectedCard.trim()) &&
+        Boolean(selectedCreditCardDefaultAccount?.id),
+      )
+      .map((row) => ({
+        row,
+        matchedTransaction: findSimilarCreditCardPayment(
+          existingCreditCardPayments,
+          selectedCard.trim(),
+          row.amount,
+          row.date,
+        ),
+      }))
+      .filter((entry) => entry.matchedTransaction && !entry.matchedTransaction.accountId);
 
-    if (importableRows.length === 0) {
+    if (importableRows.length === 0 && enrichableTcPayments.length === 0) {
       toast({
-        title: "No hay filas para importar",
+        title: "No hay cambios para importar",
         description: "Corrige las filas inválidas o elimina duplicados.",
         variant: "destructive",
       });
@@ -518,50 +821,107 @@ export default function ImportDataPage() {
       ? `${fileName || "Cartola"} · ${selectedCard.trim()}`
       : `${fileName || "Importación CSV"} · Cuenta bancaria`;
 
-    const mapped = importableRows.map((row) => ({
-      name: row.name,
-      category: row.category || suggestRowCategory(row.name, row.type, categories),
-      amount: row.amount,
-      type: row.type,
-      date: row.date,
-      notes: null,
-      subtype: "actual" as const,
-      status: accountType === "credit" && row.type === "expense" ? "pending" as const : "paid" as const,
-      itemId: null,
-      workspace: row.workspace,
-      movementType:
-        row.type === "income"
-          ? "income" as const
-          : row.type === "credit_card_payment"
-            ? "credit_card_payment" as const
-            : "expense" as const,
-      paymentMethod:
-        accountType === "credit" && row.type === "expense"
-          ? "credit_card" as const
-          : "bank_account" as const,
-      destinationWorkspace: null,
-      creditCardName: accountType === "credit" ? selectedCard.trim() : null,
-      installmentCount: accountType === "credit" && row.type === "expense" ? row.installmentCount : null,
-      accountId: accountType === "bank" ? selectedAccountId || null : null,
-      importBatchId: batchId,
-      importBatchLabel: batchLabel,
-      importedAt,
-    }));
+    const mapped = importableRows.map((row) => {
+      const isTcPayment = accountType === "credit" && row.ccMovementType === "tc_payment";
+      const isPurchase = accountType === "credit" && row.ccMovementType === "purchase";
+      const effectiveType: "income" | "expense" | "credit_card_payment" =
+        accountType === "credit"
+          ? "expense"
+          : row.type;
+      const effectiveMovementType =
+        isTcPayment
+          ? "credit_card_payment" as const
+          : effectiveType === "income"
+            ? "income" as const
+            : effectiveType === "credit_card_payment"
+              ? "credit_card_payment" as const
+              : "expense" as const;
+      const effectiveStatus =
+        isTcPayment
+          ? "paid" as const
+          : isPurchase
+            ? "pending" as const
+            : accountType === "credit" && effectiveType === "expense"
+              ? "pending" as const
+              : "paid" as const;
 
-    importMutation.mutate(mapped, {
-      onSuccess: (data) => {
-        toast({
-          title: "Importación exitosa",
-          description: `${data.imported} filas importadas. ${previewRows.length - data.imported} filas fueron omitidas.`,
-        });
-        setCsvHeaders([]);
-        setCsvRows([]);
-        setPreviewRows([]);
-        setIgnoredRowIds(new Set());
-        setFileName("");
-        setSelectedAccountId("");
-      },
+      return {
+        name: row.name,
+        category:
+          row.category ||
+          suggestRowCategory(
+            row.name,
+            accountType === "credit" ? getCreditPreviewType(row.ccMovementType) : row.type,
+            categories,
+          ),
+        amount: row.amount,
+        type: effectiveType,
+        date: row.date,
+        notes: importDueDate ? `Vence: ${importDueDate}` : null,
+        subtype: "actual" as const,
+        status: effectiveStatus,
+        itemId: null,
+        workspace: row.workspace,
+        movementType: effectiveMovementType,
+        paymentMethod:
+          accountType === "credit" && effectiveType === "expense"
+            ? "credit_card" as const
+            : "bank_account" as const,
+        destinationWorkspace: null,
+        creditCardName: accountType === "credit" ? selectedCard.trim() : null,
+        installmentCount: accountType === "credit" && row.ccMovementType === "purchase" ? row.installmentCount : null,
+        accountId:
+          accountType === "bank"
+            ? selectedAccountId || null
+            : isTcPayment
+              ? selectedCreditCardDefaultAccount?.id ?? null
+              : null,
+        importBatchId: batchId,
+        importBatchLabel: batchLabel,
+        importedAt,
+      };
     });
+
+    try {
+      if (enrichableTcPayments.length > 0 && selectedCreditCardDefaultAccount?.id) {
+        await Promise.all(
+          enrichableTcPayments.map(({ matchedTransaction }) =>
+            updateTransactionMutation.mutateAsync({
+              id: matchedTransaction!.id,
+              data: {
+                accountId: selectedCreditCardDefaultAccount.id,
+              },
+            }),
+          ),
+        );
+      }
+
+      let imported = 0;
+      if (mapped.length > 0) {
+        const result = await importMutation.mutateAsync(mapped);
+        imported = result.imported;
+      }
+
+      toast({
+        title: imported > 0 ? "Importación exitosa" : "Pagos actualizados",
+        description:
+          enrichableTcPayments.length > 0
+            ? `${imported} filas importadas y ${enrichableTcPayments.length} pagos TC existentes completados con cuenta origen.`
+            : `${imported} filas importadas. ${previewRows.length - imported} filas fueron omitidas.`,
+      });
+      setCsvHeaders([]);
+      setCsvRows([]);
+      setPreviewRows([]);
+      setIgnoredRowIds(new Set());
+      setFileName("");
+      setSelectedAccountId("");
+    } catch {
+      toast({
+        title: "No se pudo completar la importación",
+        description: "Hubo un problema al crear o actualizar movimientos.",
+        variant: "destructive",
+      });
+    }
   };
 
   const parseCSV = useCallback(
@@ -594,12 +954,22 @@ export default function ImportDataPage() {
           Object.values(row).some((value) => value.trim() !== ""),
         );
 
+      const detectedCreditImport = isLikelyCreditCardImport(headers, lines);
+      if (detectedCreditImport && accountType !== "credit") {
+        setAccountType("credit");
+      }
+
+      if (accountType === "credit" || detectedCreditImport) {
+        setImportDueDate(extractDueDate(lines, delimiter));
+      } else {
+        setImportDueDate(null);
+      }
       setIgnoredRowIds(new Set());
       setCsvHeaders(headers);
       setCsvRows(rows);
-      setMapping(inferMapping(headers));
+      setMapping(inferMapping(headers, rows));
     },
-    [toast],
+    [toast, accountType],
   );
 
   const handleFile = useCallback(
@@ -635,7 +1005,7 @@ export default function ImportDataPage() {
 
   const updateRowCategory = (index: number, category: string) => {
     setPreviewRows((prev) => prev.map((row, rowIndex) => (
-      rowIndex === index ? { ...row, category, workspace: suggestWorkspace(category, row.type, accountType, defaultImportWorkspace) } : row
+      rowIndex === index ? { ...row, category, workspace: suggestWorkspace(row.name, category, row.type, accountType, defaultImportWorkspace) } : row
     )));
   };
 
@@ -644,13 +1014,14 @@ export default function ImportDataPage() {
       const next = prev.map((row, rowIndex) => {
         if (rowIndex !== index) return row;
         const category = suggestRowCategory(row.name, type, categories);
-        return { ...row, type, category, workspace: suggestWorkspace(category, type, accountType, defaultImportWorkspace) };
+        return { ...row, type, category, workspace: suggestWorkspace(row.name, category, type, accountType, defaultImportWorkspace) };
       });
       const seenInFile = new Set<string>();
 
       return next.map((row) => {
         if (row.error) return row;
-        const key = `${row.date}__${row.name.trim().toLowerCase()}__${row.type}__${row.amount}`;
+        const storageType = accountType === "credit" ? "expense" : row.type;
+        const key = `${row.date}__${row.name.trim().toLowerCase()}__${storageType}__${row.amount}`;
         const duplicateInFile = seenInFile.has(key);
         seenInFile.add(key);
         const duplicateAgainstExisting = existingKeys.has(key);
@@ -679,6 +1050,25 @@ export default function ImportDataPage() {
     setPreviewRows((prev) => prev.map((row, rowIndex) => (
       rowIndex === index ? { ...row, workspace } : row
     )));
+  };
+
+  const cycleCcMovementType = (index: number) => {
+    setPreviewRows((prev) =>
+      prev.map((row, rowIndex) => {
+        if (rowIndex !== index || !row.ccMovementType) return row;
+        const cycle: CcMovementType[] = ["purchase", "tc_payment", "reversal"];
+        const next = cycle[(cycle.indexOf(row.ccMovementType) + 1) % cycle.length];
+        const newType = getCreditPreviewType(next);
+        const category = suggestRowCategory(row.name, newType, categories);
+        return {
+          ...row,
+          ccMovementType: next,
+          type: newType,
+          category,
+          workspace: suggestWorkspace(row.name, category, newType, accountType, defaultImportWorkspace),
+        };
+      }),
+    );
   };
 
   const removeRow = (index: number) => {
@@ -723,6 +1113,20 @@ export default function ImportDataPage() {
   const validRows = previewRows.filter((row) => !row.error);
   const duplicateCount = previewRows.filter((row) => row.duplicate).length;
   const invalidCount = previewRows.filter((row) => row.error).length;
+  const purchaseRows = accountType === "credit"
+    ? previewRows.filter((row) => !row.error && row.ccMovementType === "purchase")
+    : [];
+  const tcPaymentRows = accountType === "credit"
+    ? previewRows.filter((row) => !row.error && row.ccMovementType === "tc_payment")
+    : [];
+  const reversalRows = accountType === "credit"
+    ? previewRows.filter((row) => !row.error && row.ccMovementType === "reversal")
+    : [];
+  const purchaseTotal = purchaseRows.reduce((sum, row) => sum + row.amount, 0);
+  const tcPaymentTotal = tcPaymentRows.reduce((sum, row) => sum + row.amount, 0);
+  const importableCount = previewRows.filter(
+    (row) => !row.error && !row.duplicate && row.ccMovementType !== "reversal",
+  ).length;
   const expenseCategoryOptions = useMemo(() => {
     const names = new Set(
       categories
@@ -919,6 +1323,11 @@ export default function ImportDataPage() {
                   data-testid="input-credit-card-name"
                 />
               )}
+              <p className="mt-2 text-xs text-muted-foreground">
+                {selectedCreditCardDefaultAccount
+                  ? `Cuenta de pago por defecto: ${selectedCreditCardDefaultAccount.name} — ${selectedCreditCardDefaultAccount.bank}`
+                  : "Sin cuenta de pago por defecto vinculada para esta tarjeta."}
+              </p>
             </div>
           ) : null}
 
@@ -1118,7 +1527,7 @@ export default function ImportDataPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Para tarjetas de crédito se invierten los signos antes de construir la vista previa.
+            Para tarjetas de crédito, el signo no define ingreso o gasto: se usa para detectar reversas y pagos TC, mientras las compras siguen entrando como gastos pendientes.
           </p>
           <div className="overflow-x-auto">
             <Table>
@@ -1296,11 +1705,36 @@ export default function ImportDataPage() {
                   disabled={importMutation.isPending}
                   data-testid="button-import"
                 >
-                  {importMutation.isPending ? "Importando..." : `Importar ${validRows.length - duplicateCount} filas`}
+                  {importMutation.isPending ? "Importando..." : `Importar ${importableCount} filas`}
                 </Button>
               </div>
             </div>
           </CardHeader>
+          {accountType === "credit" && previewRows.length > 0 && (
+            <div className="px-6 pb-4">
+              <div className="rounded-lg border bg-muted/40 p-4 text-sm space-y-1.5">
+                <p className="font-medium text-muted-foreground mb-2">Resumen de importación</p>
+                <div className="flex items-center justify-between">
+                  <span>{purchaseRows.length} compras</span>
+                  <span className="tabular-nums font-medium">{formatCLP(purchaseTotal)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>{tcPaymentRows.length} pagos TC <span className="text-muted-foreground text-xs">(excluidos de gastos)</span></span>
+                  <span className="tabular-nums font-medium">{formatCLP(tcPaymentTotal)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>{reversalRows.length} reversas detectadas <span className="text-muted-foreground text-xs">(no se importarán)</span></span>
+                  <span className="tabular-nums text-muted-foreground">—</span>
+                </div>
+                {importDueDate && (
+                  <div className="flex items-center justify-between pt-1 border-t mt-1">
+                    <span className="font-medium">Fecha límite de pago</span>
+                    <span className="tabular-nums font-medium text-amber-600 dark:text-amber-400">{importDueDate}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           <CardContent className="px-0">
             <div className="overflow-x-auto">
               <Table className="zebra-stripe" data-testid="table-preview">
@@ -1309,17 +1743,18 @@ export default function ImportDataPage() {
                     <TableHead className="pl-5">Fecha</TableHead>
                     <TableHead>Descripción</TableHead>
                     <TableHead>Cuotas</TableHead>
+                    {accountType === "credit" ? <TableHead>Tipo TC</TableHead> : null}
                     <TableHead>Tipo</TableHead>
                     <TableHead>Categoría</TableHead>
                     <TableHead>Ámbito</TableHead>
-                    <TableHead>Estado</TableHead>
+                    <TableHead>Validación</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
                     <TableHead className="text-right pr-5">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {previewRows.map((row, index) => (
-                    <TableRow key={row.id}>
+                    <TableRow key={row.id} className={row.ccMovementType === "reversal" ? "opacity-50 line-through" : ""}>
                       {(() => {
                         const effectiveCategory = row.category || suggestRowCategory(row.name, row.type, categories);
                         return (
@@ -1328,25 +1763,87 @@ export default function ImportDataPage() {
                       <TableCell className="text-sm font-medium">
                         <div className="space-y-1">
                           <div>{row.name}</div>
+                          {accountType === "credit" ? (
+                            <p className="text-xs text-muted-foreground">
+                              Tarjeta: {selectedCard.trim() || "por seleccionar"}
+                            </p>
+                          ) : null}
+                          {accountType === "credit" && row.ccMovementType === "tc_payment" ? (
+                            <p className="text-xs text-muted-foreground">
+                              {selectedCreditCardDefaultAccount
+                                ? `Cuenta origen: ${selectedCreditCardDefaultAccount.name} — ${selectedCreditCardDefaultAccount.bank}`
+                                : "Cuenta origen: sin vínculo por defecto"}
+                            </p>
+                          ) : null}
                           {row.error && <p className="text-xs text-red-600 dark:text-red-400">{row.error}</p>}
+                          {row.ccMovementType === "tc_payment" && row.duplicate && !row.error ? (
+                            <p className="text-xs text-amber-600 dark:text-amber-400">
+                              Pago TC ya registrado — no se importará duplicado
+                              {selectedCreditCardDefaultAccount ? ", y se completará la cuenta origen si faltaba" : ""}
+                            </p>
+                          ) : null}
+                          {row.ccMovementType === "reversal" && !row.error && (
+                            <p className="text-xs text-yellow-600 dark:text-yellow-400">Reversa detectada — no se importará</p>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-sm tabular-nums">{row.installmentsLabel}</TableCell>
+                      {accountType === "credit" ? (
+                        <TableCell>
+                          {row.ccMovementType === "purchase" && (
+                            <button
+                              type="button"
+                              onClick={() => cycleCcMovementType(index)}
+                              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 cursor-pointer hover:opacity-80 transition-opacity"
+                              title="Clic para cambiar tipo"
+                            >
+                              Compra
+                            </button>
+                          )}
+                          {row.ccMovementType === "tc_payment" && (
+                            <button
+                              type="button"
+                              onClick={() => cycleCcMovementType(index)}
+                              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 cursor-pointer hover:opacity-80 transition-opacity"
+                              title="Clic para cambiar tipo"
+                            >
+                              Pago TC
+                            </button>
+                          )}
+                          {row.ccMovementType === "reversal" && (
+                            <button
+                              type="button"
+                              onClick={() => cycleCcMovementType(index)}
+                              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-700 cursor-pointer hover:opacity-80 transition-opacity"
+                              title="Clic para cambiar tipo"
+                            >
+                              Reversa
+                            </button>
+                          )}
+                          {!row.ccMovementType && null}
+                        </TableCell>
+                      ) : null}
                       <TableCell>
-                        <Select
-                          value={row.type}
-                          onValueChange={(value) => updateRowType(index, value as "income" | "expense" | "credit_card_payment")}
-                          disabled={Boolean(row.error)}
-                        >
-                          <SelectTrigger className="w-28 h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="income">Ingreso</SelectItem>
-                            <SelectItem value="expense">Gasto</SelectItem>
-                            <SelectItem value="credit_card_payment">Pago tarjeta</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        {accountType === "credit" ? (
+                          <Badge variant="outline" className="h-8 px-3 text-xs font-medium">
+                            {row.ccMovementType === "tc_payment" ? "Pago tarjeta" : "Gasto"}
+                          </Badge>
+                        ) : (
+                          <Select
+                            value={row.type}
+                            onValueChange={(value) => updateRowType(index, value as "income" | "expense" | "credit_card_payment")}
+                            disabled={Boolean(row.error)}
+                          >
+                            <SelectTrigger className="w-28 h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="income">Ingreso</SelectItem>
+                              <SelectItem value="expense">Gasto</SelectItem>
+                              <SelectItem value="credit_card_payment">Pago tarjeta</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
                       </TableCell>
                       <TableCell>
                         {(() => {
@@ -1404,7 +1901,7 @@ export default function ImportDataPage() {
                             Duplicada
                           </Badge>
                         ) : (
-                          <Badge variant="secondary">Lista</Badge>
+                          <Badge variant="secondary">Importable</Badge>
                         )}
                       </TableCell>
                       <TableCell
@@ -1446,7 +1943,7 @@ export default function ImportDataPage() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-3">
-            Debe existir al menos una columna para fecha, descripción y monto. Para tarjeta de crédito los signos se invierten automáticamente.
+            Debe existir al menos una columna para fecha, descripción y monto. En tarjeta de crédito, la app usa el signo solo como ayuda para detectar reversas, pero no para convertir compras en ingresos.
           </p>
           <p className="text-sm text-muted-foreground mb-3">
             La app ahora sugiere categorías en base a la descripción: por ejemplo `Uber Eats` y `Uber Trip` van a `Comida`, y `Intereses` o `Comisión` se agrupan automáticamente como cargos bancarios.

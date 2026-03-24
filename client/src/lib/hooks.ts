@@ -6,7 +6,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "./queryClient";
 import * as fs from "./firestore";
-import type { Transaction, Category, Item, Budget, ClientPayment, Client, Account } from "@shared/schema";
+import type { Transaction, Category, Item, Budget, ClientPayment, Client, Account, CreditCardSetting } from "@shared/schema";
 
 // ── Transactions ────────────────────────────────────────────────
 export function useTransactions() {
@@ -306,6 +306,48 @@ export function useDeleteAccount() {
     mutationFn: (id: string) => fs.deleteAccount(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+    },
+  });
+}
+
+// ── Credit Card Settings ──────────────────────────────────────
+export function useCreditCardSettings() {
+  return useQuery<CreditCardSetting[]>({
+    queryKey: ["credit-card-settings"],
+    queryFn: () => fs.getCreditCardSettings(),
+  });
+}
+
+export function useCreateCreditCardSetting() {
+  return useMutation({
+    mutationFn: (data: Record<string, any>) =>
+      fs.createCreditCardSetting({
+        defaultPaymentAccountId: null,
+        workspace: "family",
+        isActive: true,
+        ...data,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["credit-card-settings"] });
+    },
+  });
+}
+
+export function useUpdateCreditCardSetting() {
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, any> }) =>
+      fs.updateCreditCardSetting(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["credit-card-settings"] });
+    },
+  });
+}
+
+export function useDeleteCreditCardSetting() {
+  return useMutation({
+    mutationFn: (id: string) => fs.deleteCreditCardSetting(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["credit-card-settings"] });
     },
   });
 }

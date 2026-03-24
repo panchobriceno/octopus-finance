@@ -33,6 +33,7 @@ const openingBalancesCol = () => collection(db, "openingBalances");
 const clientPaymentsCol = () => collection(db, "clientPayments");
 const clientsCol = () => collection(db, "clients");
 const accountsCol = () => collection(db, "accounts");
+const creditCardSettingsCol = () => collection(db, "credit_card_settings");
 const preferencesDoc = () => doc(db, "preferences", "dashboard");
 
 // ════════════════════════════════════════════════════════════════
@@ -374,6 +375,35 @@ export async function updateAccount(id: string, data: Record<string, any>) {
 
 export async function deleteAccount(id: string) {
   await deleteDoc(doc(db, "accounts", id));
+}
+
+// ════════════════════════════════════════════════════════════════
+// CREDIT CARD SETTINGS
+// ════════════════════════════════════════════════════════════════
+export async function getCreditCardSettings() {
+  const snap = await getDocs(creditCardSettingsCol());
+  return snapToArray<any>(snap).sort((a, b) => `${a.cardName ?? ""}`.localeCompare(`${b.cardName ?? ""}`));
+}
+
+export async function createCreditCardSetting(data: Record<string, any>) {
+  const payload = {
+    defaultPaymentAccountId: null,
+    workspace: "family",
+    isActive: true,
+    ...data,
+  };
+  const ref = await addDoc(creditCardSettingsCol(), payload);
+  return { id: ref.id, ...payload };
+}
+
+export async function updateCreditCardSetting(id: string, data: Record<string, any>) {
+  const ref = doc(db, "credit_card_settings", id);
+  await updateDoc(ref, data);
+  return { id, ...data };
+}
+
+export async function deleteCreditCardSetting(id: string) {
+  await deleteDoc(doc(db, "credit_card_settings", id));
 }
 
 // ════════════════════════════════════════════════════════════════

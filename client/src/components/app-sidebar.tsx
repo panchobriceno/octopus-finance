@@ -1,4 +1,17 @@
-import { LayoutDashboard, ArrowUpDown, FileText, Upload, Settings, Tags, Target, BriefcaseBusiness, ClipboardList, CreditCard, Landmark } from "lucide-react";
+import {
+  LayoutDashboard,
+  ArrowUpDown,
+  FileText,
+  Upload,
+  Settings,
+  Tags,
+  Target,
+  BriefcaseBusiness,
+  ClipboardList,
+  CreditCard,
+  Landmark,
+  Sparkles,
+} from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import {
@@ -11,7 +24,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
-  SidebarFooter,
 } from "@/components/ui/sidebar";
 
 const mainNav = [
@@ -45,66 +57,54 @@ export function AppSidebar() {
   }, [location]);
 
   return (
-    <Sidebar data-testid="sidebar-nav">
-      <SidebarHeader className="px-4 py-5">
-        <div className="flex items-center gap-3">
+    <Sidebar
+      data-testid="sidebar-nav"
+      className="border-r border-[#bb9eff]/5 bg-[#141123]/90 text-[#ece5fc] backdrop-blur-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)]"
+    >
+      <SidebarHeader className="px-6 pb-8 pt-8">
+        <div className="flex items-center gap-3 px-2">
           {logoDataUrl ? (
             <img
               src={logoDataUrl}
               alt="Octopus Finance Logo"
-              className="size-8 rounded-lg object-cover"
+              className="size-10 rounded-full object-cover ring-2 ring-[#bb9eff]/30 electric-glow"
             />
           ) : (
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 32 32"
-              fill="none"
-              aria-label="Octopus Finance Logo"
-            >
-              <rect width="32" height="32" rx="8" fill="hsl(160, 84%, 39%)" />
-              <path
-                d="M8 22V14a8 8 0 0116 0v8"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
-              <path
-                d="M12 22V17M16 22V15M20 22V17"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <div className="electric-glow flex size-10 items-center justify-center rounded-full bg-gradient-to-br from-[#bb9eff] to-[#a691f9]">
+              <Sparkles className="size-5 text-[#2c006d]" strokeWidth={2.75} />
+            </div>
           )}
           <div>
-            <h1 className="text-sm font-semibold text-sidebar-foreground tracking-tight">
+            <h1 className="text-xl font-black tracking-tighter text-[#bb9eff] drop-shadow-[0_0_10px_rgba(187,158,255,0.6)]">
               Octopus Finance
             </h1>
-            <p className="text-xs text-sidebar-foreground/60">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#ad89ff]/60">
               Dashboard
             </p>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="px-4">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">
+          <SidebarGroupLabel className="sr-only">
             Principal
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="space-y-2">
               {mainNav.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
                     isActive={location === item.url}
                     data-testid={`nav-${item.url.replace("/", "") || "home"}`}
+                    className="mx-0 h-12 rounded-full px-5 text-[#c9baff]/40 transition-all duration-300 hover:bg-[#27233a] hover:text-[#c9baff] data-[active=true]:bg-gradient-to-r data-[active=true]:from-[#bb9eff] data-[active=true]:to-[#a691f9] data-[active=true]:text-[#0f0c1c] data-[active=true]:shadow-[0_0_20px_rgba(187,158,255,0.5)] data-[active=true]:hover:text-[#0f0c1c]"
                   >
                     <Link href={item.url}>
-                      <item.icon className="size-4" />
-                      <span>{item.title}</span>
+                      <item.icon className="size-4 shrink-0" />
+                      <span className="font-headline text-sm font-bold uppercase tracking-wide">
+                        {item.title}
+                      </span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -113,22 +113,25 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">
+        <SidebarGroup className="mt-6">
+          <SidebarGroupLabel className="sr-only">
             Configuración
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="space-y-2">
               {settingsNav.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
                     isActive={location === item.url}
                     data-testid={`nav-${item.url.replace("/", "")}`}
+                    className="mx-0 h-12 rounded-full px-5 text-[#c9baff]/40 transition-all duration-300 hover:bg-[#27233a] hover:text-[#c9baff] data-[active=true]:bg-gradient-to-r data-[active=true]:from-[#bb9eff] data-[active=true]:to-[#a691f9] data-[active=true]:text-[#0f0c1c] data-[active=true]:shadow-[0_0_20px_rgba(187,158,255,0.5)] data-[active=true]:hover:text-[#0f0c1c]"
                   >
                     <Link href={item.url}>
-                      <item.icon className="size-4" />
-                      <span>{item.title}</span>
+                      <item.icon className="size-4 shrink-0" />
+                      <span className="font-headline text-sm font-bold uppercase tracking-wide">
+                        {item.title}
+                      </span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -138,11 +141,6 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="px-4 py-3">
-        <p className="text-xs text-sidebar-foreground/40">
-          Octopus Media &copy; 2026
-        </p>
-      </SidebarFooter>
     </Sidebar>
   );
 }
