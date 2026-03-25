@@ -2,6 +2,7 @@
  * Firestore data layer — replaces Express API + MemStorage.
  * Uses Firebase modular SDK v9.
  */
+import type { Category, Item, Transaction } from "@shared/schema";
 import {
   collection,
   doc,
@@ -37,13 +38,77 @@ const clientsCol = () => collection(db, "clients");
 const accountsCol = () => collection(db, "accounts");
 const creditCardSettingsCol = () => collection(db, "credit_card_settings");
 const preferencesDoc = () => doc(db, "preferences", "dashboard");
+const ITEM_BUDGET_PREFIX = "item:";
+
+function isItemBudgetKey(value: unknown): value is string {
+  return typeof value === "string" && value.startsWith(ITEM_BUDGET_PREFIX);
+}
+
+function getItemBudgetId(value: string | null | undefined) {
+  if (!isItemBudgetKey(value)) return null;
+  return value.slice(ITEM_BUDGET_PREFIX.length) || null;
+}
+
+async function fixRecurringBudgetTransactionLabels(transactions: Transaction[]): Promise<Transaction[]> {
+  const candidates = transactions.filter((transaction) => {
+    if (transaction.notes !== "Generado automáticamente desde presupuesto recurrente") return false;
+    return isItemBudgetKey(transaction.name) || isItemBudgetKey(transaction.category);
+  });
+
+  if (!candidates.length) return transactions;
+
+  const [itemsSnap, categoriesSnap] = await Promise.all([getDocs(itemsCol()), getDocs(categoriesCol())]);
+  const items = snapToArray<Item>(itemsSnap);
+  const categories = snapToArray<Category>(categoriesSnap);
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
+  const updates: Array<{ id: string; data: Record<string, any> }> = [];
+  const fixedTransactions = transactions.map((transaction) => {
+    const itemId =
+      transaction.itemId ??
+      getItemBudgetId(transaction.name) ??
+      getItemBudgetId(transaction.category);
+
+    if (!itemId) return transaction;
+
+    const item = itemById.get(itemId);
+    const category = item?.categoryId ? categoryById.get(item.categoryId) : null;
+    if (!item?.name || !category?.name) return transaction;
+
+    const needsFix =
+      transaction.itemId !== itemId ||
+      transaction.name !== item.name ||
+      transaction.category !== category.name;
+
+    if (!needsFix) return transaction;
+
+    const data = {
+      itemId,
+      name: item.name,
+      category: category.name,
+    };
+    updates.push({ id: transaction.id, data });
+    return { ...transaction, ...data };
+  });
+
+  if (updates.length) {
+    const batch = writeBatch(db);
+    for (const update of updates) {
+      batch.update(doc(db, "transactions", update.id), update.data);
+    }
+    await batch.commit();
+  }
+
+  return fixedTransactions;
+}
 
 // ════════════════════════════════════════════════════════════════
 // TRANSACTIONS
 // ════════════════════════════════════════════════════════════════
 export async function getTransactions() {
   const snap = await getDocs(query(transactionsCol(), orderBy("date", "desc")));
-  return snapToArray<any>(snap);
+  const transactions = snapToArray<Transaction>(snap);
+  return fixRecurringBudgetTransactionLabels(transactions);
 }
 
 export async function createTransaction(data: Record<string, any>) {
@@ -157,10 +222,18 @@ export async function deleteBudget(id: string) {
 }
 
 export async function generateMonthlyRecurringTransactions(year: number, month: number, workspace: string) {
-  const budgetsSnap = await getDocs(budgetsCol());
-  const transactionsSnap = await getDocs(transactionsCol());
+  const [budgetsSnap, transactionsSnap, itemsSnap, categoriesSnap] = await Promise.all([
+    getDocs(budgetsCol()),
+    getDocs(transactionsCol()),
+    getDocs(itemsCol()),
+    getDocs(categoriesCol()),
+  ]);
   const budgets = snapToArray<any>(budgetsSnap);
   const transactions = snapToArray<any>(transactionsSnap);
+  const items = snapToArray<any>(itemsSnap);
+  const categories = snapToArray<any>(categoriesSnap);
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
 
   const candidateBudgets = budgets
     .filter((budget) => {
@@ -192,13 +265,21 @@ export async function generateMonthlyRecurringTransactions(year: number, month: 
   let created = 0;
 
   for (const budget of recurringBudgets) {
+    const budgetItemId = getItemBudgetId(budget.categoryGroup);
+    const budgetItem = budgetItemId ? itemById.get(budgetItemId) : null;
+    const budgetCategory = budgetItem?.categoryId ? categoryById.get(budgetItem.categoryId) : null;
+    const transactionName = budgetItem?.name ?? budget.categoryGroup;
+    const transactionCategory = budgetCategory?.name ?? budget.categoryGroup;
     const alreadyExists = transactions.some((transaction) => {
       const transactionWorkspace = transaction.workspace ?? "business";
+      const matchesBudgetTarget = budgetItemId
+        ? transaction.itemId === budgetItemId
+        : transaction.category === transactionCategory;
       return (
         transactionWorkspace === workspace &&
         transaction.subtype === "planned" &&
         transaction.status === "pending" &&
-        transaction.category === budget.categoryGroup &&
+        matchesBudgetTarget &&
         String(transaction.date ?? "").startsWith(monthPrefix)
       );
     });
@@ -210,15 +291,15 @@ export async function generateMonthlyRecurringTransactions(year: number, month: 
     const ref = doc(transactionsCol());
 
     batch.set(ref, {
-      name: budget.categoryGroup,
-      category: budget.categoryGroup,
+      name: transactionName,
+      category: transactionCategory,
       amount: Number(budget.amount) || 0,
       type: "expense",
       date,
       notes: "Generado automáticamente desde presupuesto recurrente",
       subtype: "planned",
       status: "pending",
-      itemId: null,
+      itemId: budgetItemId,
       workspace,
       movementType: "expense",
       paymentMethod: "bank_account",
