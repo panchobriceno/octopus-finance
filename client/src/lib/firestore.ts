@@ -258,18 +258,101 @@ export async function generateMonthlyRecurringTransactions(year: number, month: 
     }
   }
 
+  const childBudgetEntriesByCategory = new Map<
+    string,
+    Array<{ budget: any; item: any; category: any }>
+  >();
+  for (const [groupKey, budget] of Array.from(latestBudgetByGroup.entries())) {
+    const itemId = getItemBudgetId(groupKey);
+    if (!itemId) continue;
+
+    const item = itemById.get(itemId);
+    const category = item?.categoryId ? categoryById.get(item.categoryId) : null;
+    if (!item?.name || !category?.name) continue;
+
+    const entries = childBudgetEntriesByCategory.get(category.name) ?? [];
+    entries.push({ budget, item, category });
+    childBudgetEntriesByCategory.set(category.name, entries);
+  }
+  for (const entries of Array.from(childBudgetEntriesByCategory.values())) {
+    entries.sort(
+      (
+        left: { budget: any; item: any; category: any },
+        right: { budget: any; item: any; category: any },
+      ) => left.item.name.localeCompare(right.item.name),
+    );
+  }
+
   const recurringBudgets = Array.from(latestBudgetByGroup.values()).filter((budget) => budget.isRecurring);
   const daysInMonth = new Date(year, month, 0).getDate();
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const batch = writeBatch(db);
+  const consumedSubcategoryBudgetGroups = new Set<string>();
   let created = 0;
 
   for (const budget of recurringBudgets) {
     const budgetItemId = getItemBudgetId(budget.categoryGroup);
+    if (budgetItemId && consumedSubcategoryBudgetGroups.has(budget.categoryGroup)) {
+      continue;
+    }
+
     const budgetItem = budgetItemId ? itemById.get(budgetItemId) : null;
     const budgetCategory = budgetItem?.categoryId ? categoryById.get(budgetItem.categoryId) : null;
     const transactionName = budgetItem?.name ?? budget.categoryGroup;
     const transactionCategory = budgetCategory?.name ?? budget.categoryGroup;
+
+    const childBudgetEntries = budgetItemId
+      ? []
+      : childBudgetEntriesByCategory.get(String(budget.categoryGroup)) ?? [];
+
+    if (childBudgetEntries.length > 0) {
+      const dueDay = Math.min(Math.max(Number(budget.dayOfMonth ?? 1), 1), daysInMonth);
+      const date = `${monthPrefix}-${String(dueDay).padStart(2, "0")}`;
+
+      for (const childEntry of childBudgetEntries) {
+        consumedSubcategoryBudgetGroups.add(childEntry.budget.categoryGroup);
+
+        const alreadyExists = transactions.some((transaction) => {
+          const transactionWorkspace = transaction.workspace ?? "business";
+          return (
+            transactionWorkspace === workspace &&
+            transaction.subtype === "planned" &&
+            transaction.status === "pending" &&
+            transaction.itemId === childEntry.item.id &&
+            String(transaction.date ?? "").startsWith(monthPrefix)
+          );
+        });
+
+        if (alreadyExists) continue;
+
+        const ref = doc(transactionsCol());
+        batch.set(ref, {
+          name: childEntry.item.name,
+          category: childEntry.category.name,
+          amount: Number(childEntry.budget.amount) || 0,
+          type: "expense",
+          date,
+          notes: "Generado automáticamente desde presupuesto recurrente",
+          subtype: "planned",
+          status: "pending",
+          itemId: childEntry.item.id,
+          workspace,
+          movementType: "expense",
+          paymentMethod: "bank_account",
+          destinationWorkspace: null,
+          creditCardName: null,
+          installmentCount: null,
+          accountId: null,
+          importBatchId: null,
+          importBatchLabel: null,
+          importedAt: null,
+        });
+        created += 1;
+      }
+
+      continue;
+    }
+
     const alreadyExists = transactions.some((transaction) => {
       const transactionWorkspace = transaction.workspace ?? "business";
       const matchesBudgetTarget = budgetItemId

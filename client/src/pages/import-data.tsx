@@ -79,6 +79,25 @@ type ImportBatchSummary = {
   totalAmount: number;
 };
 
+type ClaudePdfMovement = {
+  date: string;
+  description: string;
+  amount: number;
+  installments: string;
+};
+
+type ClaudePdfExtraction = {
+  payUntil: string;
+  movements: ClaudePdfMovement[];
+};
+
+const PDF_COLUMN_HEADERS = {
+  date: "Fecha",
+  description: "Descripción",
+  amount: "Monto ($)",
+  installments: "Cuotas",
+} as const;
+
 function normalizeText(value: string) {
   return value
     .normalize("NFD")
@@ -550,6 +569,23 @@ function detectHeaderRowIndex(lines: string[], delimiter: string) {
   return bestIndex;
 }
 
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    let chunkBinary = "";
+    for (let chunkIndex = 0; chunkIndex < chunk.length; chunkIndex += 1) {
+      chunkBinary += String.fromCharCode(chunk[chunkIndex]);
+    }
+    binary += chunkBinary;
+  }
+
+  return btoa(binary);
+}
+
 export default function ImportDataPage() {
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
@@ -568,6 +604,7 @@ export default function ImportDataPage() {
   const [batchToDelete, setBatchToDelete] = useState<ImportBatchSummary | null>(null);
   const [detailBatchId, setDetailBatchId] = useState<string | null>(null);
   const [importDueDate, setImportDueDate] = useState<string | null>(null);
+  const [isPdfProcessing, setIsPdfProcessing] = useState(false);
   const { toast } = useToast();
 
   const { data: categories = [] } = useCategories();
@@ -972,9 +1009,108 @@ export default function ImportDataPage() {
     [toast, accountType],
   );
 
+  const applyNormalizedImportRows = useCallback((
+    headers: string[],
+    rows: Record<string, string>[],
+    options?: {
+      detectedCreditImport?: boolean;
+      dueDate?: string | null;
+      forceMapping?: ColumnMapping;
+    },
+  ) => {
+    const detectedCreditImport = options?.detectedCreditImport ?? false;
+
+    if (detectedCreditImport && accountType !== "credit") {
+      setAccountType("credit");
+    }
+
+    if (detectedCreditImport) {
+      setImportDueDate(options?.dueDate ?? null);
+    } else {
+      setImportDueDate(null);
+    }
+
+    setIgnoredRowIds(new Set());
+    setCsvHeaders(headers);
+    setCsvRows(rows);
+    setMapping(options?.forceMapping ?? inferMapping(headers, rows));
+  }, [accountType]);
+
+  const parsePdfWithClaude = useCallback(async (file: File) => {
+    const pdfBase64 = arrayBufferToBase64(await file.arrayBuffer());
+    const response = await fetch("/api/extract-pdf", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        pdfBase64,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || "No se pudo procesar el PDF.");
+    }
+
+    const payload = await response.json() as Partial<ClaudePdfExtraction> & { error?: string };
+    if (!Array.isArray(payload.movements)) {
+      throw new Error(payload.error || "El servidor no devolvió movimientos válidos.");
+    }
+
+    return {
+      payUntil: typeof payload.payUntil === "string" ? payload.payUntil : "",
+      movements: payload.movements.map((movement) => ({
+        date: typeof movement?.date === "string" ? movement.date : "",
+        description: typeof movement?.description === "string" ? movement.description : "",
+        amount: typeof movement?.amount === "number" ? movement.amount : Number(movement?.amount ?? NaN),
+        installments: typeof movement?.installments === "string" ? movement.installments : "",
+      })),
+    };
+  }, []);
+
   const handleFile = useCallback(
-    (file: File) => {
+    async (file: File) => {
       setFileName(file.name);
+      setCsvHeaders([]);
+      setCsvRows([]);
+      setPreviewRows([]);
+      setIgnoredRowIds(new Set());
+      setImportDueDate(null);
+
+      if (file.name.toLowerCase().endsWith(".pdf")) {
+        setIsPdfProcessing(true);
+        try {
+          const extracted = await parsePdfWithClaude(file);
+          const rows = extracted.movements.map((movement) => ({
+            [PDF_COLUMN_HEADERS.date]: parseDateValue(movement.date),
+            [PDF_COLUMN_HEADERS.description]: movement.description?.trim() ?? "",
+            [PDF_COLUMN_HEADERS.amount]: Number.isFinite(movement.amount) ? String(movement.amount) : "",
+            [PDF_COLUMN_HEADERS.installments]: movement.installments?.trim() || "01/01",
+          }));
+          const headers = Object.values(PDF_COLUMN_HEADERS);
+          applyNormalizedImportRows(headers, rows, {
+            detectedCreditImport: true,
+            dueDate: parseDateValue(extracted.payUntil),
+            forceMapping: {
+              date: PDF_COLUMN_HEADERS.date,
+              description: PDF_COLUMN_HEADERS.description,
+              amount: PDF_COLUMN_HEADERS.amount,
+              installments: PDF_COLUMN_HEADERS.installments,
+            },
+          });
+        } catch (error) {
+          toast({
+            title: "No se pudo procesar el PDF",
+            description: error instanceof Error ? error.message : "Claude no pudo extraer los movimientos.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsPdfProcessing(false);
+        }
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = (e) => {
         const text = e.target?.result as string;
@@ -982,7 +1118,7 @@ export default function ImportDataPage() {
       };
       reader.readAsText(file);
     },
-    [parseCSV],
+    [applyNormalizedImportRows, parseCSV, parsePdfWithClaude, toast],
   );
 
   const handleDrop = useCallback(
@@ -990,12 +1126,13 @@ export default function ImportDataPage() {
       e.preventDefault();
       setIsDragging(false);
       const file = e.dataTransfer.files[0];
-      if (file && (file.name.endsWith(".csv") || file.name.endsWith(".txt"))) {
-        handleFile(file);
+      const lowerName = file?.name.toLowerCase() ?? "";
+      if (file && (lowerName.endsWith(".csv") || lowerName.endsWith(".txt") || lowerName.endsWith(".pdf"))) {
+        void handleFile(file);
       } else {
         toast({
           title: "Formato no soportado",
-          description: "Por favor sube un archivo CSV.",
+          description: "Por favor sube un archivo CSV o PDF.",
           variant: "destructive",
         });
       }
@@ -1242,25 +1379,30 @@ export default function ImportDataPage() {
             data-testid="dropzone"
           >
             <FileText className="size-12 mx-auto text-muted-foreground/40 mb-4" />
-            <p className="text-base font-medium mb-1">Arrastra tu archivo CSV aquí</p>
-            <p className="text-sm text-muted-foreground mb-4">o haz clic para seleccionar</p>
+            <p className="text-base font-medium mb-1">
+              {isPdfProcessing ? "Procesando PDF con Claude..." : "Arrastra tu archivo CSV o PDF aquí"}
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              {isPdfProcessing ? "Esto puede tardar 5-10 segundos." : "o haz clic para seleccionar"}
+            </p>
             <input
               type="file"
-              accept=".csv,.txt"
+              accept=".csv,.txt,.pdf"
               className="hidden"
               id="file-input"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) handleFile(file);
+                if (file) void handleFile(file);
               }}
               data-testid="input-file"
             />
             <Button
               variant="outline"
               onClick={() => document.getElementById("file-input")?.click()}
+              disabled={isPdfProcessing}
               data-testid="button-select-file"
             >
-              Seleccionar Archivo
+              {isPdfProcessing ? "Procesando..." : "Seleccionar Archivo"}
             </Button>
           </div>
 
@@ -1270,9 +1412,13 @@ export default function ImportDataPage() {
               <span className="text-sm">
                 Archivo cargado: <span className="font-medium">{fileName}</span>
               </span>
-              <Badge variant="secondary" className="ml-auto">
-                {previewRows.length} filas detectadas
-              </Badge>
+              {isPdfProcessing ? (
+                <Badge variant="secondary" className="ml-auto">Procesando PDF...</Badge>
+              ) : (
+                <Badge variant="secondary" className="ml-auto">
+                  {previewRows.length} filas detectadas
+                </Badge>
+              )}
             </div>
           )}
         </CardContent>

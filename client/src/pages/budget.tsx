@@ -121,6 +121,7 @@ export default function BudgetPage() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [draftGroupMap, setDraftGroupMap] = useState<Record<string, string[]>>({});
   const [manualOrderMap, setManualOrderMap] = useState<Record<string, string[]>>({});
+  const [removedGroupMap, setRemovedGroupMap] = useState<Record<string, string[]>>({});
   const { toast } = useToast();
 
   const { data: transactions = [], isLoading: txLoading } = useTransactions();
@@ -296,25 +297,29 @@ export default function BudgetPage() {
     const names = new Set<string>();
     const prefix = `${selectedMonthKey}::${selectedWorkspace}::`;
     const draftGroups = draftGroupMap[selectedScopeKey] ?? [];
+    const removedGroups = new Set(removedGroupMap[selectedScopeKey] ?? []);
 
     for (const budget of periodBudgets) {
+      if (removedGroups.has(budget.categoryGroup)) continue;
       names.add(budget.categoryGroup);
     }
 
     for (const group of draftGroups) {
+      if (removedGroups.has(group)) continue;
       names.add(group);
     }
 
     for (const [stateKey, value] of Object.entries(inputValues)) {
       if (!stateKey.startsWith(prefix)) continue;
       const group = stateKey.slice(prefix.length);
+      if (removedGroups.has(group)) continue;
       if (value !== "" || names.has(group)) {
         names.add(group);
       }
     }
 
     return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [draftGroupMap, inputValues, periodBudgets, selectedMonthKey, selectedScopeKey, selectedWorkspace]);
+  }, [draftGroupMap, inputValues, periodBudgets, removedGroupMap, selectedMonthKey, selectedScopeKey, selectedWorkspace]);
 
   const orderedVisibleGroupNames = useMemo(() => {
     const manualOrder = manualOrderMap[selectedScopeKey];
@@ -614,6 +619,10 @@ export default function BudgetPage() {
       ...current,
       [selectedScopeKey]: [...orderedVisibleGroupNames, newBudgetCategory],
     }));
+    setRemovedGroupMap((current) => ({
+      ...current,
+      [selectedScopeKey]: (current[selectedScopeKey] ?? []).filter((name) => name !== newBudgetCategory),
+    }));
     setNewBudgetCategory("");
   };
 
@@ -655,6 +664,10 @@ export default function BudgetPage() {
       ...current,
       [selectedScopeKey]: [...orderedVisibleGroupNames, trimmedName],
     }));
+    setRemovedGroupMap((current) => ({
+      ...current,
+      [selectedScopeKey]: (current[selectedScopeKey] ?? []).filter((name) => name !== trimmedName),
+    }));
     setNewCategoryName("");
     toast({
       title: alreadyExists ? "Categoría agregada al presupuesto" : "Categoría creada",
@@ -665,8 +678,26 @@ export default function BudgetPage() {
   const handleRemoveBudgetCategory = async (groupName: string) => {
     const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, groupName);
     const existing = budgetByGroup[groupName];
-    if (existing) {
-      await deleteBudgetMutation.mutateAsync(existing.id);
+    setRemovedGroupMap((current) => ({
+      ...current,
+      [selectedScopeKey]: Array.from(new Set([...(current[selectedScopeKey] ?? []), groupName])),
+    }));
+
+    try {
+      if (existing) {
+        await deleteBudgetMutation.mutateAsync(existing.id);
+      }
+    } catch {
+      setRemovedGroupMap((current) => ({
+        ...current,
+        [selectedScopeKey]: (current[selectedScopeKey] ?? []).filter((name) => name !== groupName),
+      }));
+      toast({
+        title: "Error",
+        description: "No se pudo quitar la categoría del presupuesto.",
+        variant: "destructive",
+      });
+      return;
     }
 
     setInputValues((current) => {
