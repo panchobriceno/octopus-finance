@@ -973,6 +973,7 @@ function TransactionForm({
 // ── Main Page ────────────────────────────────────────────────────
 export default function OverviewPage() {
   const [createFormMode, setCreateFormMode] = useState<"transaction" | "internal">("transaction");
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isConfigMode, setIsConfigMode] = useState(false);
   const [draftCardOrder, setDraftCardOrder] = useState<DashboardCardId[]>([...DASHBOARD_CARD_IDS]);
   const [draftHiddenCards, setDraftHiddenCards] = useState<DashboardCardId[]>([]);
@@ -1728,7 +1729,10 @@ export default function OverviewPage() {
           : null,
       },
       {
-        onSuccess: () => toast({ title: "Transacción creada" }),
+        onSuccess: () => {
+          setShowCreateDialog(false);
+          toast({ title: "Transacción creada" });
+        },
       }
     );
   };
@@ -1787,7 +1791,10 @@ export default function OverviewPage() {
         installmentCount: null,
       },
       {
-        onSuccess: () => toast({ title: "Movimiento interno creado" }),
+        onSuccess: () => {
+          setShowCreateDialog(false);
+          toast({ title: "Movimiento interno creado" });
+        },
       },
     );
   };
@@ -2034,54 +2041,6 @@ export default function OverviewPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Create Transaction Form */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Plus className="size-4" />
-              Agregar Movimiento
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant={createFormMode === "transaction" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setCreateFormMode("transaction")}
-              >
-                Transacción
-              </Button>
-              <Button
-                type="button"
-                variant={createFormMode === "internal" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setCreateFormMode("internal")}
-              >
-                Transferencia
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {createFormMode === "transaction" ? (
-            <TransactionForm
-              mode="create"
-              categories={categories}
-              items={items}
-              accounts={accounts}
-              isPending={createMutation.isPending}
-              onSubmit={handleCreate}
-            />
-          ) : (
-            <InternalMovementForm
-              accounts={accounts}
-              isPending={createMutation.isPending}
-              onSubmit={handleCreateInternalMovement}
-            />
-          )}
         </CardContent>
       </Card>
 
@@ -2452,6 +2411,16 @@ export default function OverviewPage() {
         </CardContent>
       </Card>
 
+      <Button
+        type="button"
+        onClick={() => setShowCreateDialog(true)}
+        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#bb9eff] p-0 text-[#0f0c1c] shadow-[0_12px_35px_rgba(187,158,255,0.45)] transition-transform duration-200 hover:scale-105 hover:bg-[#ad89ff] active:scale-95 animate-in fade-in zoom-in-95 slide-in-from-bottom-4"
+        data-testid="button-open-create-transaction-modal"
+      >
+        <Plus className="size-6" />
+        <span className="sr-only">Agregar movimiento</span>
+      </Button>
+
       {/* Bulk Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
@@ -2484,6 +2453,58 @@ export default function OverviewPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <div className="flex flex-wrap items-center justify-between gap-3 pr-8">
+              <div>
+                <DialogTitle className="flex items-center gap-2">
+                  <Plus className="size-4" />
+                  Agregar Movimiento
+                </DialogTitle>
+                <DialogDescription>
+                  Completa el formulario para registrar una transacción o un movimiento interno.
+                </DialogDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant={createFormMode === "transaction" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCreateFormMode("transaction")}
+                >
+                  Transacción
+                </Button>
+                <Button
+                  type="button"
+                  variant={createFormMode === "internal" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCreateFormMode("internal")}
+                >
+                  Transferencia
+                </Button>
+              </div>
+            </div>
+          </DialogHeader>
+          {createFormMode === "transaction" ? (
+            <TransactionForm
+              mode="create"
+              categories={categories}
+              items={items}
+              accounts={accounts}
+              isPending={createMutation.isPending}
+              onSubmit={handleCreate}
+            />
+          ) : (
+            <InternalMovementForm
+              accounts={accounts}
+              isPending={createMutation.isPending}
+              onSubmit={handleCreateInternalMovement}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Transaction Modal */}
       <Dialog open={!!editingTx} onOpenChange={(open) => { if (!open) setEditingTx(null); }}>
