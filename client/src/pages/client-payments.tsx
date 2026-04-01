@@ -6,9 +6,10 @@ import {
   useAccounts,
   useCreateClient,
   useCreateClientPayment,
-  useCreateTransaction,
   useDeleteClientPayment,
   useMigrateClientPaymentStatuses,
+  useRegularizeClientPayments,
+  useSyncClientPaymentSettlement,
   useUpdateClientPayment,
 } from "@/lib/hooks";
 import { formatCLP } from "@/lib/utils";
@@ -169,10 +170,11 @@ export default function ClientPaymentsPage() {
   const { data: payments = [], isLoading } = useClientPayments();
   const createClientMutation = useCreateClient();
   const createMutation = useCreateClientPayment();
-  const createTransactionMutation = useCreateTransaction();
   const updateMutation = useUpdateClientPayment();
+  const syncSettlementMutation = useSyncClientPaymentSettlement();
   const deleteMutation = useDeleteClientPayment();
   const migrateStatusesMutation = useMigrateClientPaymentStatuses();
+  const regularizeClientPaymentsMutation = useRegularizeClientPayments();
 
   const activeBankAccounts = useMemo(
     () =>
@@ -398,41 +400,11 @@ export default function ClientPaymentsPage() {
     toast({ title: "Cliente creado" });
   };
 
-  const createSettlementTransaction = async ({
-    clientPaymentId,
-    clientName,
-    netAmount,
-    paymentDate,
-    accountId,
-  }: {
-    clientPaymentId: string;
-    clientName: string;
-    netAmount: number;
-    paymentDate: string;
-    accountId: string;
-  }) => {
-    await createTransactionMutation.mutateAsync({
-      name: clientName,
-      type: "income",
-      subtype: "actual",
-      status: "paid",
-      amount: netAmount,
-      category: "Ingresos Clientes",
-      workspace: "business",
-      accountId,
-      paymentMethod: "bank_account",
-      date: paymentDate,
-      sourceClientPaymentId: clientPaymentId,
-      movementType: "income",
-      notes: null,
-      itemId: null,
-      destinationWorkspace: null,
-      creditCardName: null,
-      installmentCount: null,
-    });
+  const syncSettlementForPayment = async (payment: ClientPayment, accountId?: string | null) => {
+    await syncSettlementMutation.mutateAsync({ payment, accountId });
   };
 
-  const handleStatusChange = (payment: ClientPayment, status: PaymentStatus) => {
+  const handleStatusChange = async (payment: ClientPayment, status: PaymentStatus) => {
     if (status === "paid" && payment.status !== "paid") {
       setMarkPaidDraft({
         netAmount: String(payment.netAmount ?? 0),
@@ -447,13 +419,21 @@ export default function ClientPaymentsPage() {
       return;
     }
 
-    updateMutation.mutate({
+    await updateMutation.mutateAsync({
       id: payment.id,
       data: {
         status,
         paymentDate: status === "paid" ? payment.paymentDate ?? new Date().toISOString().slice(0, 10) : null,
       },
     });
+
+    if (payment.status === "paid" || status === "paid") {
+      await syncSettlementForPayment({
+        ...payment,
+        status,
+        paymentDate: status === "paid" ? payment.paymentDate ?? new Date().toISOString().slice(0, 10) : null,
+      });
+    }
   };
 
   const startEdit = (payment: ClientPayment) => {
@@ -524,27 +504,54 @@ export default function ClientPaymentsPage() {
       return;
     }
 
+    const updatedPayment: ClientPayment = {
+      ...(existingPayment as ClientPayment),
+      id: editingPaymentId,
+      clientId: editForm.clientId || null,
+      clientName: editForm.clientName.trim(),
+      rut: editForm.rut.trim() || null,
+      contactName: editForm.contactName.trim() || null,
+      email: editForm.email.trim() || null,
+      accountManager: existingPayment?.accountManager ?? null,
+      serviceItem: editForm.serviceItem.trim() || null,
+      serviceMonth: editForm.serviceMonth.trim() || null,
+      issueDate: editForm.issueDate || null,
+      dueDate: editForm.dueDate || null,
+      expectedDate: editForm.dueDate || null,
+      paymentDate: editForm.status === "paid" ? new Date().toISOString().slice(0, 10) : null,
+      netAmount: Number.parseFloat(editForm.netAmount || "0"),
+      vatAmount: Number.parseFloat(editForm.vatAmount || "0"),
+      totalAmount: Number.parseFloat(editForm.totalAmount || "0"),
+      status: editForm.status,
+      notes: editForm.notes.trim() || null,
+      workspace: existingPayment?.workspace ?? "business",
+    };
+
     await updateMutation.mutateAsync({
       id: editingPaymentId,
       data: {
-        clientId: editForm.clientId || null,
-        clientName: editForm.clientName.trim(),
-        rut: editForm.rut.trim() || null,
-        contactName: editForm.contactName.trim() || null,
-        email: editForm.email.trim() || null,
-        serviceItem: editForm.serviceItem.trim() || null,
-        serviceMonth: editForm.serviceMonth.trim() || null,
-        issueDate: editForm.issueDate || null,
-        dueDate: editForm.dueDate || null,
-        expectedDate: editForm.dueDate || null,
-        netAmount: Number.parseFloat(editForm.netAmount || "0"),
-        vatAmount: Number.parseFloat(editForm.vatAmount || "0"),
-        totalAmount: Number.parseFloat(editForm.totalAmount || "0"),
-        status: editForm.status,
-        paymentDate: editForm.status === "paid" ? new Date().toISOString().slice(0, 10) : null,
-        notes: editForm.notes.trim() || null,
+        clientId: updatedPayment.clientId,
+        clientName: updatedPayment.clientName,
+        rut: updatedPayment.rut,
+        contactName: updatedPayment.contactName,
+        email: updatedPayment.email,
+        serviceItem: updatedPayment.serviceItem,
+        serviceMonth: updatedPayment.serviceMonth,
+        issueDate: updatedPayment.issueDate,
+        dueDate: updatedPayment.dueDate,
+        expectedDate: updatedPayment.expectedDate,
+        netAmount: updatedPayment.netAmount,
+        vatAmount: updatedPayment.vatAmount,
+        totalAmount: updatedPayment.totalAmount,
+        status: updatedPayment.status,
+        paymentDate: updatedPayment.paymentDate,
+        notes: updatedPayment.notes,
       },
     });
+
+    if (existingPayment?.status === "paid" || updatedPayment.status === "paid") {
+      await syncSettlementForPayment(updatedPayment);
+    }
 
     toast({ title: "Ingreso cliente actualizado" });
     cancelEdit();
@@ -589,13 +596,16 @@ export default function ClientPaymentsPage() {
         workspace: "business",
       });
 
-      await createSettlementTransaction({
-        clientPaymentId: createdPayment.id,
-        clientName: sourceForm.clientName.trim(),
-        netAmount: safeNetAmount,
+      const settledCreatedPayment: ClientPayment = {
+        ...(createdPayment as ClientPayment),
         paymentDate: markPaidDraft.paymentDate,
-        accountId: markPaidDraft.accountId,
-      });
+        netAmount: safeNetAmount,
+        vatAmount: Number.parseFloat(vatAmount),
+        totalAmount: Number.parseFloat(totalAmount),
+        status: "paid",
+      };
+
+      await syncSettlementForPayment(settledCreatedPayment, markPaidDraft.accountId);
 
       toast({ title: "Pago de cliente registrado" });
       setForm(defaultForm);
@@ -618,17 +628,25 @@ export default function ClientPaymentsPage() {
       },
     });
 
-    await createSettlementTransaction({
-      clientPaymentId: payment.id,
+    await syncSettlementForPayment({
+      ...payment,
+      ...updatedFields,
       clientName: updatedClientName,
       netAmount: safeNetAmount,
+      vatAmount: Number.parseFloat(vatAmount),
+      totalAmount: Number.parseFloat(totalAmount),
+      status: "paid",
       paymentDate: markPaidDraft.paymentDate,
-      accountId: markPaidDraft.accountId,
-    });
+    }, markPaidDraft.accountId);
 
     toast({ title: "Pago de cliente registrado" });
     cancelEdit();
     setMarkPaidDraft(null);
+  };
+
+  const handleDeletePayment = async (payment: ClientPayment) => {
+    await deleteMutation.mutateAsync(payment.id);
+    toast({ title: "Ingreso cliente eliminado" });
   };
 
   if (isLoading) {
@@ -648,23 +666,43 @@ export default function ClientPaymentsPage() {
           <BriefcaseBusiness className="size-5 text-primary" />
           <h2 className="text-xl font-semibold">Ingresos Clientes</h2>
         </div>
-        {hasLegacyStatuses ? (
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             onClick={() =>
-              migrateStatusesMutation.mutate(undefined, {
-                onSuccess: ({ updated }) =>
+              regularizeClientPaymentsMutation.mutate(undefined, {
+                onSuccess: (result) =>
                   toast({
-                    title: "Estados históricos migrados",
-                    description: `${updated} registros pasaron a Facturado.`,
+                    title: "ClientPayment regularizados",
+                    description:
+                      `${result.updatedPayments} pagos actualizados, ` +
+                      `${result.linkedByIdentity} vínculos con cliente recuperados y ` +
+                      `${result.updatedSettlements + result.deletedSettlements} ajustes en transacciones.`,
                   }),
               })
             }
-            disabled={migrateStatusesMutation.isPending}
+            disabled={regularizeClientPaymentsMutation.isPending}
           >
-            {migrateStatusesMutation.isPending ? "Migrando..." : "Migrar estados históricos"}
+            {regularizeClientPaymentsMutation.isPending ? "Regularizando..." : "Regularizar vínculos"}
           </Button>
-        ) : null}
+          {hasLegacyStatuses ? (
+            <Button
+              variant="outline"
+              onClick={() =>
+                migrateStatusesMutation.mutate(undefined, {
+                  onSuccess: ({ updated }) =>
+                    toast({
+                      title: "Estados históricos migrados",
+                      description: `${updated} registros pasaron a Facturado.`,
+                    }),
+                })
+              }
+              disabled={migrateStatusesMutation.isPending}
+            >
+              {migrateStatusesMutation.isPending ? "Migrando..." : "Migrar estados históricos"}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -1168,11 +1206,9 @@ export default function ClientPaymentsPage() {
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
                                     <AlertDialogAction
-                                      onClick={() =>
-                                        deleteMutation.mutate(payment.id, {
-                                          onSuccess: () => toast({ title: "Ingreso cliente eliminado" }),
-                                        })
-                                      }
+                                      onClick={() => {
+                                        void handleDeletePayment(payment);
+                                      }}
                                     >
                                       Eliminar
                                     </AlertDialogAction>
@@ -1271,9 +1307,9 @@ export default function ClientPaymentsPage() {
             </Button>
             <Button
               onClick={handleConfirmMarkPaid}
-              disabled={createMutation.isPending || updateMutation.isPending || createTransactionMutation.isPending}
+              disabled={createMutation.isPending || updateMutation.isPending || syncSettlementMutation.isPending}
             >
-              {createMutation.isPending || updateMutation.isPending || createTransactionMutation.isPending ? "Guardando..." : "Confirmar pago"}
+              {createMutation.isPending || updateMutation.isPending || syncSettlementMutation.isPending ? "Guardando..." : "Confirmar pago"}
             </Button>
           </DialogFooter>
         </DialogContent>

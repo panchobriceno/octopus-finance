@@ -236,11 +236,23 @@ export function useUpdateClientPayment() {
   });
 }
 
+export function useSyncClientPaymentSettlement() {
+  return useMutation({
+    mutationFn: ({ payment, accountId }: { payment: ClientPayment; accountId?: string | null }) =>
+      fs.syncClientPaymentSettlement(payment, { accountId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["client-payments"] });
+    },
+  });
+}
+
 export function useDeleteClientPayment() {
   return useMutation({
     mutationFn: (id: string) => fs.deleteClientPayment(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["client-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 }
@@ -250,6 +262,16 @@ export function useMigrateClientPaymentStatuses() {
     mutationFn: () => fs.migrateClientPaymentStatuses(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["client-payments"] });
+    },
+  });
+}
+
+export function useRegularizeClientPayments() {
+  return useMutation({
+    mutationFn: () => fs.regularizeClientPayments(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 }

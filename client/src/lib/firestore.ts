@@ -2,7 +2,7 @@
  * Firestore data layer — replaces Express API + MemStorage.
  * Uses Firebase modular SDK v9.
  */
-import type { Category, Item, Transaction } from "@shared/schema";
+import type { Category, Client, ClientPayment, Item, Transaction } from "@shared/schema";
 import {
   collection,
   doc,
@@ -25,6 +25,14 @@ import { db } from "./firebase";
 // ── Helper: map Firestore snapshot to typed array ───────────────
 function snapToArray<T>(snap: QuerySnapshot<DocumentData>): T[] {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
+}
+
+function normalizeText(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 // ── Collection references ───────────────────────────────────────
@@ -234,35 +242,29 @@ export async function generateMonthlyRecurringTransactions(year: number, month: 
   const categories = snapToArray<any>(categoriesSnap);
   const itemById = new Map(items.map((item) => [item.id, item]));
   const categoryById = new Map(categories.map((category) => [category.id, category]));
+  const previousMonthDate = new Date(year, month - 2, 1);
+  const previousYear = previousMonthDate.getFullYear();
+  const previousMonth = previousMonthDate.getMonth() + 1;
+  const previousMonthBudgets = budgets.filter((budget) => {
+    const budgetWorkspace = budget.workspace ?? "business";
+    return (
+      budgetWorkspace === workspace &&
+      budget.year === previousYear &&
+      budget.month === previousMonth
+    );
+  });
 
-  const candidateBudgets = budgets
-    .filter((budget) => {
-      const budgetWorkspace = budget.workspace ?? "business";
-      if (budgetWorkspace !== workspace) return false;
-      if (budget.year > year) return false;
-      if (budget.year === year && budget.month > month) return false;
-      return true;
-    })
-    .sort((left, right) => {
-      if (left.categoryGroup !== right.categoryGroup) {
-        return String(left.categoryGroup).localeCompare(String(right.categoryGroup));
-      }
-      if (left.year !== right.year) return right.year - left.year;
-      return right.month - left.month;
-    });
-
-  const latestBudgetByGroup = new Map<string, any>();
-  for (const budget of candidateBudgets) {
-    if (!latestBudgetByGroup.has(budget.categoryGroup)) {
-      latestBudgetByGroup.set(budget.categoryGroup, budget);
-    }
+  const recurringBudgets = previousMonthBudgets.filter((budget) => budget.isRecurring);
+  const recurringBudgetByGroup = new Map<string, any>();
+  for (const budget of recurringBudgets) {
+    recurringBudgetByGroup.set(budget.categoryGroup, budget);
   }
 
   const childBudgetEntriesByCategory = new Map<
     string,
     Array<{ budget: any; item: any; category: any }>
   >();
-  for (const [groupKey, budget] of Array.from(latestBudgetByGroup.entries())) {
+  for (const [groupKey, budget] of Array.from(recurringBudgetByGroup.entries())) {
     const itemId = getItemBudgetId(groupKey);
     if (!itemId) continue;
 
@@ -283,7 +285,6 @@ export async function generateMonthlyRecurringTransactions(year: number, month: 
     );
   }
 
-  const recurringBudgets = Array.from(latestBudgetByGroup.values()).filter((budget) => budget.isRecurring);
   const daysInMonth = new Date(year, month, 0).getDate();
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const batch = writeBatch(db);
@@ -487,7 +488,17 @@ export async function updateClientPayment(id: string, data: Record<string, any>)
 }
 
 export async function deleteClientPayment(id: string) {
-  await deleteDoc(doc(db, "clientPayments", id));
+  const [paymentRef, linkedTransactionsSnap] = await Promise.all([
+    Promise.resolve(doc(db, "clientPayments", id)),
+    getDocs(query(transactionsCol(), where("sourceClientPaymentId", "==", id))),
+  ]);
+
+  const batch = writeBatch(db);
+  batch.delete(paymentRef);
+  linkedTransactionsSnap.docs.forEach((transactionDoc) => {
+    batch.delete(transactionDoc.ref);
+  });
+  await batch.commit();
 }
 
 export async function migrateClientPaymentStatuses() {
@@ -515,6 +526,217 @@ export async function migrateClientPaymentStatuses() {
   }
 
   return { updated: legacyPayments.length };
+}
+
+function buildClientPaymentSettlementTransaction(
+  payment: ClientPayment,
+  accountId: string | null,
+): Record<string, any> | null {
+  const paymentDate =
+    payment.paymentDate ??
+    payment.expectedDate ??
+    payment.dueDate ??
+    payment.issueDate ??
+    null;
+
+  if (!paymentDate || !accountId) return null;
+
+  return {
+    name: payment.clientName,
+    type: "income",
+    subtype: "actual",
+    status: "paid",
+    amount: Number(payment.netAmount) || 0,
+    category: "Ingresos Clientes",
+    workspace: payment.workspace ?? "business",
+    accountId,
+    paymentMethod: "bank_account",
+    date: paymentDate,
+    sourceClientPaymentId: payment.id,
+    movementType: "income",
+    notes: null,
+    itemId: null,
+    destinationWorkspace: null,
+    creditCardName: null,
+    installmentCount: null,
+  };
+}
+
+export async function syncClientPaymentSettlement(
+  payment: ClientPayment,
+  options?: { accountId?: string | null },
+) {
+  const linkedTransactionsSnap = await getDocs(
+    query(transactionsCol(), where("sourceClientPaymentId", "==", payment.id)),
+  );
+  const linkedTransactions = snapToArray<Transaction>(linkedTransactionsSnap).sort((left, right) =>
+    String(left.date ?? "").localeCompare(String(right.date ?? "")),
+  );
+
+  if (payment.status !== "paid") {
+    if (!linkedTransactions.length) {
+      return { created: 0, updated: 0, deleted: 0, skipped: 0 };
+    }
+
+    const batch = writeBatch(db);
+    linkedTransactions.forEach((transaction) => {
+      batch.delete(doc(db, "transactions", transaction.id));
+    });
+    await batch.commit();
+    return { created: 0, updated: 0, deleted: linkedTransactions.length, skipped: 0 };
+  }
+
+  const targetAccountId = options?.accountId ?? linkedTransactions[0]?.accountId ?? null;
+  const transactionData = buildClientPaymentSettlementTransaction(payment, targetAccountId);
+  if (!transactionData) {
+    return { created: 0, updated: 0, deleted: 0, skipped: 1 };
+  }
+
+  if (!linkedTransactions.length) {
+    const ref = await addDoc(transactionsCol(), transactionData);
+    return { created: 1, updated: 0, deleted: 0, skipped: 0, id: ref.id };
+  }
+
+  const [primaryTransaction, ...duplicates] = linkedTransactions;
+  const batch = writeBatch(db);
+  batch.update(doc(db, "transactions", primaryTransaction.id), transactionData);
+  duplicates.forEach((transaction) => {
+    batch.delete(doc(db, "transactions", transaction.id));
+  });
+  await batch.commit();
+  return {
+    created: 0,
+    updated: 1,
+    deleted: duplicates.length,
+    skipped: 0,
+    id: primaryTransaction.id,
+  };
+}
+
+export async function regularizeClientPayments() {
+  const [paymentsSnap, clientsSnap, transactionsSnap] = await Promise.all([
+    getDocs(clientPaymentsCol()),
+    getDocs(clientsCol()),
+    getDocs(transactionsCol()),
+  ]);
+
+  const payments = snapToArray<ClientPayment>(paymentsSnap);
+  const clients = snapToArray<Client>(clientsSnap);
+  const transactions = snapToArray<Transaction>(transactionsSnap);
+
+  const clientById = new Map(clients.map((client) => [client.id, client]));
+  const clientsByName = new Map<string, Client[]>();
+  const clientsByRut = new Map<string, Client[]>();
+  const clientsByEmail = new Map<string, Client[]>();
+
+  for (const client of clients) {
+    const nameKey = normalizeText(client.name);
+    if (nameKey) {
+      clientsByName.set(nameKey, [...(clientsByName.get(nameKey) ?? []), client]);
+    }
+
+    const rutKey = normalizeText(client.rut);
+    if (rutKey) {
+      clientsByRut.set(rutKey, [...(clientsByRut.get(rutKey) ?? []), client]);
+    }
+
+    const emailKey = normalizeText(client.email);
+    if (emailKey) {
+      clientsByEmail.set(emailKey, [...(clientsByEmail.get(emailKey) ?? []), client]);
+    }
+  }
+
+  const linkedTransactionsByPaymentId = transactions.reduce<Map<string, Transaction[]>>((acc, transaction) => {
+    if (!transaction.sourceClientPaymentId) return acc;
+    acc.set(transaction.sourceClientPaymentId, [...(acc.get(transaction.sourceClientPaymentId) ?? []), transaction]);
+    return acc;
+  }, new Map());
+
+  const batch = writeBatch(db);
+  let updatedPayments = 0;
+  let linkedByIdentity = 0;
+  let updatedSettlements = 0;
+  let deletedSettlements = 0;
+  let skippedPaidWithoutAccount = 0;
+
+  for (const payment of payments) {
+    const currentClient = payment.clientId ? clientById.get(payment.clientId) ?? null : null;
+    const rutMatches = normalizeText(payment.rut) ? clientsByRut.get(normalizeText(payment.rut)) ?? [] : [];
+    const emailMatches = normalizeText(payment.email) ? clientsByEmail.get(normalizeText(payment.email)) ?? [] : [];
+    const nameMatches = normalizeText(payment.clientName)
+      ? clientsByName.get(normalizeText(payment.clientName)) ?? []
+      : [];
+
+    const matchedClient =
+      currentClient ??
+      (rutMatches.length === 1 ? rutMatches[0] : null) ??
+      (emailMatches.length === 1 ? emailMatches[0] : null) ??
+      (nameMatches.length === 1 ? nameMatches[0] : null);
+
+    const paymentPatch: Record<string, any> = {};
+    if (matchedClient && payment.clientId !== matchedClient.id) {
+      paymentPatch.clientId = matchedClient.id;
+      linkedByIdentity += 1;
+    }
+    if (matchedClient && !normalizeText(payment.rut) && matchedClient.rut) {
+      paymentPatch.rut = matchedClient.rut;
+    }
+    if (matchedClient && !normalizeText(payment.contactName) && matchedClient.contactName) {
+      paymentPatch.contactName = matchedClient.contactName;
+    }
+    if (matchedClient && !normalizeText(payment.email) && matchedClient.email) {
+      paymentPatch.email = matchedClient.email;
+    }
+
+    if (Object.keys(paymentPatch).length > 0) {
+      batch.update(doc(db, "clientPayments", payment.id), paymentPatch);
+      updatedPayments += 1;
+    }
+
+    const settlementTransactions = linkedTransactionsByPaymentId.get(payment.id) ?? [];
+
+    if (payment.status !== "paid") {
+      settlementTransactions.forEach((transaction) => {
+        batch.delete(doc(db, "transactions", transaction.id));
+        deletedSettlements += 1;
+      });
+      continue;
+    }
+
+    if (!settlementTransactions.length) {
+      skippedPaidWithoutAccount += 1;
+      continue;
+    }
+
+    const [primaryTransaction, ...duplicates] = settlementTransactions;
+    const settlementData = buildClientPaymentSettlementTransaction(payment, primaryTransaction.accountId ?? null);
+    if (!settlementData) {
+      skippedPaidWithoutAccount += 1;
+      continue;
+    }
+
+    const needsSettlementUpdate = Object.entries(settlementData).some(([key, value]) => primaryTransaction[key as keyof Transaction] !== value);
+    if (needsSettlementUpdate) {
+      batch.update(doc(db, "transactions", primaryTransaction.id), settlementData);
+      updatedSettlements += 1;
+    }
+    duplicates.forEach((transaction) => {
+      batch.delete(doc(db, "transactions", transaction.id));
+      deletedSettlements += 1;
+    });
+  }
+
+  if (updatedPayments || updatedSettlements || deletedSettlements) {
+    await batch.commit();
+  }
+
+  return {
+    updatedPayments,
+    linkedByIdentity,
+    updatedSettlements,
+    deletedSettlements,
+    skippedPaidWithoutAccount,
+  };
 }
 
 // ════════════════════════════════════════════════════════════════
