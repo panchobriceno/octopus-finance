@@ -293,6 +293,20 @@ export default function BudgetPage() {
     );
   }, [transactions, selectedYear, selectedMonth, selectedWorkspace]);
 
+  const periodCommittedTransactions = useMemo(() => {
+    const prefix = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+    return transactions.filter((tx) => {
+      const normalized = normalizeTransaction(tx);
+      return (
+        normalized.subtype === "planned" &&
+        normalized.status === "pending" &&
+        normalized.type === "expense" &&
+        normalized.workspace === selectedWorkspace &&
+        normalized.date.startsWith(prefix)
+      );
+    });
+  }, [transactions, selectedYear, selectedMonth, selectedWorkspace]);
+
   const visibleGroupNames = useMemo(() => {
     const names = new Set<string>();
     const prefix = `${selectedMonthKey}::${selectedWorkspace}::`;
@@ -423,8 +437,7 @@ export default function BudgetPage() {
     });
   }, [effectiveBudgetByGroup, orderedVisibleGroupNames, selectedMonthKey, selectedWorkspace]);
 
-  // Calculate actuals per group
-  const actualByGroup = useMemo(() => {
+  const buildAmountsByGroup = (sourceTransactions: Transaction[]) => {
     const map: Record<string, number> = {};
     const visibleItemBudgetIds = new Set(
       orderedVisibleGroupNames
@@ -436,7 +449,7 @@ export default function BudgetPage() {
     }
     map["Sin Agrupadora"] = 0;
 
-    for (const tx of periodTransactions) {
+    for (const tx of sourceTransactions) {
       const itemGroup = tx.itemId ? getItemBudgetKey(tx.itemId) : null;
       let group = getGroupForTransaction(tx);
 
@@ -449,7 +462,18 @@ export default function BudgetPage() {
       map[group] = (map[group] ?? 0) + tx.amount;
     }
     return map;
-  }, [orderedVisibleGroupNames, periodTransactions, getGroupForTransaction]);
+  };
+
+  // Calculate actuals and commitments per group
+  const actualByGroup = useMemo(
+    () => buildAmountsByGroup(periodTransactions),
+    [orderedVisibleGroupNames, periodTransactions, getGroupForTransaction],
+  );
+
+  const committedByGroup = useMemo(
+    () => buildAmountsByGroup(periodCommittedTransactions),
+    [orderedVisibleGroupNames, periodCommittedTransactions, getGroupForTransaction],
+  );
 
   const getVisibleBudgetAmount = (group: string) => {
     const raw = inputValues[getBudgetStateKey(selectedMonthKey, selectedWorkspace, group)];
@@ -474,13 +498,33 @@ export default function BudgetPage() {
     return categoryById[item.categoryId]?.name ?? "Subcategoría";
   };
 
+  const getExecutionReferenceAmount = (actual: number, committed: number) => {
+    if (actual > 0 && committed > 0) {
+      return Math.max(actual, committed);
+    }
+    return actual > 0 ? actual : committed;
+  };
+
+  const unmatchedTransactions = useMemo(
+    () =>
+      [...periodTransactions, ...periodCommittedTransactions].filter(
+        (tx) => getGroupForTransaction(tx) === "Sin Agrupadora",
+      ),
+    [periodCommittedTransactions, periodTransactions, getGroupForTransaction],
+  );
+
   // Totals
   const totalBudget = orderedVisibleGroupNames.reduce((sum, g) => sum + getVisibleBudgetAmount(g), 0);
+  const totalCommitted = orderedVisibleGroupNames.reduce(
+    (sum, g) => sum + (committedByGroup[g] ?? 0),
+    0,
+  );
   const totalActual = orderedVisibleGroupNames.reduce(
     (sum, g) => sum + (actualByGroup[g] ?? 0),
-    0
+    0,
   );
-  const totalDiff = totalBudget - totalActual;
+  const totalReferenceAmount = getExecutionReferenceAmount(totalActual, totalCommitted);
+  const totalDiff = totalBudget - totalReferenceAmount;
 
   const handleSave = async (groupName: string) => {
     const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, groupName);
@@ -1037,6 +1081,7 @@ export default function BudgetPage() {
                 <TableRow>
                   <TableHead className="pl-5">Categoría Agrupadora</TableHead>
                   <TableHead className="w-44">Presupuesto</TableHead>
+                  <TableHead className="text-right">Comprometido</TableHead>
                   <TableHead className="text-center">Recurrente</TableHead>
                   <TableHead className="w-32">Día de pago</TableHead>
                   <TableHead className="text-right">Real Ejecutado</TableHead>
@@ -1052,9 +1097,11 @@ export default function BudgetPage() {
                 {orderedVisibleGroupNames.map((group) => {
                   const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, group);
                   const budget = getVisibleBudgetAmount(group);
+                  const committed = committedByGroup[group] ?? 0;
                   const actual = actualByGroup[group] ?? 0;
-                  const diff = budget - actual;
-                  const pct = budget > 0 ? (actual / budget) * 100 : actual > 0 ? 999 : 0;
+                  const executionReference = getExecutionReferenceAmount(actual, committed);
+                  const diff = budget - executionReference;
+                  const pct = budget > 0 ? (executionReference / budget) * 100 : executionReference > 0 ? 999 : 0;
                   const carriedForward =
                     !budgetByGroup[group] &&
                     Boolean(effectiveBudgetByGroup[group]) &&
@@ -1098,6 +1145,9 @@ export default function BudgetPage() {
                             </p>
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-sm font-medium">
+                        {committed > 0 ? formatCLP(committed) : <span className="text-muted-foreground">$0</span>}
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex justify-center">
@@ -1188,6 +1238,7 @@ export default function BudgetPage() {
                 <TableRow className="border-t-2 font-semibold">
                   <TableCell className="pl-5 text-sm">{selectedWorkspace === "family" ? "Subtotal" : "Total"}</TableCell>
                   <TableCell className="tabular-nums text-sm">{formatCLP(totalBudget)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalCommitted)}</TableCell>
                   <TableCell />
                   <TableCell />
                   <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalActual)}</TableCell>
@@ -1204,12 +1255,12 @@ export default function BudgetPage() {
                     {totalBudget > 0 ? (
                       <Badge
                         className={`text-xs ${
-                          totalActual / totalBudget <= 1
+                          totalReferenceAmount / totalBudget <= 1
                             ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                             : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                         }`}
                       >
-                        {((totalActual / totalBudget) * 100).toFixed(0)}%
+                        {((totalReferenceAmount / totalBudget) * 100).toFixed(0)}%
                       </Badge>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
@@ -1235,6 +1286,7 @@ export default function BudgetPage() {
                       </TableCell>
                       <TableCell />
                       <TableCell />
+                      <TableCell />
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(familyIncomeJavi)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm text-blue-700 dark:text-blue-300">
                         {formatCLP(familyIncomeJavi)}
@@ -1250,6 +1302,7 @@ export default function BudgetPage() {
                     <TableRow>
                       <TableCell className="pl-5 font-medium text-sm">Ingreso Agencia</TableCell>
                       <TableCell className="tabular-nums text-sm">{formatCLP(businessRemainder)}</TableCell>
+                      <TableCell />
                       <TableCell />
                       <TableCell />
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(businessRemainder)}</TableCell>
@@ -1269,6 +1322,7 @@ export default function BudgetPage() {
                       <TableCell className="tabular-nums text-sm">{formatCLP(familyIncomeTotal)}</TableCell>
                       <TableCell />
                       <TableCell />
+                      <TableCell />
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(familyIncomeTotal)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm text-blue-700 dark:text-blue-300">
                         {formatCLP(familyIncomeTotal)}
@@ -1286,6 +1340,7 @@ export default function BudgetPage() {
                       <TableCell className="tabular-nums text-sm">
                         {formatCLP(familyBalanceAfterBudget)}
                       </TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalCommitted)}</TableCell>
                       <TableCell />
                       <TableCell />
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalActual)}</TableCell>
@@ -1302,19 +1357,26 @@ export default function BudgetPage() {
                     </TableRow>
                   </>
                 )}
-                {(actualByGroup["Sin Agrupadora"] ?? 0) > 0 && (
+                {((actualByGroup["Sin Agrupadora"] ?? 0) > 0 || (committedByGroup["Sin Agrupadora"] ?? 0) > 0) && (
                   <TableRow>
                     <TableCell className="pl-5 font-medium text-sm text-muted-foreground italic">
                       Sin Agrupadora
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">Asigna ámbito y categoría.</TableCell>
-                    <TableCell />
+                    <TableCell className="text-right tabular-nums text-sm font-medium">
+                      {formatCLP(committedByGroup["Sin Agrupadora"] ?? 0)}
+                    </TableCell>
                     <TableCell />
                     <TableCell className="text-right tabular-nums text-sm font-medium">
                       {formatCLP(actualByGroup["Sin Agrupadora"])}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm font-medium text-red-600 dark:text-red-400">
-                      {formatCLP(-actualByGroup["Sin Agrupadora"])}
+                      {formatCLP(
+                        -getExecutionReferenceAmount(
+                          actualByGroup["Sin Agrupadora"] ?? 0,
+                          committedByGroup["Sin Agrupadora"] ?? 0,
+                        ),
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <span className="text-xs text-muted-foreground">—</span>
@@ -1332,7 +1394,7 @@ export default function BudgetPage() {
       </Card>
 
       {/* Unmatched transactions detail */}
-      {(actualByGroup["Sin Agrupadora"] ?? 0) > 0 && (
+      {unmatchedTransactions.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold text-muted-foreground">
@@ -1347,24 +1409,28 @@ export default function BudgetPage() {
                     <TableHead className="pl-5">Fecha</TableHead>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Categoría</TableHead>
+                    <TableHead>Estado</TableHead>
                     <TableHead className="text-right pr-5">Monto</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {periodTransactions
-                    .filter((tx) => getGroupForTransaction(tx) === "Sin Agrupadora")
-                    .map((tx) => (
+                  {unmatchedTransactions.map((tx) => (
                       <TableRow key={tx.id}>
                         <TableCell className="pl-5 tabular-nums text-sm">{tx.date}</TableCell>
                         <TableCell className="text-sm font-medium">{tx.name}</TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-xs">{tx.category}</Badge>
                         </TableCell>
+                        <TableCell>
+                          <Badge variant={tx.subtype === "planned" ? "outline" : "secondary"} className="text-xs">
+                            {tx.subtype === "planned" ? "Comprometido" : "Ejecutado"}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-right tabular-nums text-sm font-medium text-red-600 dark:text-red-400 pr-5">
                           {formatCLP(tx.amount)}
                         </TableCell>
                       </TableRow>
-                    ))}
+                  ))}
                 </TableBody>
               </Table>
             </div>
