@@ -28,6 +28,12 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import {
+  FinanceDialogBody,
+  FinanceDialogContent,
+  FinanceDialogHeader,
+  FinanceSegmentedControl,
+} from "@/components/finance/finance-dialog";
 import { AttentionFeed } from "@/components/overview/attention-feed";
 import {
   OverviewMetricCard,
@@ -131,6 +137,7 @@ type TransactionStatusFilter = "all" | "paid" | "pending" | "cancelled" | "plann
 type TransactionWorkspaceFilter = "all" | "business" | "family" | "shared";
 type TransactionSortField = "date" | "name" | "amount" | "status" | "workspace";
 type DecisionAlertTone = "danger" | "warning" | "info" | "success";
+type CreateFormMode = "transaction" | "internal";
 
 type DecisionAlert = {
   tone: DecisionAlertTone;
@@ -552,23 +559,27 @@ interface TransactionFormProps {
   onCancel?: () => void;
 }
 
+type InternalMovementFormData = {
+  movementType: "transfer" | "credit_card_payment";
+  sourceAccountId: string;
+  destinationAccountId: string;
+  destinationCardName: string;
+  amount: string;
+  date: string;
+  notes: string;
+};
+
+interface InternalMovementFormProps {
+  accounts: Account[];
+  isPending: boolean;
+  onSubmit: (data: InternalMovementFormData) => void;
+}
+
 function InternalMovementForm({
   accounts,
   isPending,
   onSubmit,
-}: {
-  accounts: Account[];
-  isPending: boolean;
-  onSubmit: (data: {
-    movementType: "transfer" | "credit_card_payment";
-    sourceAccountId: string;
-    destinationAccountId: string;
-    destinationCardName: string;
-    amount: string;
-    date: string;
-    notes: string;
-  }) => void;
-}) {
+}: InternalMovementFormProps) {
   const { toast } = useToast();
   const [creditCards, setCreditCards] = useState<string[]>([]);
   const [movementType, setMovementType] = useState<"transfer" | "credit_card_payment">("transfer");
@@ -1226,10 +1237,125 @@ function TransactionForm({
   );
 }
 
+const CREATE_MOVEMENT_MODE_OPTIONS: Array<{ value: CreateFormMode; label: string }> = [
+  { value: "transaction", label: "Transacción" },
+  { value: "internal", label: "Transferencia / Pago TC" },
+];
+
+function CreateMovementDialog({
+  open,
+  onOpenChange,
+  createFormMode,
+  onCreateFormModeChange,
+  categories,
+  items,
+  accounts,
+  isPending,
+  onCreate,
+  onCreateInternalMovement,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  createFormMode: CreateFormMode;
+  onCreateFormModeChange: (mode: CreateFormMode) => void;
+  categories: Category[];
+  items: Item[];
+  accounts: Account[];
+  isPending: boolean;
+  onCreate: TransactionFormProps["onSubmit"];
+  onCreateInternalMovement: InternalMovementFormProps["onSubmit"];
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <FinanceDialogContent size="lg">
+        <FinanceDialogHeader
+          icon={<Plus className="size-4" />}
+          title="Nuevo movimiento"
+          description="Registra una transacción, transferencia interna o pago de tarjeta sin salir del contexto del mes."
+          actions={
+            <FinanceSegmentedControl
+              value={createFormMode}
+              options={CREATE_MOVEMENT_MODE_OPTIONS}
+              onChange={onCreateFormModeChange}
+            />
+          }
+        />
+        <FinanceDialogBody>
+          {createFormMode === "transaction" ? (
+            <TransactionForm
+              mode="create"
+              categories={categories}
+              items={items}
+              accounts={accounts}
+              isPending={isPending}
+              onSubmit={onCreate}
+            />
+          ) : (
+            <InternalMovementForm
+              accounts={accounts}
+              isPending={isPending}
+              onSubmit={onCreateInternalMovement}
+            />
+          )}
+        </FinanceDialogBody>
+      </FinanceDialogContent>
+    </Dialog>
+  );
+}
+
+function EditMovementDialog({
+  transaction,
+  onOpenChange,
+  categories,
+  items,
+  accounts,
+  initialValues,
+  isPending,
+  onEdit,
+  onCancel,
+}: {
+  transaction: Transaction | null;
+  onOpenChange: (open: boolean) => void;
+  categories: Category[];
+  items: Item[];
+  accounts: Account[];
+  initialValues: TransactionFormProps["initialValues"] | undefined;
+  isPending: boolean;
+  onEdit: TransactionFormProps["onSubmit"];
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog open={!!transaction} onOpenChange={onOpenChange}>
+      <FinanceDialogContent size="md">
+        <FinanceDialogHeader
+          icon={<Pencil className="size-4" />}
+          title="Editar movimiento"
+          description={transaction ? `${formatDate(transaction.date)} · ${transaction.name}` : "Modifica los campos y guarda los cambios."}
+        />
+        <FinanceDialogBody>
+          {transaction ? (
+            <TransactionForm
+              key={transaction.id}
+              mode="edit"
+              categories={categories}
+              items={items}
+              accounts={accounts}
+              initialValues={initialValues}
+              isPending={isPending}
+              onSubmit={onEdit}
+              onCancel={onCancel}
+            />
+          ) : null}
+        </FinanceDialogBody>
+      </FinanceDialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main Page ────────────────────────────────────────────────────
 export default function OverviewPage() {
   const [, navigate] = useLocation();
-  const [createFormMode, setCreateFormMode] = useState<"transaction" | "internal">("transaction");
+  const [createFormMode, setCreateFormMode] = useState<CreateFormMode>("transaction");
   const [overviewScope, setOverviewScope] = useState<OverviewScope>("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isConfigMode, setIsConfigMode] = useState(false);
@@ -2814,88 +2940,37 @@ export default function OverviewPage() {
         <Button
           type="button"
           onClick={() => setShowCreateDialog(true)}
-          className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#bb9eff] p-0 text-[#0f0c1c] shadow-[0_12px_35px_rgba(187,158,255,0.45)] transition-transform duration-200 hover:scale-105 hover:bg-[#ad89ff] active:scale-95"
+          className="!fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#bb9eff] p-0 text-[#0f0c1c] shadow-[0_12px_35px_rgba(187,158,255,0.45)] transition-transform duration-200 hover:scale-105 hover:bg-[#ad89ff] active:scale-95 no-default-hover-elevate no-default-active-elevate"
           data-testid="button-open-create-transaction-modal"
         >
           <Plus className="size-6" />
           <span className="sr-only">Agregar movimiento</span>
         </Button>
 
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogContent className="max-w-5xl">
-            <DialogHeader>
-              <div className="flex flex-wrap items-center justify-between gap-3 pr-8">
-                <div>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Plus className="size-4" />
-                    Agregar Movimiento
-                  </DialogTitle>
-                  <DialogDescription>
-                    Completa el formulario para registrar una transacción o un movimiento interno.
-                  </DialogDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant={createFormMode === "transaction" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCreateFormMode("transaction")}
-                  >
-                    Transacción
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={createFormMode === "internal" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCreateFormMode("internal")}
-                  >
-                    Transferencia
-                  </Button>
-                </div>
-              </div>
-            </DialogHeader>
-            {createFormMode === "transaction" ? (
-              <TransactionForm
-                mode="create"
-                categories={categories}
-                items={items}
-                accounts={accounts}
-                isPending={createMutation.isPending}
-                onSubmit={handleCreate}
-              />
-            ) : (
-              <InternalMovementForm
-                accounts={accounts}
-                isPending={createMutation.isPending}
-                onSubmit={handleCreateInternalMovement}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
+        <CreateMovementDialog
+          open={showCreateDialog}
+          onOpenChange={setShowCreateDialog}
+          createFormMode={createFormMode}
+          onCreateFormModeChange={setCreateFormMode}
+          categories={categories}
+          items={items}
+          accounts={accounts}
+          isPending={createMutation.isPending}
+          onCreate={handleCreate}
+          onCreateInternalMovement={handleCreateInternalMovement}
+        />
 
-        <Dialog open={!!editingTx} onOpenChange={(open) => { if (!open) setEditingTx(null); }}>
-          <DialogContent className="max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>Editar Transacción</DialogTitle>
-              <DialogDescription>
-                Modifica los campos y guarda los cambios.
-              </DialogDescription>
-            </DialogHeader>
-            {editingTx && (
-              <TransactionForm
-                key={editingTx.id}
-                mode="edit"
-                categories={categories}
-                items={items}
-                accounts={accounts}
-                initialValues={getEditValues(editingTx)}
-                isPending={updateMutation.isPending}
-                onSubmit={handleEdit}
-                onCancel={() => setEditingTx(null)}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
+        <EditMovementDialog
+          transaction={editingTx}
+          onOpenChange={(open) => { if (!open) setEditingTx(null); }}
+          categories={categories}
+          items={items}
+          accounts={accounts}
+          initialValues={editingTx ? getEditValues(editingTx) : undefined}
+          isPending={updateMutation.isPending}
+          onEdit={handleEdit}
+          onCancel={() => setEditingTx(null)}
+        />
       </div>
     );
   }
@@ -3393,7 +3468,7 @@ export default function OverviewPage() {
       <Button
         type="button"
         onClick={() => setShowCreateDialog(true)}
-        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#bb9eff] p-0 text-[#0f0c1c] shadow-[0_12px_35px_rgba(187,158,255,0.45)] transition-transform duration-200 hover:scale-105 hover:bg-[#ad89ff] active:scale-95 animate-in fade-in zoom-in-95 slide-in-from-bottom-4"
+        className="!fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#bb9eff] p-0 text-[#0f0c1c] shadow-[0_12px_35px_rgba(187,158,255,0.45)] transition-transform duration-200 hover:scale-105 hover:bg-[#ad89ff] active:scale-95 animate-in fade-in zoom-in-95 slide-in-from-bottom-4 no-default-hover-elevate no-default-active-elevate"
         data-testid="button-open-create-transaction-modal"
       >
         <Plus className="size-6" />
@@ -3433,82 +3508,30 @@ export default function OverviewPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <div className="flex flex-wrap items-center justify-between gap-3 pr-8">
-              <div>
-                <DialogTitle className="flex items-center gap-2">
-                  <Plus className="size-4" />
-                  Agregar Movimiento
-                </DialogTitle>
-                <DialogDescription>
-                  Completa el formulario para registrar una transacción o un movimiento interno.
-                </DialogDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant={createFormMode === "transaction" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCreateFormMode("transaction")}
-                >
-                  Transacción
-                </Button>
-                <Button
-                  type="button"
-                  variant={createFormMode === "internal" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCreateFormMode("internal")}
-                >
-                  Transferencia
-                </Button>
-              </div>
-            </div>
-          </DialogHeader>
-          {createFormMode === "transaction" ? (
-            <TransactionForm
-              mode="create"
-              categories={categories}
-              items={items}
-              accounts={accounts}
-              isPending={createMutation.isPending}
-              onSubmit={handleCreate}
-            />
-          ) : (
-            <InternalMovementForm
-              accounts={accounts}
-              isPending={createMutation.isPending}
-              onSubmit={handleCreateInternalMovement}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <CreateMovementDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        createFormMode={createFormMode}
+        onCreateFormModeChange={setCreateFormMode}
+        categories={categories}
+        items={items}
+        accounts={accounts}
+        isPending={createMutation.isPending}
+        onCreate={handleCreate}
+        onCreateInternalMovement={handleCreateInternalMovement}
+      />
 
-      {/* Edit Transaction Modal */}
-      <Dialog open={!!editingTx} onOpenChange={(open) => { if (!open) setEditingTx(null); }}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Editar Transacción</DialogTitle>
-            <DialogDescription>
-              Modifica los campos y guarda los cambios.
-            </DialogDescription>
-          </DialogHeader>
-          {editingTx && (
-            <TransactionForm
-              key={editingTx.id}
-              mode="edit"
-              categories={categories}
-              items={items}
-              accounts={accounts}
-              initialValues={getEditValues(editingTx)}
-              isPending={updateMutation.isPending}
-              onSubmit={handleEdit}
-              onCancel={() => setEditingTx(null)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <EditMovementDialog
+        transaction={editingTx}
+        onOpenChange={(open) => { if (!open) setEditingTx(null); }}
+        categories={categories}
+        items={items}
+        accounts={accounts}
+        initialValues={editingTx ? getEditValues(editingTx) : undefined}
+        isPending={updateMutation.isPending}
+        onEdit={handleEdit}
+        onCancel={() => setEditingTx(null)}
+      />
 
       <Dialog open={showBulkEditDialog} onOpenChange={setShowBulkEditDialog}>
         <DialogContent className="max-w-xl">
