@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Account, CommitmentInstance } from "@shared/schema";
+import type { CommitmentInstance } from "@shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -11,13 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { formatCLP, formatDate } from "@/lib/utils";
 
@@ -28,37 +21,34 @@ function todayISO() {
 type Props = {
   /** Instancia a pagar; null cierra el modal. */
   instance: CommitmentInstance | null;
-  /** Cuentas seleccionables para "Pagado desde". */
-  accounts: Account[];
   isPending?: boolean;
   onOpenChange: (open: boolean) => void;
   /** El padre dispara la mutación (la lógica vive en la página). */
-  onConfirm: (data: { paidAt: string; accountId: string | null }) => void;
+  onConfirm: (data: { paidAt: string }) => void;
 };
 
 /**
  * Modal "Registrar pago" de un compromiso — modal 3 del handoff.
  *
  * Presentación sobre la mutación existente (updateCommitmentInstance). Solo
- * persiste campos reales del schema: status="paid", paidAt y accountId. El
+ * persiste lo que el schema consume sin conflictos: status="paid" y paidAt. El
  * "monto del compromiso" se muestra read-only (expectedAmount); no se edita un
- * "monto pagado" porque no hay campo que lo consuma. "Vincular cartola" queda
- * fuera (es conciliación, depende de matchedTransactionId del flujo de import).
+ * "monto pagado" porque no hay campo que lo consuma. NO escribe accountId: ese
+ * campo es la "cuenta esperada" que usa la conciliación, no la cuenta de pago
+ * (un "Pagado desde" real necesitaría un campo de schema nuevo). "Vincular
+ * cartola" queda fuera (es conciliación, depende de matchedTransactionId).
  */
 export function CommitmentPaymentDialog({
   instance,
-  accounts,
   isPending,
   onOpenChange,
   onConfirm,
 }: Props) {
   const [paidAt, setPaidAt] = useState("");
-  const [accountId, setAccountId] = useState("none");
 
   useEffect(() => {
     if (instance) {
       setPaidAt(instance.paidAt ?? todayISO());
-      setAccountId(instance.accountId ?? "none");
     }
   }, [instance]);
 
@@ -91,34 +81,15 @@ export function CommitmentPaymentDialog({
               </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="commitment-paid-at">Fecha de pago</Label>
-                <Input
-                  id="commitment-paid-at"
-                  type="date"
-                  value={paidAt}
-                  onChange={(event) => setPaidAt(event.target.value)}
-                  data-testid="input-commitment-paid-at"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Pagado desde</Label>
-                <Select value={accountId} onValueChange={setAccountId}>
-                  <SelectTrigger data-testid="select-commitment-paid-account">
-                    <SelectValue placeholder="Sin cuenta" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin cuenta fija</SelectItem>
-                    {accounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.name}
-                        {account.bank ? ` · ${account.bank}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="commitment-paid-at">Fecha de pago</Label>
+              <Input
+                id="commitment-paid-at"
+                type="date"
+                value={paidAt}
+                onChange={(event) => setPaidAt(event.target.value)}
+                data-testid="input-commitment-paid-at"
+              />
             </div>
           </div>
         ) : null}
@@ -128,7 +99,7 @@ export function CommitmentPaymentDialog({
             Cancelar
           </Button>
           <Button
-            onClick={() => onConfirm({ paidAt, accountId: accountId === "none" ? null : accountId })}
+            onClick={() => onConfirm({ paidAt })}
             disabled={isPending || !paidAt}
             data-testid="button-confirm-commitment-payment"
           >

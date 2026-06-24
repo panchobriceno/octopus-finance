@@ -272,17 +272,22 @@ export default function MonthlyAutomationPage() {
     });
   };
 
-  const handleConfirmPayment = async (data: { paidAt: string; accountId: string | null }) => {
+  const handleConfirmPayment = async (data: { paidAt: string }) => {
     if (!payingInstance) return;
     try {
       await updateInstanceMutation.mutateAsync({
         id: payingInstance.id,
-        data: { status: "paid", paidAt: data.paidAt, accountId: data.accountId },
+        data: { status: "paid", paidAt: data.paidAt },
       });
       setPayingInstance(null);
       toast({ title: "Compromiso marcado como pagado" });
     } catch {
-      // la mutación ya notifica el error; dejar el modal abierto
+      // dejar el modal abierto y avisar (no hay onError global de mutaciones)
+      toast({
+        title: "No se pudo registrar el pago",
+        description: "Reintentá en unos segundos.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -555,7 +560,6 @@ export default function MonthlyAutomationPage() {
 
         <CommitmentPaymentDialog
           instance={payingInstance}
-          accounts={cashAccounts}
           isPending={updateInstanceMutation.isPending}
           onOpenChange={(open) => { if (!open) setPayingInstance(null); }}
           onConfirm={handleConfirmPayment}
