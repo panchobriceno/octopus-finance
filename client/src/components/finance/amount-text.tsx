@@ -9,9 +9,11 @@ type AmountTextProps = {
   tone?: "auto" | "neutral" | "positive" | "negative";
 };
 
-const POSITIVE = "text-emerald-700 dark:text-emerald-300";
-const NEGATIVE = "text-red-700 dark:text-[#ff8da3]";
-const ZERO = "text-muted-foreground";
+// Semántica "lima-mono": entra = lima, sale = blanco, neutro = gris.
+// La distinción es por color + brillo + signo (no por verde/rojo).
+const POSITIVE = "text-[hsl(var(--money-in))]";
+const NEGATIVE = "text-[hsl(var(--money-out))]";
+const ZERO = "text-[hsl(var(--money-pending))]";
 
 /**
  * Fuente única de verdad para mostrar montos.
