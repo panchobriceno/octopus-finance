@@ -931,7 +931,7 @@ function TransactionForm({
         />
       </div>
 
-      <div className="space-y-1.5">
+      <div className={`space-y-1.5${mode === "edit" ? " lg:col-span-2" : ""}`}>
         <p className="text-xs text-muted-foreground">Tipo de movimiento</p>
         <SegmentedControl
           testId="select-movement-type"
@@ -2704,7 +2704,13 @@ export default function OverviewPage() {
                         const normalized = normalizeTransaction(tx);
                         const isIncome = tx.type === "income";
                         return (
-                          <TableRow key={tx.id} className="border-white/7 hover:bg-white/3">
+                          <TableRow
+                            key={tx.id}
+                            className="cursor-pointer border-white/7 hover:bg-white/3"
+                            onClick={() => setEditingTx(tx)}
+                            title="Editar movimiento"
+                            data-testid={`row-edit-tx-${tx.id}`}
+                          >
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 <span className={`flex size-8 items-center justify-center rounded-lg ${isIncome ? "bg-[#9ef0cf]/15 text-[#9ef0cf]" : "bg-[#ff6f8d]/15 text-[#ff6f8d]"}`}>
