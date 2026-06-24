@@ -104,7 +104,15 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return btoa(binary);
 }
 
-export default function ImportDataPage() {
+export default function ImportDataPage({
+  embedded = false,
+  onImported,
+}: {
+  /** Embebido dentro del wizard de importación: oculta el chrome de página. */
+  embedded?: boolean;
+  /** Si se pasa, al crear el lote llama esto en vez de navegar a /movements. */
+  onImported?: (batchId: string) => void;
+} = {}) {
   const [, navigate] = useLocation();
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
@@ -436,7 +444,11 @@ export default function ImportDataPage() {
       setFileName("");
       setDetectedParser(null);
       setSelectedAccountId("");
-      navigate(`/movements?batch=${encodeURIComponent(result.batchId)}`);
+      if (onImported) {
+        onImported(result.batchId);
+      } else {
+        navigate(`/movements?batch=${encodeURIComponent(result.batchId)}`);
+      }
     } catch {
       toast({
         title: "No se pudo crear la carga",
@@ -887,11 +899,13 @@ export default function ImportDataPage() {
   };
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto h-full">
-      <div className="flex items-center gap-3">
-        <Upload className="size-5 text-primary" />
-        <h2 className="text-xl font-semibold">Importar Datos</h2>
-      </div>
+    <div className={embedded ? "space-y-6" : "p-6 space-y-6 overflow-y-auto h-full"}>
+      {!embedded && (
+        <div className="flex items-center gap-3">
+          <Upload className="size-5 text-primary" />
+          <h2 className="text-xl font-semibold">Importar Datos</h2>
+        </div>
+      )}
 
       <Card>
         <CardContent className="pt-6">
@@ -1137,6 +1151,7 @@ export default function ImportDataPage() {
         </CardContent>
       </Card>
 
+      {!embedded && (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">Últimas cargas</CardTitle>
@@ -1213,6 +1228,7 @@ export default function ImportDataPage() {
           </Table>
         </CardContent>
       </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-3">

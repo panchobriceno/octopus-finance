@@ -162,17 +162,31 @@ export function FinanceSegmentedControl<TValue extends string>({
   value,
   options,
   onChange,
+  ariaLabel,
+  className,
+  testId,
 }: {
   value: TValue;
-  options: Array<{ value: TValue; label: string }>;
+  options: Array<{ value: TValue; label: string; testId?: string }>;
   onChange: (value: TValue) => void;
+  ariaLabel?: string;
+  className?: string;
+  testId?: string;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-white/10 bg-[#1a1528] p-1 text-xs font-bold">
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      data-testid={testId}
+      className={cn("inline-flex rounded-lg border border-white/10 bg-[#1a1528] p-1 text-xs font-bold", className)}
+    >
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
+          role="radio"
+          aria-checked={value === option.value}
+          data-testid={option.testId}
           className={cn(
             "whitespace-nowrap rounded-md px-3 py-2 text-[#aea8be] outline-none transition hover:text-[#f1e9fc] focus-visible:ring-2 focus-visible:ring-[#bb9eff]/55 sm:px-4",
             value === option.value && "bg-[#36304a] text-[#f1e9fc]",

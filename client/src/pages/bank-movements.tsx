@@ -141,7 +141,18 @@ function accountLabel(account: { bank?: string | null; name?: string | null } | 
   return [bank, name].filter(Boolean).join(" · ") || "Sin nombre";
 }
 
-export default function BankMovementsPage() {
+export default function BankMovementsPage({
+  embedded = false,
+  batchIdOverride,
+  onDone,
+}: {
+  /** Embebido en el wizard de importación: oculta el chrome de página. */
+  embedded?: boolean;
+  /** Acota la bandeja a un lote concreto (en vez de leerlo de la URL). */
+  batchIdOverride?: string;
+  /** Se dispara cuando se confirma la conversión del lote. */
+  onDone?: () => void;
+} = {}) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const searchString = useSearch();
@@ -179,9 +190,13 @@ export default function BankMovementsPage() {
   const closeBatchMutation = useCloseImportBatch();
 
   useEffect(() => {
+    if (batchIdOverride) {
+      setBatchFilter(batchIdOverride);
+      return;
+    }
     const batchId = new URLSearchParams(searchString).get("batch");
     setBatchFilter(batchId || "latest");
-  }, [searchString]);
+  }, [searchString, batchIdOverride]);
 
   const visibleMovements = useMemo(() => {
     const needle = normalizeImportText(search);
@@ -407,6 +422,7 @@ export default function BankMovementsPage() {
         title: "Lote cerrado",
         description: `${result.summary.converted} convertidos, ${result.summary.reconciled} conciliados y ${result.summary.discarded} omitidos. El lote quedo bloqueado para nuevas revisiones.`,
       });
+      onDone?.();
     } catch (error) {
       toast({
         title: "No se pudo cerrar el lote",
@@ -432,20 +448,24 @@ export default function BankMovementsPage() {
 
   return (
     <>
-    <div className="h-full overflow-auto bg-background">
-      <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 py-5 lg:px-6">
+    <div className={embedded ? "" : "h-full overflow-auto bg-background"}>
+      <div className={embedded ? "flex w-full flex-col gap-5" : "mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 py-5 lg:px-6"}>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Inbox className="size-4" />
-              Conciliacion bancaria
-            </div>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-              Revision de movimientos
-            </h1>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Bandeja previa para revisar cartolas, detectar duplicados y convertir movimientos aprobados en transacciones.
-            </p>
+            {!embedded && (
+              <>
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Inbox className="size-4" />
+                  Conciliacion bancaria
+                </div>
+                <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+                  Revision de movimientos
+                </h1>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                  Bandeja previa para revisar cartolas, detectar duplicados y convertir movimientos aprobados en transacciones.
+                </p>
+              </>
+            )}
             {selectedBatch ? (
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <Badge variant="outline">Lote actual</Badge>
@@ -459,22 +479,26 @@ export default function BankMovementsPage() {
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={() => navigate("/import")}
-              data-testid="button-import-bank-statement"
-            >
-              <Upload className="mr-2 size-4" />
-              Importar cartola
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleSeedDemo}
-              disabled={seedDemoMutation.isPending}
-              data-testid="button-seed-demo-movements"
-            >
-              <Database className="mr-2 size-4" />
-              Cargar demo
-            </Button>
+            {!embedded && (
+              <>
+                <Button
+                  onClick={() => navigate("/import")}
+                  data-testid="button-import-bank-statement"
+                >
+                  <Upload className="mr-2 size-4" />
+                  Importar cartola
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleSeedDemo}
+                  disabled={seedDemoMutation.isPending}
+                  data-testid="button-seed-demo-movements"
+                >
+                  <Database className="mr-2 size-4" />
+                  Cargar demo
+                </Button>
+              </>
+            )}
             <Button
               onClick={handleBulkConvert}
               disabled={!pendingHighConfidenceIds.length || bulkConvertMutation.isPending || bulkPreflightMutation.isPending || isSelectedBatchClosed}
@@ -508,13 +532,15 @@ export default function BankMovementsPage() {
           </div>
         </div>
 
-        <StepFlow
-          steps={[
-            { label: "Importar cartola", hint: "Subí el CSV o PDF", href: "/import" },
-            { label: "Revisar y clasificar", hint: "Categoría, cuenta y duplicados" },
-            { label: "Confirmar", hint: "Convertir en transacciones" },
-          ]}
-        />
+        {!embedded && (
+          <StepFlow
+            steps={[
+              { label: "Importar cartola", hint: "Subí el CSV o PDF", href: "/import" },
+              { label: "Revisar y clasificar", hint: "Categoría, cuenta y duplicados" },
+              { label: "Confirmar", hint: "Convertir en transacciones" },
+            ]}
+          />
+        )}
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <Card className="rounded-lg">
@@ -578,20 +604,22 @@ export default function BankMovementsPage() {
                 className="pl-9"
               />
             </div>
-            <Select value={batchFilter} onValueChange={setBatchFilter}>
-              <SelectTrigger className="w-full lg:w-[280px]">
-                <SelectValue placeholder="Lote" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="latest">Ultimo lote</SelectItem>
-                <SelectItem value="all">Todos los lotes</SelectItem>
-                {batches.map((batch) => (
-                  <SelectItem key={batch.id} value={batch.id}>
-                    {batch.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!embedded && (
+              <Select value={batchFilter} onValueChange={setBatchFilter}>
+                <SelectTrigger className="w-full lg:w-[280px]">
+                  <SelectValue placeholder="Lote" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="latest">Ultimo lote</SelectItem>
+                  <SelectItem value="all">Todos los lotes</SelectItem>
+                  {batches.map((batch) => (
+                    <SelectItem key={batch.id} value={batch.id}>
+                      {batch.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
               <SelectTrigger className="w-full lg:w-[210px]">
                 <SelectValue placeholder="Estado" />
@@ -943,28 +971,30 @@ export default function BankMovementsPage() {
       <FinanceAlertDialogContent size="md">
         <FinanceAlertDialogHeader
           icon={<ListChecks className="size-4" />}
-          title="Revisar conversión masiva"
-          description={`Se revisaron ${bulkPreflight?.total ?? 0} movimientos de alta confianza antes de crear transacciones reales.`}
+          title="Confirmar importación"
+          description={`Paso 3 de 3 · Revisa ${bulkPreflight?.total ?? 0} movimientos de alta confianza antes de crear transacciones reales.`}
         />
         {bulkPreflight ? (
           <FinanceDialogBody className="space-y-4">
-            <div className="grid gap-2 sm:grid-cols-4">
-              <div className="rounded-xl border border-white/7 bg-[#171225] p-3">
-                <p className="text-xs text-[#aea8be]">Listos</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.ready}</p>
+            <div className="divide-y divide-border/40 rounded-xl border border-border/60 bg-card/60">
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-sm">Movimientos a crear</span>
+                <span className="font-mono text-lg font-semibold tabular-nums text-[#bcf8df]">{bulkPreflight.ready}</span>
               </div>
-              <div className="rounded-xl border border-white/7 bg-[#171225] p-3">
-                <p className="text-xs text-[#aea8be]">Duplicados</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.duplicates.length}</p>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-sm text-muted-foreground">Duplicados a descartar</span>
+                <span className="font-mono text-lg font-semibold tabular-nums">{bulkPreflight.duplicates.length}</span>
               </div>
-              <div className="rounded-xl border border-white/7 bg-[#171225] p-3">
-                <p className="text-xs text-[#aea8be]">Por revisar</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.reviewRequired.length}</p>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-sm text-muted-foreground">Pendientes de revisar después</span>
+                <span className="font-mono text-lg font-semibold tabular-nums text-amber-300">{bulkPreflight.reviewRequired.length}</span>
               </div>
-              <div className="rounded-xl border border-white/7 bg-[#171225] p-3">
-                <p className="text-xs text-[#aea8be]">Bloqueados</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.blocked.length}</p>
-              </div>
+              {bulkPreflight.blocked.length > 0 ? (
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-sm text-muted-foreground">Bloqueados</span>
+                  <span className="font-mono text-lg font-semibold tabular-nums text-[#ff8da3]">{bulkPreflight.blocked.length}</span>
+                </div>
+              ) : null}
             </div>
             {bulkPreflightIssues.length > 0 ? (
               <div className="max-h-64 overflow-auto rounded-xl border border-white/7">
@@ -988,6 +1018,9 @@ export default function BankMovementsPage() {
                 No hay duplicados ni bloqueos detectados para este lote.
               </div>
             )}
+            <p className="text-xs text-muted-foreground">
+              Se crean solo los movimientos listos. Puedes deshacer pendientes después con “Omitir lote”.
+            </p>
           </FinanceDialogBody>
         ) : null}
         <FinanceDialogFooter>
@@ -995,7 +1028,7 @@ export default function BankMovementsPage() {
             className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]"
             disabled={bulkConvertMutation.isPending}
           >
-            Cancelar
+            Atrás
           </AlertDialogCancel>
           <AlertDialogAction
             className="bg-[#bb9eff] text-[#0f0c1c] hover:bg-[#a48bf6]"
@@ -1005,7 +1038,7 @@ export default function BankMovementsPage() {
             }}
             disabled={!bulkPreflight?.ready || bulkConvertMutation.isPending}
           >
-            {bulkConvertMutation.isPending ? "Convirtiendo..." : `Convertir ${bulkPreflight?.ready ?? 0} listos`}
+            {bulkConvertMutation.isPending ? "Aplicando..." : "Aplicar importación"}
           </AlertDialogAction>
         </FinanceDialogFooter>
       </FinanceAlertDialogContent>

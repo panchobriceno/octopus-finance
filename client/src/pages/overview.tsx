@@ -4,6 +4,7 @@ import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type D
 import { SortableContext, arrayMove, useSortable, rectSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { formatCLP, formatDate } from "@/lib/utils";
+import { AmountText } from "@/components/finance/amount-text";
 import {
   useTransactions,
   useClientPayments,
@@ -28,7 +29,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { AmountText } from "@/components/finance/amount-text";
 import {
   FinanceAlertDialogContent,
   FinanceAlertDialogHeader,
@@ -100,6 +100,7 @@ import {
 } from "@/lib/finance";
 import { useMonthlyBalances } from "@/lib/monthly-balances";
 import { getCreditCards } from "@/lib/credit-cards";
+import { buildTransactionPayload, getTransactionFormInitialValues } from "@/lib/transaction-form";
 import { getOperatingCashBalance, getSavingsBalance } from "@/domain/accounts";
 
 const FAMILY_CATEGORY_HINTS = [
@@ -560,6 +561,8 @@ interface TransactionFormProps {
     notes: string;
   }) => void;
   onCancel?: () => void;
+  /** Solo en modo editar: abre la confirmación de borrado del movimiento. */
+  onDelete?: () => void;
 }
 
 type InternalMovementFormData = {
@@ -762,7 +765,7 @@ function InternalMovementForm({
   );
 }
 
-function TransactionForm({
+export function TransactionForm({
   mode,
   categories,
   items,
@@ -771,6 +774,7 @@ function TransactionForm({
   isPending,
   onSubmit,
   onCancel,
+  onDelete,
 }: TransactionFormProps) {
   const { toast } = useToast();
   const [creditCards, setCreditCards] = useState<string[]>([]);
@@ -897,56 +901,58 @@ function TransactionForm({
     });
   };
 
+  const applyMovementType = (
+    movementType: "income" | "expense" | "transfer" | "credit_card_payment",
+  ) => {
+    setFormMovementType(movementType);
+    setFormCategoryId("");
+    setFormItemId("");
+    setFormInstallmentCount("1");
+    setFormPaymentMethod("bank_account");
+    if (movementType === "credit_card_payment") {
+      setFormAccountId("");
+    }
+  };
+
+  const movementTypeOptions: { value: typeof formMovementType; label: string; testId?: string }[] =
+    mode === "edit"
+      ? [
+          { value: "income", label: "Ingreso", testId: "type-income" },
+          { value: "expense", label: "Gasto", testId: "type-expense" },
+          { value: "credit_card_payment", label: "Pago TC", testId: "type-cc-payment" },
+          { value: "transfer", label: "Transferencia", testId: "type-transfer" },
+        ]
+      : [
+          { value: "income", label: "Ingreso", testId: "type-income" },
+          { value: "expense", label: "Gasto", testId: "type-expense" },
+        ];
+
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       <div className="space-y-1.5">
         <p className="text-xs text-muted-foreground">Ambito</p>
-        <Select value={formWorkspace} onValueChange={(v) => setFormWorkspace(v as "business" | "family" | "dentist")}>
-          <SelectTrigger data-testid="select-workspace">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="business">Empresa</SelectItem>
-            <SelectItem value="family">Familia</SelectItem>
-            <SelectItem value="dentist">Consulta Dentista</SelectItem>
-          </SelectContent>
-        </Select>
+        <FinanceSegmentedControl
+          testId="select-workspace"
+          ariaLabel="Ámbito"
+          value={formWorkspace}
+          onChange={(v) => setFormWorkspace(v)}
+          options={[
+            { value: "business", label: "Empresa", testId: "workspace-business" },
+            { value: "family", label: "Familia", testId: "workspace-family" },
+            { value: "dentist", label: "Consulta", testId: "workspace-dentist" },
+          ]}
+        />
       </div>
 
-      <div className="space-y-1.5">
+      <div className={`space-y-1.5${mode === "edit" ? " lg:col-span-2" : ""}`}>
         <p className="text-xs text-muted-foreground">Tipo de movimiento</p>
-        <Select
+        <FinanceSegmentedControl
+          testId="select-movement-type"
+          ariaLabel="Tipo de movimiento"
           value={formMovementType}
-          onValueChange={(v) => {
-            const movementType = v as "income" | "expense" | "transfer" | "credit_card_payment";
-            setFormMovementType(movementType);
-            setFormCategoryId("");
-            setFormItemId("");
-            setFormInstallmentCount("1");
-            if (movementType === "income") {
-              setFormPaymentMethod("bank_account");
-            } else {
-              setFormPaymentMethod("bank_account");
-            }
-            if (movementType === "credit_card_payment") {
-              setFormAccountId("");
-            }
-          }}
-        >
-          <SelectTrigger data-testid="select-movement-type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="income">Ingreso</SelectItem>
-            <SelectItem value="expense">Gasto</SelectItem>
-            {mode === "edit" ? (
-              <>
-                <SelectItem value="credit_card_payment">Pago tarjeta</SelectItem>
-                <SelectItem value="transfer">Transferencia</SelectItem>
-              </>
-            ) : null}
-          </SelectContent>
-        </Select>
+          onChange={applyMovementType}
+          options={movementTypeOptions}
+        />
       </div>
 
       <div className="space-y-1.5">
@@ -1208,33 +1214,33 @@ function TransactionForm({
         />
       </div>
 
-      <div className="sm:col-span-2 lg:col-span-4">
-        {mode === "create" ? (
+      <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap items-center gap-2 pt-1">
+        {mode === "edit" && onDelete ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-[#ff6f8d] hover:bg-[#ff6f8d]/10 hover:text-[#ff6f8d]"
+            onClick={onDelete}
+            data-testid="button-delete-from-edit"
+          >
+            <Trash2 className="size-4 mr-1.5" />
+            Eliminar
+          </Button>
+        ) : null}
+        <div className="ml-auto flex items-center gap-2">
+          {onCancel && (
+            <Button type="button" variant="outline" onClick={onCancel} data-testid="button-cancel-edit">
+              Cancelar
+            </Button>
+          )}
           <Button
             type="submit"
-            className="w-full"
             disabled={isPending}
-            data-testid="button-add-transaction"
+            data-testid={mode === "create" ? "button-add-transaction" : "button-save-transaction"}
           >
-            {isPending ? "Guardando..." : "Agregar"}
+            {isPending ? "Guardando..." : mode === "create" ? "Guardar movimiento" : "Guardar cambios"}
           </Button>
-        ) : (
-          <div className="flex gap-2">
-            <Button
-              type="submit"
-              className="flex-1"
-              disabled={isPending}
-              data-testid="button-save-transaction"
-            >
-              {isPending ? "Guardando..." : "Guardar"}
-            </Button>
-            {onCancel && (
-              <Button type="button" variant="outline" onClick={onCancel} data-testid="button-cancel-edit">
-                <X className="size-4" />
-              </Button>
-            )}
-          </div>
-        )}
+        </div>
       </div>
     </form>
   );
@@ -2379,61 +2385,21 @@ export default function OverviewPage() {
     installmentCount: string;
     notes: string;
   }) => {
-    const selectedCategory = formData.categoryId ? categoryMap[formData.categoryId] : null;
-    const selectedItem = formData.itemId ? itemMap[formData.itemId] : null;
-    const derivedName =
-      formData.movementType === "transfer"
-        ? `Transferencia ${workspaceLabel(formData.workspace)} -> ${workspaceLabel(formData.destinationWorkspace)}`
-        : formData.movementType === "credit_card_payment"
-        ? `Pago ${formData.creditCardName || "Tarjeta"}`
-        : selectedItem?.name ?? selectedCategory?.name ?? "";
-    const derivedCategory =
-      formData.movementType === "transfer"
-        ? "Transferencias"
-        : formData.movementType === "credit_card_payment"
-        ? "Pago Tarjeta"
-        : selectedCategory?.name ?? "";
-    if (!derivedName || !derivedCategory) {
+    const { ok, message, payload } = buildTransactionPayload(formData, { categoryMap, itemMap });
+    if (!ok) {
       toast({
         title: "Faltan datos para crear la transacción",
-        description: "Revisa categoría, subcategoría o tipo de movimiento.",
+        description: message ?? undefined,
         variant: "destructive",
       });
       return;
     }
-    createMutation.mutate(
-      {
-        name: derivedName,
-        category: derivedCategory,
-        amount: parseFloat(formData.amount),
-        type: formData.movementType === "income" ? "income" : "expense",
-        date: formData.date,
-        notes: formData.notes || null,
-        subtype: formData.subtype,
-        status: formData.status,
-        itemId: formData.itemId || null,
-        workspace: formData.workspace,
-        movementType: formData.movementType,
-        paymentMethod: formData.paymentMethod,
-        accountId: formData.paymentMethod === "bank_account" && formData.movementType !== "transfer"
-          ? formData.accountId || null
-          : null,
-        destinationWorkspace: formData.movementType === "transfer" ? formData.destinationWorkspace : null,
-        destinationAccountId: null,
-        creditCardName: formData.paymentMethod === "credit_card" || formData.movementType === "credit_card_payment"
-          ? formData.creditCardName || null
-          : null,
-        installmentCount: formData.paymentMethod === "credit_card" && formData.movementType === "expense"
-          ? Number.parseInt(formData.installmentCount || "1", 10)
-          : null,
+    createMutation.mutate(payload, {
+      onSuccess: () => {
+        setShowCreateDialog(false);
+        toast({ title: "Transacción creada" });
       },
-      {
-        onSuccess: () => {
-          setShowCreateDialog(false);
-          toast({ title: "Transacción creada" });
-        },
-      }
-    );
+    });
   };
 
   const handleCreateInternalMovement = (formData: {
@@ -2516,80 +2482,20 @@ export default function OverviewPage() {
     notes: string;
   }) => {
     if (!editingTx) return;
-    const selectedCategory = formData.categoryId ? categoryMap[formData.categoryId] : null;
-    const selectedItem = formData.itemId ? itemMap[formData.itemId] : null;
-    const derivedName =
-      formData.movementType === "transfer"
-        ? `Transferencia ${workspaceLabel(formData.workspace)} -> ${workspaceLabel(formData.destinationWorkspace)}`
-        : formData.movementType === "credit_card_payment"
-        ? `Pago ${formData.creditCardName || "Tarjeta"}`
-        : selectedItem?.name ?? selectedCategory?.name ?? "";
-    const derivedCategory =
-      formData.movementType === "transfer"
-        ? "Transferencias"
-        : formData.movementType === "credit_card_payment"
-        ? "Pago Tarjeta"
-        : selectedCategory?.name ?? "";
+    const { payload } = buildTransactionPayload(formData, { categoryMap, itemMap });
     updateMutation.mutate(
-      {
-        id: editingTx.id,
-        data: {
-          name: derivedName,
-          category: derivedCategory,
-          amount: parseFloat(formData.amount),
-          type: formData.movementType === "income" ? "income" : "expense",
-          date: formData.date,
-          notes: formData.notes || null,
-          subtype: formData.subtype,
-          status: formData.status,
-          itemId: formData.itemId || null,
-          workspace: formData.workspace,
-          movementType: formData.movementType,
-          paymentMethod: formData.paymentMethod,
-          accountId: formData.paymentMethod === "bank_account" && formData.movementType !== "transfer"
-            ? formData.accountId || null
-            : null,
-          destinationWorkspace: formData.movementType === "transfer" ? formData.destinationWorkspace : null,
-          destinationAccountId: null,
-          creditCardName: formData.paymentMethod === "credit_card" || formData.movementType === "credit_card_payment"
-            ? formData.creditCardName || null
-            : null,
-          installmentCount: formData.paymentMethod === "credit_card" && formData.movementType === "expense"
-            ? Number.parseInt(formData.installmentCount || "1", 10)
-            : null,
-        },
-      },
+      { id: editingTx.id, data: payload },
       {
         onSuccess: () => {
           setEditingTx(null);
           toast({ title: "Transacción actualizada" });
         },
-      }
+      },
     );
   };
 
   // Resolve a transaction to initial form values for editing
-  const getEditValues = (tx: Transaction) => {
-    const normalized = normalizeTransaction(tx);
-    const catId = categoryNameToId[tx.category] ?? "";
-    const itmId = tx.itemId ?? "";
-    return {
-      categoryId: catId,
-      itemId: itmId,
-      amount: String(tx.amount),
-      date: tx.date,
-      subtype: tx.subtype as "actual" | "planned",
-      status: tx.status as "pending" | "paid" | "cancelled",
-      workspace: normalized.workspace,
-      movementType: normalized.movementType,
-      paymentMethod: normalized.paymentMethod,
-      accountId: tx.accountId ?? "",
-      destinationWorkspace: normalized.destinationWorkspace ?? (normalized.workspace === "business" ? "family" : "business"),
-      creditCardName: normalized.creditCardName ?? "",
-      installmentCount: String((tx.installmentCount ?? 1)),
-      notes: tx.notes ?? "",
-    };
-  };
+  const getEditValues = (tx: Transaction) => getTransactionFormInitialValues(tx, categoryNameToId);
 
   const toggleHiddenCard = (cardId: DashboardCardId) => {
     setDraftHiddenCards((current) =>
@@ -2920,7 +2826,7 @@ export default function OverviewPage() {
             <OverviewPanel
               title="Movimientos recientes"
               aside={
-                <Button type="button" variant="ghost" className="h-8 px-2 text-[#bb9eff]" onClick={() => navigate("/movements")}>
+                <Button type="button" variant="ghost" className="h-8 px-2 text-[#bb9eff]" onClick={() => navigate("/transactions")}>
                   Ver todos <ChevronRight className="ml-1 size-4" />
                 </Button>
               }
@@ -2941,7 +2847,13 @@ export default function OverviewPage() {
                         const normalized = normalizeTransaction(tx);
                         const isIncome = tx.type === "income";
                         return (
-                          <TableRow key={tx.id} className="border-white/7 hover:bg-white/3">
+                          <TableRow
+                            key={tx.id}
+                            className="cursor-pointer border-white/7 hover:bg-white/3"
+                            onClick={() => setEditingTx(tx)}
+                            title="Editar movimiento"
+                            data-testid={`row-edit-tx-${tx.id}`}
+                          >
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 <span className={`flex size-8 items-center justify-center rounded-lg ${isIncome ? "bg-[#9ef0cf]/15 text-[#9ef0cf]" : "bg-[#ff6f8d]/15 text-[#ff6f8d]"}`}>
@@ -3625,10 +3537,10 @@ export default function OverviewPage() {
         items={items}
         accounts={accounts}
         initialValues={editingTx ? getEditValues(editingTx) : undefined}
-        isPending={updateMutation.isPending}
-        onEdit={handleEdit}
-        onCancel={() => setEditingTx(null)}
-      />
+          isPending={updateMutation.isPending}
+          onEdit={handleEdit}
+          onCancel={() => setEditingTx(null)}
+        />
 
       <Dialog open={showBulkEditDialog} onOpenChange={setShowBulkEditDialog}>
         <FinanceDialogContent size="sm">
