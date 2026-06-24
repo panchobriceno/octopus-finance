@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildImportedMovement, buildTransactionFromImportedMovement } from "../bank-imports";
+import {
+  buildImportedMovement,
+  buildTransactionFromImportedMovement,
+  findMatchingTransactionForPayload,
+} from "../bank-imports";
 
 describe("bank import domain", () => {
   it("preserves installment count from imported movement to transaction", () => {
@@ -26,5 +30,71 @@ describe("bank import domain", () => {
 
     expect(movement.installmentCount).toBe(12);
     expect(buildTransactionFromImportedMovement(movement).installmentCount).toBe(12);
+  });
+
+  it("finds an existing transaction that matches the imported movement payload", () => {
+    const movement = {
+      id: "movement-1",
+      ...buildImportedMovement({
+        batchId: "batch-1",
+        source: "manual_file",
+        sourceName: "Cartola banco",
+        sourceType: "bank_account",
+        accountId: "account-1",
+        date: "2026-06-23",
+        description: "Pago proveedor ACME",
+        amount: 120000,
+        direction: "expense",
+        category: "Proveedores",
+        workspace: "business",
+        movementType: "expense",
+        paymentMethod: "bank_account",
+        createdAt: "2026-06-23T12:00:00.000Z",
+      }),
+    };
+    const payload = buildTransactionFromImportedMovement(movement);
+
+    const match = findMatchingTransactionForPayload(payload, [
+      {
+        id: "transaction-1",
+        ...payload,
+        name: "  pago   proveedor acme ",
+      },
+    ]);
+
+    expect(match?.id).toBe("transaction-1");
+  });
+
+  it("ignores cancelled transactions when matching imported movements", () => {
+    const movement = {
+      id: "movement-1",
+      ...buildImportedMovement({
+        batchId: "batch-1",
+        source: "manual_file",
+        sourceName: "Cartola banco",
+        sourceType: "bank_account",
+        accountId: "account-1",
+        date: "2026-06-23",
+        description: "Pago duplicado",
+        amount: 45000,
+        direction: "expense",
+        category: "Otros",
+        workspace: "family",
+        movementType: "expense",
+        paymentMethod: "bank_account",
+        createdAt: "2026-06-23T12:00:00.000Z",
+      }),
+    };
+    const payload = buildTransactionFromImportedMovement(movement);
+
+    const match = findMatchingTransactionForPayload(payload, [
+      {
+        id: "transaction-cancelled",
+        ...payload,
+        status: "cancelled",
+      },
+    ]);
+
+    expect(match).toBeNull();
   });
 });

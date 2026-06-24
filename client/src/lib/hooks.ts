@@ -664,9 +664,11 @@ export function useConvertImportedMovement() {
       forceDuplicate?: boolean;
     }) => fs.convertImportedMovementToTransaction(id, override, { forceDuplicate }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
     },
   });
 }
@@ -675,9 +677,11 @@ export function useBulkConvertImportedMovements() {
   return useMutation({
     mutationFn: (ids: string[]) => fs.bulkConvertImportedMovements(ids),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
     },
   });
 }

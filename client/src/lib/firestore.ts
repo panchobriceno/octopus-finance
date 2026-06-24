@@ -44,6 +44,7 @@ import {
   buildImportedMovement,
   buildTransactionFromImportedMovement,
   buildTransactionMatchKey,
+  findMatchingTransactionForPayload,
   findBestMovementRule,
   applyMovementRule,
   type ImportedMovementOverride,
@@ -1916,6 +1917,20 @@ function transactionKeysByMatch(transactions: Transaction[]) {
   return keys;
 }
 
+async function findExistingTransactionForPayload(payload: Omit<Transaction, "id">) {
+  const snap = await getDocs(query(transactionsCol(), where("date", "==", payload.date)));
+  return findMatchingTransactionForPayload(payload, snapToArray<Transaction>(snap));
+}
+
+async function markImportedMovementAsDuplicate(id: string, duplicateTransactionId: string) {
+  const updatedAt = nowIso();
+  await updateDoc(doc(db, "importedMovements", id), {
+    status: "duplicate",
+    duplicateTransactionId,
+    updatedAt,
+  });
+}
+
 export async function seedDemoImportedMovements() {
   const now = nowIso();
   const monthKey = getCurrentMonthKey();
@@ -2251,6 +2266,16 @@ export async function convertImportedMovementToTransaction(
     importBatchLabel: batchLabel,
   };
   assertCompleteTransfer(transactionPayload);
+
+  if (!options.forceDuplicate) {
+    const duplicateTransaction = await findExistingTransactionForPayload(transactionPayload);
+    if (duplicateTransaction) {
+      await markImportedMovementAsDuplicate(id, duplicateTransaction.id);
+      throw new Error(
+        `Este movimiento coincide con una transaccion existente (${duplicateTransaction.name}). Quedo marcado como duplicado.`,
+      );
+    }
+  }
 
   const categoryType = transactionPayload.movementType === "income" ? "income" : "expense";
   await ensureCategoryExists(

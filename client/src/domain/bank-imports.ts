@@ -107,6 +107,32 @@ export function buildTransactionMatchKey(input: {
   ].join("__");
 }
 
+export function buildTransactionMatchKeyFromTransaction(transaction: Pick<
+  Transaction,
+  "date" | "name" | "amount" | "movementType" | "type" | "accountId" | "creditCardName"
+>) {
+  return buildTransactionMatchKey({
+    date: transaction.date,
+    name: transaction.name,
+    amount: Number(transaction.amount) || 0,
+    movementType: transaction.movementType ?? (transaction.type === "income" ? "income" : "expense"),
+    accountId: transaction.accountId ?? null,
+    creditCardName: transaction.creditCardName ?? null,
+  });
+}
+
+export function findMatchingTransactionForPayload(
+  payload: Omit<Transaction, "id">,
+  transactions: Transaction[],
+) {
+  const targetKey = buildTransactionMatchKeyFromTransaction(payload);
+
+  return transactions.find((transaction) => {
+    if ((transaction.status ?? "paid") === "cancelled") return false;
+    return buildTransactionMatchKeyFromTransaction(transaction) === targetKey;
+  }) ?? null;
+}
+
 function movementRuleScore(rule: MovementRule, movement: ImportedMovement) {
   if (rule.isActive === false) return 0;
   if (rule.amountDirection !== "any" && rule.amountDirection !== movement.direction) return 0;
