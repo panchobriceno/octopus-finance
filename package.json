@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "NODE_ENV=development tsx server/index.ts",
     "build": "vite build --config vite.config.ts && node -e \"const fs=require('fs'),p=require('path'),d=p.join(__dirname,'dist/public/assets');fs.readdirSync(d).filter(f=>f.endsWith('.js')).forEach(f=>{const fp=p.join(d,f);fs.writeFileSync(fp,fs.readFileSync(fp,'utf8').replace(/indexedDB/g,'_idbNoop'))})\" ",
