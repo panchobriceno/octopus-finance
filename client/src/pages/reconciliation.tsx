@@ -342,7 +342,7 @@ export default function ReconciliationPage() {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Diferencia</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
-                  <div className={Math.abs(workspace.difference) <= 1 ? "text-2xl font-semibold tabular-nums text-lime-700 dark:text-lime-300" : "text-2xl font-semibold tabular-nums text-zinc-700 dark:text-zinc-300"}>
+                  <div className={Math.abs(workspace.difference) <= 1 ? "text-2xl font-semibold tabular-nums text-[hsl(var(--money-in))]" : "text-2xl font-semibold tabular-nums text-zinc-700 dark:text-zinc-300"}>
                     {formatCLP(workspace.difference)}
                   </div>
                   <div className="mt-2 flex gap-2">
@@ -469,7 +469,7 @@ export default function ReconciliationPage() {
                                   <span className="text-sm text-muted-foreground">Sin candidato</span>
                                 )}
                               </TableCell>
-                              <TableCell className={row.importedImpact >= 0 ? "text-right tabular-nums text-lime-700 dark:text-lime-300" : "text-right tabular-nums text-[#e3e3ea]"}>
+                              <TableCell className={row.importedImpact >= 0 ? "text-right tabular-nums text-[hsl(var(--money-in))]" : "text-right tabular-nums text-[#e3e3ea]"}>
                                 {formatCLP(row.importedImpact)}
                               </TableCell>
                               <TableCell>

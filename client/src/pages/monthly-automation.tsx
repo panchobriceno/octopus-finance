@@ -455,7 +455,7 @@ export default function MonthlyAutomationPage() {
           <Card>
             <CardContent className="pt-5">
               <p className="text-sm text-muted-foreground">Pagados</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums text-lime-600 dark:text-lime-300">{dashboard.paid}</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums text-[hsl(var(--money-in))]">{dashboard.paid}</p>
             </CardContent>
           </Card>
           <Card>
@@ -489,7 +489,7 @@ export default function MonthlyAutomationPage() {
           <Card>
             <CardContent className="pt-5">
               <p className="text-sm text-muted-foreground">Ya pagado</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-lime-600 dark:text-lime-300">{formatCLP(dashboard.paidOutflow)}</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-[hsl(var(--money-in))]">{formatCLP(dashboard.paidOutflow)}</p>
             </CardContent>
           </Card>
           <Card>

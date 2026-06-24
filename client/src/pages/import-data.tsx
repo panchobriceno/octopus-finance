@@ -1368,7 +1368,7 @@ export default function ImportDataPage({
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className={`text-right tabular-nums text-sm font-medium ${transaction.type === "income" ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"}`}>
+                      <TableCell className={`text-right tabular-nums text-sm font-medium ${transaction.type === "income" ? "text-[hsl(var(--money-in))]" : "text-[#e3e3ea]"}`}>
                         {transaction.type === "income" ? "+" : "-"}
                         {formatCLP(transaction.amount)}
                       </TableCell>
@@ -1614,7 +1614,7 @@ export default function ImportDataPage({
                       </TableCell>
                       <TableCell
                         className={`text-right tabular-nums text-sm font-medium ${
-                          row.type === "income" ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"
+                          row.type === "income" ? "text-[hsl(var(--money-in))]" : "text-[#e3e3ea]"
                         }`}
                       >
                         {row.type === "income" ? "+" : "-"}

@@ -279,7 +279,7 @@ function DecisionHeader({
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             <div className="rounded-md border p-3">
               <p className="text-xs text-muted-foreground">Ingresado este mes</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-lime-700 dark:text-lime-300">
+              <p className="mt-1 text-xl font-semibold tabular-nums text-[hsl(var(--money-in))]">
                 {formatCLP(currentMonthRealIncome)}
               </p>
             </div>
@@ -375,7 +375,7 @@ function DecisionHeader({
                       <span className="size-2 rounded-full" style={{ backgroundColor: pulse.accent }} />
                       <span className="font-medium">{pulse.label}</span>
                     </div>
-                    <span className={pulse.net >= 0 ? "text-lime-700 dark:text-lime-300" : "text-zinc-600 dark:text-zinc-400"}>
+                    <span className={pulse.net >= 0 ? "text-[hsl(var(--money-in))]" : "text-zinc-600 dark:text-zinc-400"}>
                       {formatCLP(pulse.net)}
                     </span>
                   </div>
@@ -2192,7 +2192,7 @@ export default function OverviewPage() {
           id: "balance-apertura" as DashboardCardId,
           className: "md:col-span-2 xl:col-span-4",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/88">
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold text-[#f4f4f7]">
                   Balance de Apertura y Proyección del Mes
@@ -3441,7 +3441,7 @@ export default function OverviewPage() {
                     <TableCell
                       className={`text-right tabular-nums text-sm font-medium ${
                         tx.type === "income"
-                          ? "text-lime-600 dark:text-lime-400"
+                          ? "text-[hsl(var(--money-in))]"
                           : "text-zinc-600 dark:text-zinc-400"
                       }`}
                     >
@@ -3504,7 +3504,7 @@ export default function OverviewPage() {
       <Button
         type="button"
         onClick={() => setShowCreateDialog(true)}
-        className="!fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#cdfa46] p-0 text-[#0a0a0f] shadow-[0_12px_35px_rgba(187,158,255,0.45)] transition-transform duration-200 hover:scale-105 hover:bg-[#cdfa46] active:scale-95 animate-in fade-in zoom-in-95 slide-in-from-bottom-4 no-default-hover-elevate no-default-active-elevate"
+        className="!fixed bottom-6 right-6 z-50 hidden h-14 w-14 rounded-full bg-[#cdfa46] p-0 text-[#0a0a0f] shadow-[0_12px_35px_rgba(205,250,70,0.35)] transition-transform duration-200 hover:scale-105 hover:bg-[#cdfa46] active:scale-95 animate-in fade-in zoom-in-95 slide-in-from-bottom-4 no-default-hover-elevate no-default-active-elevate md:flex"
         data-testid="button-open-create-transaction-modal"
       >
         <Plus className="size-6" />

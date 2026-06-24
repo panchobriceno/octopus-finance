@@ -708,7 +708,7 @@ export default function CreditCardsPanelPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
               <div className="rounded-lg border bg-background p-4">
                 <p className="text-sm text-muted-foreground">Saldo TC calculado</p>
-                <p className={cn("text-2xl font-semibold tabular-nums mt-1", totals.debt >= 0 ? "text-zinc-700 dark:text-zinc-300" : "text-lime-600 dark:text-lime-400")}>
+                <p className={cn("text-2xl font-semibold tabular-nums mt-1", totals.debt >= 0 ? "text-zinc-700 dark:text-zinc-300" : "text-[hsl(var(--money-in))]")}>
                   {formatCLP(totals.debt)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">Histórico registrado menos pagos cargados.</p>
@@ -725,7 +725,7 @@ export default function CreditCardsPanelPage() {
               </div>
               <div className="rounded-lg border bg-background p-4">
                 <p className="text-sm text-muted-foreground">Balance del mes</p>
-                <p className={cn("text-2xl font-semibold tabular-nums mt-1", monthlyNet > 0 ? "text-zinc-700 dark:text-zinc-300" : "text-lime-600 dark:text-lime-400")}>
+                <p className={cn("text-2xl font-semibold tabular-nums mt-1", monthlyNet > 0 ? "text-zinc-700 dark:text-zinc-300" : "text-[hsl(var(--money-in))]")}>
                   {formatCLP(monthlyNet)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">Compras menos pagos del periodo.</p>

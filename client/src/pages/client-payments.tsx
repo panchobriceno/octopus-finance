@@ -715,7 +715,7 @@ export default function ClientPaymentsPage() {
         <Card>
           <CardContent className="pt-5">
             <p className="text-sm text-muted-foreground">Pagado</p>
-            <p className="text-xl font-semibold tabular-nums mt-1 text-lime-600 dark:text-lime-400">
+            <p className="text-xl font-semibold tabular-nums mt-1 text-[hsl(var(--money-in))]">
               {formatCLP(summary.paid)}
             </p>
           </CardContent>

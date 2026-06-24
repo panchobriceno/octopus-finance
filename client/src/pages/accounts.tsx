@@ -369,7 +369,7 @@ export default function AccountsPage() {
                       <span
                         className={`text-sm font-medium ${
                           difference > 0
-                            ? "text-lime-600 dark:text-lime-400"
+                            ? "text-[hsl(var(--money-in))]"
                             : difference < 0
                             ? "text-[#e3e3ea]"
                             : "text-muted-foreground"
@@ -470,7 +470,7 @@ export default function AccountsPage() {
                     <span
                       className={`text-sm font-medium ${
                         totals.difference > 0
-                          ? "text-lime-600 dark:text-lime-400"
+                          ? "text-[hsl(var(--money-in))]"
                           : totals.difference < 0
                           ? "text-[#e3e3ea]"
                           : "text-muted-foreground"

@@ -447,7 +447,7 @@ export default function CashFlowPage() {
             <div className="grid grid-cols-2 gap-3 pt-2 text-sm">
               <div className="rounded-lg bg-lime-50/60 p-3 dark:bg-lime-950/20">
                 <p className="text-muted-foreground">Ingresos reales</p>
-                <p className="font-semibold tabular-nums text-lime-600 dark:text-lime-400">
+                <p className="font-semibold tabular-nums text-[hsl(var(--money-in))]">
                   {formatCLP(selectedSummary.realIncome)}
                 </p>
               </div>
@@ -475,7 +475,7 @@ export default function CashFlowPage() {
             <div className="grid grid-cols-2 gap-3 pt-2 text-sm">
               <div className="rounded-lg bg-lime-50/60 p-3 dark:bg-lime-950/20">
                 <p className="text-muted-foreground">Ingresos presupuestados</p>
-                <p className="font-semibold tabular-nums text-lime-600 dark:text-lime-400">
+                <p className="font-semibold tabular-nums text-[hsl(var(--money-in))]">
                   {formatCLP(selectedSummary.plannedIncome)}
                 </p>
               </div>
@@ -577,14 +577,14 @@ export default function CashFlowPage() {
                   ))}
                 </TableRow>
                 <TableRow className="bg-lime-50/40 dark:bg-lime-950/10">
-                  <TableCell className="pl-5 font-medium text-sm text-lime-700 dark:text-lime-300">
+                  <TableCell className="pl-5 font-medium text-sm text-[hsl(var(--money-in))]">
                     Ingresos clientes
                   </TableCell>
                   {weeklyBreakdown.map((week, index) => (
                     <TableCell key={`income-${weeklyColumns[index]?.key}`} className="text-right">
                       <Button
                         variant="ghost"
-                        className="h-auto p-0 text-right font-medium tabular-nums text-lime-700 dark:text-lime-300"
+                        className="h-auto p-0 text-right font-medium tabular-nums text-[hsl(var(--money-in))]"
                         onClick={() => openWeeklyDetail("clientIncome", index, weeklyColumns[index].label, "Ingresos clientes")}
                       >
                         {formatCLP(week.clientIncome)}
@@ -748,7 +748,7 @@ export default function CashFlowPage() {
                     <TableCell className="text-right tabular-nums text-sm">
                       {formatCLP(summary.openingBalance)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-lime-600 dark:text-lime-400">
+                    <TableCell className="text-right tabular-nums text-sm text-[hsl(var(--money-in))]">
                       {formatCLP(summary.realIncome)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm text-[#e3e3ea]">

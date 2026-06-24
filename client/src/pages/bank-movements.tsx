@@ -110,7 +110,7 @@ function statusTone(status: string) {
 }
 
 function confidenceTone(value: number) {
-  if (value >= 85) return "text-lime-700 dark:text-lime-300";
+  if (value >= 85) return "text-[hsl(var(--money-in))]";
   if (value >= 70) return "text-zinc-700 dark:text-zinc-300";
   return "text-[#e3e3ea]";
 }
@@ -759,7 +759,7 @@ export default function BankMovementsPage({
                             </div>
                           </TableCell>
                           <TableCell className="align-top">
-                            <div className={movement.direction === "income" ? "font-semibold text-lime-700 dark:text-lime-300" : "font-semibold"}>
+                            <div className={movement.direction === "income" ? "font-semibold text-[hsl(var(--money-in))]" : "font-semibold"}>
                               {movement.direction === "income" ? "+" : "-"}{formatCLP(movement.amount)}
                             </div>
                             <div className="mt-1 text-xs text-muted-foreground">{movement.currency}</div>
@@ -892,7 +892,7 @@ export default function BankMovementsPage({
           }
         />
         <FinanceDialogBody className="space-y-4">
-          <div className="rounded-xl border border-[#8a8a94]/20 bg-[#8a8a94]/10 px-4 py-3 text-sm text-[#ffd89a]">
+          <div className="rounded-xl border border-[#8a8a94]/20 bg-[#8a8a94]/10 px-4 py-3 text-sm text-[#cfcfd8]">
             Los {dashboard.converted} convertidos y {dashboard.reconciled} conciliados permanecerán como movimientos resueltos.
           </div>
         </FinanceDialogBody>

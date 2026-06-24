@@ -13,10 +13,10 @@ const ORDER: Record<AuditSeverity, number> = {
 };
 
 const ACCENT: Record<AuditSeverity, string> = {
-  critical: "text-[#e3e3ea] bg-[#e3e3ea]/12",
+  critical: "text-[#e3e3ea] bg-[#e3e3ea]/15",
   high: "text-[#e3e3ea] bg-[#e3e3ea]/10",
   medium: "text-zinc-300 bg-zinc-500/12",
-  low: "text-[#cfcfd8] bg-[#cdfa46]/12",
+  low: "text-[#cfcfd8] bg-[#cdfa46]/15",
 };
 
 const TARGET: Record<string, string> = {
@@ -48,7 +48,7 @@ export function AttentionFeed({ limit = 4 }: { limit?: number }) {
   if (top.length === 0) return null;
 
   return (
-    <Card className="border-[#cdfa46]/12 bg-card/90">
+    <Card className="border-[#cdfa46]/15 bg-card/90">
       <CardContent className="p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-sm font-bold">

@@ -33,7 +33,7 @@ function PnlCell({ value }: { value: CellTotals }) {
       </div>
       <div
         className={`tabular-nums text-xs font-medium ${
-          variance >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"
+          variance >= 0 ? "text-[hsl(var(--money-in))]" : "text-[#e3e3ea]"
         }`}
       >
         Var. {formatCLP(variance)}
@@ -203,7 +203,7 @@ export default function PnLPage() {
               <TrendingUp className="size-4 text-lime-500" />
               <p className="text-sm text-muted-foreground">Total Ingresos Reales</p>
             </div>
-            <p className="text-xl font-semibold tabular-nums text-lime-600 dark:text-lime-400">
+            <p className="text-xl font-semibold tabular-nums text-[hsl(var(--money-in))]">
               {formatCLP(model.grandIncome.real)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
@@ -233,7 +233,7 @@ export default function PnLPage() {
             </div>
             <p
               className={`text-xl font-semibold tabular-nums ${
-                model.grandNet.real >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"
+                model.grandNet.real >= 0 ? "text-[hsl(var(--money-in))]" : "text-[#e3e3ea]"
               }`}
             >
               {formatCLP(model.grandNet.real)}

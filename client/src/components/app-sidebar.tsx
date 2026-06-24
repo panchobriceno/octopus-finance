@@ -14,9 +14,9 @@ import {
 import { NAV_GROUPS } from "@/lib/navigation";
 
 const ITEM_CLASS =
-  "mx-0 h-10 rounded-lg px-3 text-[#9a9aa6]/62 transition-all duration-200 " +
+  "mx-0 h-10 rounded-lg px-3 text-[#9a9aa6]/60 transition-all duration-200 " +
   "hover:bg-[#22222b] hover:text-[#f4f4f7] " +
-  "data-[active=true]:border data-[active=true]:border-[#cdfa46]/24 " +
+  "data-[active=true]:border data-[active=true]:border-[#cdfa46]/25 " +
   "data-[active=true]:bg-[#17171f] data-[active=true]:text-[#cdfa46] " +
   "data-[active=true]:shadow-[inset_0_0_0_1px_rgba(205,250,70,0.12)]";
 

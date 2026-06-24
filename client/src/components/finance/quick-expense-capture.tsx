@@ -449,7 +449,7 @@ export function QuickExpenseCapture() {
                   </div>
 
                   {ocrResult ? (
-                    <div className="mt-3 rounded-lg border border-[#cdfa46]/20 bg-[#cdfa46]/8 p-3 text-xs text-[#c9f8e6]">
+                    <div className="mt-3 rounded-lg border border-[#cdfa46]/20 bg-[#cdfa46]/10 p-3 text-xs text-[#cdfa46]">
                       OCR aplicado {formatConfidence(ocrResult.confidence) ? `· ${formatConfidence(ocrResult.confidence)}` : ""}
                       {ocrResult.warnings.length ? (
                         <p className="mt-1 text-[#f5c77a]">{ocrResult.warnings.join(" · ")}</p>
@@ -458,7 +458,7 @@ export function QuickExpenseCapture() {
                   ) : null}
 
                   {ocrError ? (
-                    <div className="mt-3 rounded-lg border border-[#e3e3ea]/20 bg-[#e3e3ea]/10 p-3 text-xs text-[#ffb4c2]">
+                    <div className="mt-3 rounded-lg border border-[#e3e3ea]/20 bg-[#e3e3ea]/10 p-3 text-xs text-[#f4f4f7]">
                       {ocrError}
                     </div>
                   ) : null}

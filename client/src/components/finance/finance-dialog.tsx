@@ -115,7 +115,7 @@ export function FinanceAlertDialogHeader({
     <AlertDialogHeader className="border-b border-white/7 px-5 py-4 text-left sm:px-6">
       <AlertDialogTitle className="flex items-center gap-2 text-lg font-extrabold tracking-tight text-[#f4f4f7]">
         {icon ? (
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#e3e3ea]/25 bg-[#e3e3ea]/15 text-[#ff9aaf]">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#e3e3ea]/25 bg-[#e3e3ea]/15 text-[#e3e3ea]">
             {icon}
           </span>
         ) : null}

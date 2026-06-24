@@ -50,14 +50,14 @@ function workspacePill(workspace?: string | null) {
   // Ámbito = grises etiquetados (nunca lima, que queda para la plata/marca).
   if (workspace === "family") return { label: "Familia", className: "bg-[#9ea6b4]/15 text-[#9ea6b4]" };
   if (workspace === "dentist" || workspace === "shared") return { label: "Consulta", className: "bg-[#7c7c88]/15 text-[#9aa0aa]" };
-  return { label: "Empresa", className: "bg-[#c8c8d2]/12 text-[#c8c8d2]" };
+  return { label: "Empresa", className: "bg-[#c8c8d2]/15 text-[#c8c8d2]" };
 }
 
 function statusPill(status: string) {
   // Estados en mono (gris), no lima.
-  if (status === "paid") return { label: "Pagado", className: "bg-[#9aa0aa]/12 text-[#9aa0aa]" };
+  if (status === "paid") return { label: "Pagado", className: "bg-[#9aa0aa]/15 text-[#9aa0aa]" };
   if (status === "cancelled") return { label: "Anulado", className: "bg-muted text-muted-foreground" };
-  return { label: "Pendiente", className: "bg-[#8a8a94]/12 text-[#8a8a94]" };
+  return { label: "Pendiente", className: "bg-[#8a8a94]/15 text-[#8a8a94]" };
 }
 
 export default function TransactionsPage() {
