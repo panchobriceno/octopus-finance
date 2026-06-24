@@ -229,10 +229,10 @@ function DecisionHeader({
   const primaryAlert = alerts[0];
 
   const alertToneClass: Record<DecisionAlertTone, string> = {
-    danger: "border-red-200 bg-red-50 text-red-900 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-200",
-    warning: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200",
+    danger: "border-zinc-200 bg-zinc-50 text-zinc-900 dark:border-zinc-900/40 dark:bg-zinc-950/20 dark:text-zinc-200",
+    warning: "border-zinc-200 bg-zinc-50 text-zinc-900 dark:border-zinc-900/40 dark:bg-zinc-950/20 dark:text-zinc-200",
     info: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/20 dark:text-sky-200",
-    success: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200",
+    success: "border-lime-200 bg-lime-50 text-lime-900 dark:border-lime-900/40 dark:bg-lime-950/20 dark:text-lime-200",
   };
 
   return (
@@ -248,7 +248,7 @@ function DecisionHeader({
               <div className="mt-2 text-4xl font-semibold tracking-tight tabular-nums">
                 {formatCLP(availableCash)}
               </div>
-              <div className={`mt-2 text-sm ${netAfterCards >= 0 ? "text-muted-foreground" : "text-red-600 dark:text-red-400"}`}>
+              <div className={`mt-2 text-sm ${netAfterCards >= 0 ? "text-muted-foreground" : "text-zinc-600 dark:text-zinc-400"}`}>
                 Neto después de deuda TC: {formatCLP(netAfterCards)}
               </div>
             </div>
@@ -257,9 +257,9 @@ function DecisionHeader({
               <div className="rounded-md border p-3">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm text-muted-foreground">Deuda tarjetas</span>
-                  <CreditCard className="size-4 text-red-500" />
+                  <CreditCard className="size-4 text-zinc-500" />
                 </div>
-                <div className="mt-2 text-2xl font-semibold tabular-nums text-red-600 dark:text-red-400">
+                <div className="mt-2 text-2xl font-semibold tabular-nums text-zinc-600 dark:text-zinc-400">
                   {formatCLP(totalCreditCardDebt)}
                 </div>
               </div>
@@ -279,7 +279,7 @@ function DecisionHeader({
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             <div className="rounded-md border p-3">
               <p className="text-xs text-muted-foreground">Ingresado este mes</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
+              <p className="mt-1 text-xl font-semibold tabular-nums text-lime-700 dark:text-lime-300">
                 {formatCLP(currentMonthRealIncome)}
               </p>
             </div>
@@ -319,7 +319,7 @@ function DecisionHeader({
         <Card className="rounded-lg">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="flex items-center gap-2 text-base font-semibold">
-              <AlertTriangle className="size-4 text-amber-500" />
+              <AlertTriangle className="size-4 text-zinc-500" />
               Atención
             </CardTitle>
           </CardHeader>
@@ -375,7 +375,7 @@ function DecisionHeader({
                       <span className="size-2 rounded-full" style={{ backgroundColor: pulse.accent }} />
                       <span className="font-medium">{pulse.label}</span>
                     </div>
-                    <span className={pulse.net >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-600 dark:text-red-400"}>
+                    <span className={pulse.net >= 0 ? "text-lime-700 dark:text-lime-300" : "text-zinc-600 dark:text-zinc-400"}>
                       {formatCLP(pulse.net)}
                     </span>
                   </div>
@@ -496,17 +496,17 @@ function KPICard({
   return (
     <Card
       data-testid={`kpi-${title.toLowerCase().replace(/\s/g, "-")}`}
-      className="glass glow-card overflow-hidden rounded-xl border-white/5 bg-[#1a172a]/85"
+      className="glass glow-card overflow-hidden rounded-xl border-white/5 bg-[#15151c]/85"
     >
       <CardContent className="px-5 pb-5 pt-5">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-sm font-medium text-[#aea8be]">{title}</p>
-            <p className="glow-text-primary mt-2 text-2xl font-extrabold tracking-tight tabular-nums text-[#ece5fc]">
+            <p className="text-sm font-medium text-[#9a9aa6]">{title}</p>
+            <p className="glow-text-primary mt-2 text-2xl font-extrabold tracking-tight tabular-nums text-[#f4f4f7]">
               {value}
             </p>
             {trend && (
-              <p className="mt-2 text-xs text-[#aea8be]">{trend}</p>
+              <p className="mt-2 text-xs text-[#9a9aa6]">{trend}</p>
             )}
           </div>
           <div
@@ -1197,7 +1197,7 @@ export function TransactionForm({
       </div>
 
       {(formPaymentMethod === "credit_card" && formMovementType === "expense") && (
-        <div className="sm:col-span-2 lg:col-span-4 rounded-lg border border-amber-200/70 bg-amber-50/60 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+        <div className="sm:col-span-2 lg:col-span-4 rounded-lg border border-zinc-200/70 bg-zinc-50/60 px-4 py-3 text-xs text-zinc-800 dark:border-zinc-900/40 dark:bg-zinc-950/20 dark:text-zinc-200">
           La compra se registra como gasto en este mes. Las cuotas quedan informadas por ahora y luego podremos desglosarlas y ajustarlas manualmente segun la cartola.
         </div>
       )}
@@ -1219,7 +1219,7 @@ export function TransactionForm({
           <Button
             type="button"
             variant="ghost"
-            className="text-[#ff6f8d] hover:bg-[#ff6f8d]/10 hover:text-[#ff6f8d]"
+            className="text-[#e3e3ea] hover:bg-[#e3e3ea]/10 hover:text-[#e3e3ea]"
             onClick={onDelete}
             data-testid="button-delete-from-edit"
           >
@@ -1392,19 +1392,19 @@ function DeleteTransactionsDialog({
           }
         />
         <FinanceDialogBody className="space-y-4">
-          <div className="rounded-xl border border-[#ff6f8d]/20 bg-[#ff6f8d]/10 px-4 py-3 text-sm text-[#ffd3dc]">
+          <div className="rounded-xl border border-[#e3e3ea]/20 bg-[#e3e3ea]/10 px-4 py-3 text-sm text-[#22222b]">
             Esta acción no se puede deshacer. Si el movimiento venía de una cartola importada, tendrás que importarlo o crearlo nuevamente.
           </div>
 
           {previewTransactions.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs font-bold uppercase tracking-wide text-[#8f879e]">Vista previa</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-[#6c6c78]">Vista previa</p>
               <div className="space-y-2">
                 {previewTransactions.map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/7 bg-[#171225] px-3 py-2">
+                  <div key={tx.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/7 bg-[#15151c] px-3 py-2">
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-bold text-[#f1e9fc]">{tx.name}</span>
-                      <span className="block text-xs text-[#8f879e]">{formatDate(tx.date)} · {tx.category}</span>
+                      <span className="block truncate text-sm font-bold text-[#f4f4f7]">{tx.name}</span>
+                      <span className="block text-xs text-[#6c6c78]">{formatDate(tx.date)} · {tx.category}</span>
                     </span>
                     <AmountText
                       value={tx.type === "income" ? tx.amount : -tx.amount}
@@ -1415,21 +1415,21 @@ function DeleteTransactionsDialog({
                 ))}
               </div>
               {hiddenCount > 0 ? (
-                <p className="text-xs text-[#aea8be]">Y {hiddenCount} movimiento{hiddenCount === 1 ? "" : "s"} más.</p>
+                <p className="text-xs text-[#9a9aa6]">Y {hiddenCount} movimiento{hiddenCount === 1 ? "" : "s"} más.</p>
               ) : null}
             </div>
           ) : null}
         </FinanceDialogBody>
         <FinanceDialogFooter>
           <AlertDialogCancel
-            className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]"
+            className="border-white/10 bg-[#15151c] text-[#f4f4f7] hover:bg-[#22222b]"
             data-testid="button-cancel-bulk-delete"
             disabled={isPending}
           >
             Cancelar
           </AlertDialogCancel>
           <AlertDialogAction
-            className="bg-[#ff6f8d] text-[#0f0c1c] hover:bg-[#ff8da3]"
+            className="bg-[#e3e3ea] text-[#0a0a0f] hover:bg-[#e3e3ea]"
             onClick={onConfirm}
             disabled={isPending || totalCount === 0}
             data-testid="button-confirm-bulk-delete"
@@ -1941,21 +1941,21 @@ export default function OverviewPage() {
         income: globalCurrentMonthBusinessMetrics.income,
         expenses: globalCurrentMonthBusinessMetrics.expenses,
         net: globalCurrentMonthBusinessMetrics.cashFlow,
-        accent: "#2563eb",
+        accent: "#9ea6b4",
       },
       {
         label: "Familia",
         income: globalCurrentMonthFamilyMetrics.income,
         expenses: globalCurrentMonthFamilyMetrics.expenses,
         net: globalCurrentMonthFamilyMetrics.cashFlow,
-        accent: "#16a34a",
+        accent: "#cdfa46",
       },
       {
         label: "Consulta",
         income: globalCurrentMonthDentistMetrics.income,
         expenses: globalCurrentMonthDentistMetrics.expenses,
         net: globalCurrentMonthDentistMetrics.cashFlow,
-        accent: "#d97706",
+        accent: "#8a8a94",
       },
     ],
     [globalCurrentMonthBusinessMetrics, globalCurrentMonthDentistMetrics, globalCurrentMonthFamilyMetrics],
@@ -2011,7 +2011,7 @@ export default function OverviewPage() {
               title="Balance"
               value={formatCLP(balance)}
               icon={Wallet}
-              color={balance >= 0 ? "#10b981" : "#ef4444"}
+              color={balance >= 0 ? "#cdfa46" : "#8a8a94"}
               trend={`${transactions.length} transacciones`}
             />
           ),
@@ -2020,23 +2020,23 @@ export default function OverviewPage() {
           id: "kpi-ingresos" as DashboardCardId,
           className: "",
           content: (
-            <Card data-testid="kpi-ingresos" className="glass glow-card overflow-hidden rounded-xl border-white/5 bg-[#1a172a]/85">
+            <Card data-testid="kpi-ingresos" className="glass glow-card overflow-hidden rounded-xl border-white/5 bg-[#15151c]/85">
               <CardContent className="px-5 pb-5 pt-5">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-[#aea8be]">Ingresos</p>
-                    <p className="glow-text-primary mt-2 text-2xl font-extrabold tracking-tight tabular-nums text-[#bcffe0]">
+                    <p className="text-sm font-medium text-[#9a9aa6]">Ingresos</p>
+                    <p className="glow-text-primary mt-2 text-2xl font-extrabold tracking-tight tabular-nums text-[#cdfa46]">
                       {formatCLP(currentMonthRealIncome)}
                     </p>
-                    <p className="mt-2 text-xs text-[#aea8be]">
+                    <p className="mt-2 text-xs text-[#9a9aa6]">
                       Proyectado: {formatCLP(currentMonthProjectedIncome)}
                     </p>
                   </div>
                   <div
                     className="rounded-xl border border-white/5 p-3"
-                    style={{ backgroundColor: `${"#bcffe0"}15` }}
+                    style={{ backgroundColor: `${"#cdfa46"}15` }}
                   >
-                    <TrendingUp className="size-5" style={{ color: "#bcffe0" }} />
+                    <TrendingUp className="size-5" style={{ color: "#cdfa46" }} />
                   </div>
                 </div>
               </CardContent>
@@ -2051,7 +2051,7 @@ export default function OverviewPage() {
               title="Gastos"
               value={formatCLP(totalExpenses)}
               icon={TrendingDown}
-              color="#ef4444"
+              color="#8a8a94"
             />
           ),
         },
@@ -2067,7 +2067,7 @@ export default function OverviewPage() {
                   : "0%"
               }
               icon={DollarSign}
-              color="#3b82f6"
+              color="#9ea6b4"
             />
           ),
         },
@@ -2075,11 +2075,11 @@ export default function OverviewPage() {
           id: "caja-empresa" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-[#aea8be]">Empresa: caja real</p>
+                <p className="text-sm text-[#9a9aa6]">Empresa: caja real</p>
                 <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">{formatCLP(businessMetrics.cashFlow)}</p>
-                <p className="mt-2 text-xs text-[#aea8be]">Ingresos y gastos de empresa, considerando tarjetas</p>
+                <p className="mt-2 text-xs text-[#9a9aa6]">Ingresos y gastos de empresa, considerando tarjetas</p>
               </CardContent>
             </Card>
           ),
@@ -2088,11 +2088,11 @@ export default function OverviewPage() {
           id: "caja-familia" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-[#aea8be]">Familia: caja real</p>
+                <p className="text-sm text-[#9a9aa6]">Familia: caja real</p>
                 <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">{formatCLP(familyMetrics.cashFlow)}</p>
-                <p className="mt-2 text-xs text-[#aea8be]">Incluye transferencias recibidas desde empresa</p>
+                <p className="mt-2 text-xs text-[#9a9aa6]">Incluye transferencias recibidas desde empresa</p>
               </CardContent>
             </Card>
           ),
@@ -2101,11 +2101,11 @@ export default function OverviewPage() {
           id: "caja-dentista" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-[#aea8be]">Consulta Dentista: caja real</p>
+                <p className="text-sm text-[#9a9aa6]">Consulta Dentista: caja real</p>
                 <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">{formatCLP(dentistMetrics.cashFlow)}</p>
-                <p className="mt-2 text-xs text-[#aea8be]">Ingresos y gastos del ámbito consulta</p>
+                <p className="mt-2 text-xs text-[#9a9aa6]">Ingresos y gastos del ámbito consulta</p>
               </CardContent>
             </Card>
           ),
@@ -2114,14 +2114,14 @@ export default function OverviewPage() {
           id: "deuda-tarjetas" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
               <CardContent className="pt-5">
                 <div className="flex items-center gap-2">
-                  <CreditCard className="size-4 text-[#ff6e84]" />
-                  <p className="text-sm text-[#aea8be]">Deuda tarjetas empresa</p>
+                  <CreditCard className="size-4 text-[#e3e3ea]" />
+                  <p className="text-sm text-[#9a9aa6]">Deuda tarjetas empresa</p>
                 </div>
-                <p className="mt-2 text-2xl font-bold tabular-nums text-[#ff6e84]">{formatCLP(businessMetrics.creditCardDebt)}</p>
-                <p className="mt-2 text-xs text-[#aea8be]">Compras TC menos pagos de tarjeta</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-[#e3e3ea]">{formatCLP(businessMetrics.creditCardDebt)}</p>
+                <p className="mt-2 text-xs text-[#9a9aa6]">Compras TC menos pagos de tarjeta</p>
               </CardContent>
             </Card>
           ),
@@ -2130,13 +2130,13 @@ export default function OverviewPage() {
           id: "ahorro" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-[#aea8be]">Ahorro</p>
+                <p className="text-sm text-[#9a9aa6]">Ahorro</p>
                 <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">
                   {formatCLP(filteredSavingsBalance)}
                 </p>
-                <p className="mt-2 text-xs text-[#aea8be]">
+                <p className="mt-2 text-xs text-[#9a9aa6]">
                   {selectedAccount ? "Saldo de ahorro de la cuenta seleccionada" : "Suma de cuentas de ahorro registradas"}
                 </p>
               </CardContent>
@@ -2147,13 +2147,13 @@ export default function OverviewPage() {
           id: "iva-cobrado" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-[#aea8be]">IVA cobrado este mes</p>
-                <p className="mt-2 text-2xl font-bold tabular-nums text-[#bb9eff]">
+                <p className="text-sm text-[#9a9aa6]">IVA cobrado este mes</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-[#cdfa46]">
                   {formatCLP(currentMonthPaidVat)}
                 </p>
-                <p className="mt-2 text-xs text-[#aea8be]">Se actualiza a medida que los clientes van pagando</p>
+                <p className="mt-2 text-xs text-[#9a9aa6]">Se actualiza a medida que los clientes van pagando</p>
               </CardContent>
             </Card>
           ),
@@ -2162,13 +2162,13 @@ export default function OverviewPage() {
           id: "iva-proyectado" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-[#aea8be]">IVA proyectado próximo 20</p>
-                <p className="mt-2 text-2xl font-bold tabular-nums text-[#bb9eff]">
+                <p className="text-sm text-[#9a9aa6]">IVA proyectado próximo 20</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-[#cdfa46]">
                   {formatCLP(currentMonthPaidVat)}
                 </p>
-                <p className="mt-2 text-xs text-[#aea8be]">Pago estimado para {formatDate(nextVatDueDate)}</p>
+                <p className="mt-2 text-xs text-[#9a9aa6]">Pago estimado para {formatDate(nextVatDueDate)}</p>
               </CardContent>
             </Card>
           ),
@@ -2177,13 +2177,13 @@ export default function OverviewPage() {
           id: "caja-sin-iva" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/85">
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
               <CardContent className="pt-5">
-                <p className="text-sm text-[#aea8be]">Caja empresa disponible sin IVA</p>
+                <p className="text-sm text-[#9a9aa6]">Caja empresa disponible sin IVA</p>
                 <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">
                   {formatCLP(businessAvailableAfterVat)}
                 </p>
-                <p className="mt-2 text-xs text-[#aea8be]">Caja empresa menos IVA cobrado este mes</p>
+                <p className="mt-2 text-xs text-[#9a9aa6]">Caja empresa menos IVA cobrado este mes</p>
               </CardContent>
             </Card>
           ),
@@ -2192,51 +2192,51 @@ export default function OverviewPage() {
           id: "balance-apertura" as DashboardCardId,
           className: "md:col-span-2 xl:col-span-4",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#1a172a]/88">
+            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/88">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold text-[#ece5fc]">
+                <CardTitle className="text-base font-semibold text-[#f4f4f7]">
                   Balance de Apertura y Proyección del Mes
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 lg:grid-cols-[240px_1fr]">
-                <div className="rounded-xl border border-white/5 bg-[#211d32]/90 p-4">
-                  <p className="text-sm font-medium text-[#bb9eff]">
+                <div className="rounded-xl border border-white/5 bg-[#22222b]/90 p-4">
+                  <p className="text-sm font-medium text-[#cdfa46]">
                     Saldo inicial
                   </p>
-                  <p className="mb-3 mt-1 text-xs text-[#aea8be]">
+                  <p className="mb-3 mt-1 text-xs text-[#9a9aa6]">
                     {selectedAccount ? "Saldo base de la cuenta seleccionada" : "Suma de saldos en cuentas operativas registradas"}
                   </p>
-                  <p className="glow-text-primary text-3xl font-extrabold tracking-tight tabular-nums text-[#ece5fc]">{formatCLP(summaryOpeningBalance)}</p>
-                  <p className="mt-2 text-xs text-[#aea8be]">
+                  <p className="glow-text-primary text-3xl font-extrabold tracking-tight tabular-nums text-[#f4f4f7]">{formatCLP(summaryOpeningBalance)}</p>
+                  <p className="mt-2 text-xs text-[#9a9aa6]">
                     Mes: {currentMonthKey}
                   </p>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl border border-white/5 bg-[#211d32]/80 p-4">
-                    <p className="text-sm text-[#aea8be]">Ejecutado</p>
-                    <p className="mt-2 text-xl font-bold tabular-nums text-[#ece5fc]">
+                  <div className="rounded-xl border border-white/5 bg-[#22222b]/80 p-4">
+                    <p className="text-sm text-[#9a9aa6]">Ejecutado</p>
+                    <p className="mt-2 text-xl font-bold tabular-nums text-[#f4f4f7]">
                       {formatCLP(currentMonthSummary.realEndingBalance)}
                     </p>
-                    <p className="mt-2 text-xs text-[#aea8be]">
+                    <p className="mt-2 text-xs text-[#9a9aa6]">
                       {formatCLP(summaryOpeningBalance)} + {formatCLP(currentMonthSummary.realIncome)} - {formatCLP(currentMonthSummary.realExpenses)}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-white/5 bg-[#211d32]/80 p-4">
-                    <p className="text-sm text-[#aea8be]">Ingresos presupuestados</p>
-                    <p className="mt-2 text-xl font-bold tabular-nums text-[#bcffe0]">
+                  <div className="rounded-xl border border-white/5 bg-[#22222b]/80 p-4">
+                    <p className="text-sm text-[#9a9aa6]">Ingresos presupuestados</p>
+                    <p className="mt-2 text-xl font-bold tabular-nums text-[#cdfa46]">
                       {formatCLP(currentMonthSummary.plannedIncome)}
                     </p>
-                    <p className="mt-2 text-xs text-[#aea8be]">
+                    <p className="mt-2 text-xs text-[#9a9aa6]">
                       No impactan el saldo real
                     </p>
                   </div>
-                  <div className="rounded-xl border border-white/5 bg-[#211d32]/80 p-4">
-                    <p className="text-sm text-[#aea8be]">Saldo proyectado</p>
-                    <p className="mt-2 text-xl font-bold tabular-nums text-[#bb9eff]">
+                  <div className="rounded-xl border border-white/5 bg-[#22222b]/80 p-4">
+                    <p className="text-sm text-[#9a9aa6]">Saldo proyectado</p>
+                    <p className="mt-2 text-xl font-bold tabular-nums text-[#cdfa46]">
                       {formatCLP(currentMonthSummary.projectedEndingBalance)}
                     </p>
-                    <p className="mt-2 text-xs text-[#aea8be]">
+                    <p className="mt-2 text-xs text-[#9a9aa6]">
                       Ejecutado + proyectado del resto del mes
                     </p>
                   </div>
@@ -2606,9 +2606,9 @@ export default function OverviewPage() {
     ...workspacePulses.map((pulse) => ({
       label: pulse.label,
       amount: pulse.net,
-      color: pulse.label === "Octopus" ? "#bb9eff" : pulse.label === "Familia" ? "#9ef0cf" : "#f59e0b",
+      color: pulse.label === "Octopus" ? "#cdfa46" : pulse.label === "Familia" ? "#cdfa46" : "#8a8a94",
     })),
-    { label: "Ahorro", amount: filteredSavingsBalance, color: "#a48bf6" },
+    { label: "Ahorro", amount: filteredSavingsBalance, color: "#cdfa46" },
   ];
   const cashEvolutionData = (() => {
     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
@@ -2656,7 +2656,7 @@ export default function OverviewPage() {
       .map(([name, amount]) => ({ name, amount }));
   })();
   const categoryTotal = categorySpendData.reduce((sum, item) => sum + item.amount, 0);
-  const categoryColors = ["#bb9eff", "#9ef0cf", "#a48bf6", "#f59e0b", "#ff6f8d"];
+  const categoryColors = ["#cdfa46", "#c8c8d2", "#9a9aa6", "#74747e", "#52525c"];
   const upcomingCommitments = transactions
     .filter((tx) => {
       const normalized = normalizeTransaction(tx);
@@ -2670,23 +2670,23 @@ export default function OverviewPage() {
 
   if (!isConfigMode) {
     return (
-      <div className="h-full overflow-y-auto bg-[#0f0c1c] text-[#f1e9fc]">
-        <header className="sticky top-0 z-20 border-b border-white/7 bg-[#0b0914]/95 px-4 py-4 backdrop-blur-xl sm:px-6">
+      <div className="h-full overflow-y-auto bg-[#0a0a0f] text-[#f4f4f7]">
+        <header className="sticky top-0 z-20 border-b border-white/7 bg-[#0a0a0f]/95 px-4 py-4 backdrop-blur-xl sm:px-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <h2 className="text-xl font-extrabold tracking-tight">Resumen</h2>
-              <p className="mt-1 text-xs text-[#aea8be]">{currentMonthLabel} · vista consolidada</p>
+              <p className="mt-1 text-xs text-[#9a9aa6]">{currentMonthLabel} · vista consolidada</p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
               <OverviewScopeToggle value={overviewScope} onChange={setOverviewScope} />
               <div className="-mx-1 flex max-w-full items-center gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <Button type="button" variant="outline" className="shrink-0 border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]">
+                <Button type="button" variant="outline" className="shrink-0 border-white/10 bg-[#15151c] text-[#f4f4f7] hover:bg-[#22222b]">
                   {currentMonthLabel}
                 </Button>
-                <Button type="button" className="shrink-0 bg-[#bb9eff] text-[#0f0c1c] hover:bg-[#a48bf6]" onClick={() => navigate("/monthly-close")}>
+                <Button type="button" className="shrink-0 bg-[#cdfa46] text-[#0a0a0f] hover:bg-[#cdfa46]" onClick={() => navigate("/monthly-close")}>
                   Cerrar mes
                 </Button>
-                <Button type="button" variant="outline" size="icon" className="shrink-0 border-white/10 bg-[#141123]" onClick={() => navigate("/settings")} title="Ajustes">
+                <Button type="button" variant="outline" size="icon" className="shrink-0 border-white/10 bg-[#15151c]" onClick={() => navigate("/settings")} title="Ajustes">
                   <Settings2 className="size-4" />
                 </Button>
               </div>
@@ -2696,18 +2696,18 @@ export default function OverviewPage() {
 
         <div className="mx-auto max-w-[1440px] space-y-4 p-4 sm:p-6">
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[1.5fr_1fr_1fr_1fr]">
-            <Card className="overflow-hidden rounded-2xl border-[#bb9eff]/20 bg-[#1a1430] shadow-[0_24px_70px_rgba(0,0,0,0.28)] md:col-span-2 xl:col-span-1">
+            <Card className="overflow-hidden rounded-2xl border-[#cdfa46]/20 bg-[#15151c] shadow-[0_24px_70px_rgba(0,0,0,0.28)] md:col-span-2 xl:col-span-1">
               <CardContent className="relative min-h-[132px] p-5">
                 <div className="relative z-10">
-                  <p className="text-sm text-[#aea8be]">Caja {overviewScopeLabel}</p>
-                  <p className="mt-2 break-words font-mono text-3xl font-bold tracking-tight text-[#f1e9fc] tabular-nums sm:text-4xl">
+                  <p className="text-sm text-[#9a9aa6]">Caja {overviewScopeLabel}</p>
+                  <p className="mt-2 break-words font-mono text-3xl font-bold tracking-tight text-[#f4f4f7] tabular-nums sm:text-4xl">
                     {formatCLP(dashboardCash)}
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="rounded-md bg-[#9ef0cf]/15 px-2 py-1 font-bold text-[#9ef0cf]">
+                    <span className="rounded-md bg-[#cdfa46]/15 px-2 py-1 font-bold text-[#cdfa46]">
                       {dashboardCash - dashboardCreditCardDebt >= 0 ? "+" : "-"} neto TC
                     </span>
-                    <span className="text-[#aea8be]">vs. deuda tarjetas {formatCLP(dashboardCreditCardDebt)}</span>
+                    <span className="text-[#9a9aa6]">vs. deuda tarjetas {formatCLP(dashboardCreditCardDebt)}</span>
                   </div>
                 </div>
                 <div className="pointer-events-none absolute bottom-0 right-0 hidden h-14 w-[72%] opacity-65 sm:block">
@@ -2715,11 +2715,11 @@ export default function OverviewPage() {
                     <AreaChart data={cashEvolutionData.slice(-14)}>
                       <defs>
                         <linearGradient id="cashGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#bb9eff" stopOpacity={0.75} />
-                          <stop offset="100%" stopColor="#bb9eff" stopOpacity={0.05} />
+                          <stop offset="0%" stopColor="#cdfa46" stopOpacity={0.75} />
+                          <stop offset="100%" stopColor="#cdfa46" stopOpacity={0.05} />
                         </linearGradient>
                       </defs>
-                      <Area type="monotone" dataKey="Empresa" stroke="#bb9eff" fill="url(#cashGradient)" strokeWidth={2} />
+                      <Area type="monotone" dataKey="Empresa" stroke="#cdfa46" fill="url(#cashGradient)" strokeWidth={2} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -2750,9 +2750,9 @@ export default function OverviewPage() {
             <OverviewPanel
               title="Evolución de caja"
               aside={
-                <div className="hidden items-center gap-4 text-xs text-[#aea8be] sm:flex">
-                  <span className="flex items-center gap-2"><span className="size-2 rounded-sm bg-[#9ef0cf]" />Personal</span>
-                  <span className="flex items-center gap-2"><span className="size-2 rounded-sm bg-[#bb9eff]" />Empresa</span>
+                <div className="hidden items-center gap-4 text-xs text-[#9a9aa6] sm:flex">
+                  <span className="flex items-center gap-2"><span className="size-2 rounded-sm bg-[#9ea6b4]" />Personal</span>
+                  <span className="flex items-center gap-2"><span className="size-2 rounded-sm bg-[#c8c8d2]" />Empresa</span>
                 </div>
               }
             >
@@ -2761,23 +2761,23 @@ export default function OverviewPage() {
                     <AreaChart data={cashEvolutionData}>
                       <defs>
                         <linearGradient id="businessGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#bb9eff" stopOpacity={0.45} />
-                          <stop offset="100%" stopColor="#bb9eff" stopOpacity={0.02} />
+                          <stop offset="0%" stopColor="#c8c8d2" stopOpacity={0.40} />
+                          <stop offset="100%" stopColor="#c8c8d2" stopOpacity={0.02} />
                         </linearGradient>
                         <linearGradient id="familyGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#9ef0cf" stopOpacity={0.18} />
-                          <stop offset="100%" stopColor="#9ef0cf" stopOpacity={0.01} />
+                          <stop offset="0%" stopColor="#9ea6b4" stopOpacity={0.18} />
+                          <stop offset="100%" stopColor="#9ea6b4" stopOpacity={0.01} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                      <XAxis dataKey="day" tick={{ fill: "#8f879e", fontSize: 11 }} interval={4} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="day" tick={{ fill: "#6c6c78", fontSize: 11 }} interval={4} axisLine={false} tickLine={false} />
                       <YAxis hide domain={["auto", "auto"]} />
                       <Tooltip
                         formatter={(value: number) => formatCLP(Number(value))}
-                        contentStyle={{ backgroundColor: "#171225", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px" }}
+                        contentStyle={{ backgroundColor: "#15151c", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px" }}
                       />
-                      <Area type="monotone" dataKey="Empresa" stroke="#bb9eff" fill="url(#businessGradient)" strokeWidth={3} />
-                      <Area type="monotone" dataKey="Personal" stroke="#9ef0cf" fill="url(#familyGradient)" strokeWidth={2} />
+                      <Area type="monotone" dataKey="Empresa" stroke="#c8c8d2" fill="url(#businessGradient)" strokeWidth={3} />
+                      <Area type="monotone" dataKey="Personal" stroke="#9ea6b4" fill="url(#familyGradient)" strokeWidth={2} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -2786,11 +2786,11 @@ export default function OverviewPage() {
             <OverviewPanel
               title={
                 <span className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-[#f59e0b] shadow-[0_0_18px_rgba(245,158,11,0.7)]" />
+                  <span className="size-2 rounded-full bg-[#8a8a94] shadow-[0_0_18px_rgba(245,158,11,0.7)]" />
                   Requiere tu atención
                 </span>
               }
-              aside={<span className="text-xs font-bold text-[#aea8be]">{decisionAlerts.length}</span>}
+              aside={<span className="text-xs font-bold text-[#9a9aa6]">{decisionAlerts.length}</span>}
               contentClassName="space-y-1"
             >
                 {decisionAlerts.slice(0, 4).map((alert, index) => (
@@ -2802,21 +2802,21 @@ export default function OverviewPage() {
                   >
                     <span className={`flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${
                       alert.tone === "danger"
-                        ? "bg-[#ff6f8d]/15 text-[#ff6f8d]"
+                        ? "bg-[#e3e3ea]/15 text-[#e3e3ea]"
                         : alert.tone === "warning"
-                          ? "bg-[#f59e0b]/15 text-[#f59e0b]"
+                          ? "bg-[#8a8a94]/15 text-[#8a8a94]"
                           : alert.tone === "success"
-                            ? "bg-[#9ef0cf]/15 text-[#9ef0cf]"
-                            : "bg-[#bb9eff]/15 text-[#bb9eff]"
+                            ? "bg-[#cdfa46]/15 text-[#cdfa46]"
+                            : "bg-[#cdfa46]/15 text-[#cdfa46]"
                     }`}
                     >
                       !
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-bold text-[#f1e9fc]">{alert.title}</span>
-                      <span className="block truncate text-xs text-[#aea8be]">{alert.description}</span>
+                      <span className="block truncate text-sm font-bold text-[#f4f4f7]">{alert.title}</span>
+                      <span className="block truncate text-xs text-[#9a9aa6]">{alert.description}</span>
                     </span>
-                    {alert.href ? <ChevronRight className="size-4 shrink-0 text-[#8f879e]" /> : null}
+                    {alert.href ? <ChevronRight className="size-4 shrink-0 text-[#6c6c78]" /> : null}
                   </button>
                 ))}
             </OverviewPanel>
@@ -2826,7 +2826,7 @@ export default function OverviewPage() {
             <OverviewPanel
               title="Movimientos recientes"
               aside={
-                <Button type="button" variant="ghost" className="h-8 px-2 text-[#bb9eff]" onClick={() => navigate("/transactions")}>
+                <Button type="button" variant="ghost" className="h-8 px-2 text-[#cdfa46]" onClick={() => navigate("/transactions")}>
                   Ver todos <ChevronRight className="ml-1 size-4" />
                 </Button>
               }
@@ -2836,16 +2836,22 @@ export default function OverviewPage() {
                   <Table className="min-w-[680px]">
                     <TableHeader>
                       <TableRow className="border-white/7 hover:bg-transparent">
-                        <TableHead className="text-xs uppercase tracking-wide text-[#8f879e]">Descripción</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wide text-[#8f879e]">Categoría</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wide text-[#8f879e]">Ámbito</TableHead>
-                        <TableHead className="min-w-[120px] text-right text-xs uppercase tracking-wide text-[#8f879e]">Monto</TableHead>
+                        <TableHead className="text-xs uppercase tracking-wide text-[#6c6c78]">Descripción</TableHead>
+                        <TableHead className="text-xs uppercase tracking-wide text-[#6c6c78]">Categoría</TableHead>
+                        <TableHead className="text-xs uppercase tracking-wide text-[#6c6c78]">Ámbito</TableHead>
+                        <TableHead className="min-w-[120px] text-right text-xs uppercase tracking-wide text-[#6c6c78]">Monto</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {recentDashboardTransactions.map((tx) => {
                         const normalized = normalizeTransaction(tx);
                         const isIncome = tx.type === "income";
+                        const wsColor =
+                          normalized.workspace === "family"
+                            ? "#9ea6b4"
+                            : normalized.workspace === "dentist"
+                              ? "#7c7c88"
+                              : "#c8c8d2";
                         return (
                           <TableRow
                             key={tx.id}
@@ -2856,27 +2862,26 @@ export default function OverviewPage() {
                           >
                             <TableCell>
                               <div className="flex items-center gap-3">
-                                <span className={`flex size-8 items-center justify-center rounded-lg ${isIncome ? "bg-[#9ef0cf]/15 text-[#9ef0cf]" : "bg-[#ff6f8d]/15 text-[#ff6f8d]"}`}>
+                                <span className={`flex size-8 items-center justify-center rounded-lg ${isIncome ? "bg-[#cdfa46]/15 text-[#cdfa46]" : "bg-[#e3e3ea]/15 text-[#e3e3ea]"}`}>
                                   {isIncome ? "↑" : "↓"}
                                 </span>
                                 <span>
                                   <span className="block max-w-[280px] truncate text-sm font-bold">{tx.name}</span>
-                                  <span className="block text-xs text-[#8f879e]">{formatDate(tx.date)}</span>
+                                  <span className="block text-xs text-[#6c6c78]">{formatDate(tx.date)}</span>
                                 </span>
                               </div>
                             </TableCell>
-                            <TableCell className="text-sm text-[#cfc7dd]">{tx.category || "Sin categoria"}</TableCell>
+                            <TableCell className="text-sm text-[#9a9aa6]">{tx.category || "Sin categoria"}</TableCell>
                             <TableCell>
-                              <span className={`rounded-md px-2 py-1 text-xs font-bold ${
-                                normalized.workspace === "family"
-                                  ? "bg-[#9ef0cf]/15 text-[#9ef0cf]"
-                                  : "bg-[#bb9eff]/15 text-[#d6c7ff]"
-                              }`}
+                              <span
+                                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold"
+                                style={{ background: `${wsColor}1f`, color: wsColor }}
                               >
+                                <span className="size-1.5 rounded-sm" style={{ background: wsColor }} />
                                 {transactionWorkspaceLabel(normalized.workspace)}
                               </span>
                             </TableCell>
-                            <TableCell className={`min-w-[120px] whitespace-nowrap text-right font-mono text-sm font-bold tabular-nums ${isIncome ? "text-[#9ef0cf]" : "text-[#ff6f8d]"}`}>
+                            <TableCell className={`min-w-[120px] whitespace-nowrap text-right font-mono text-sm font-bold tabular-nums ${isIncome ? "text-[#cdfa46]" : "text-[#e3e3ea]"}`}>
                               {isIncome ? "+" : "-"}{formatCLP(tx.amount)}
                             </TableCell>
                           </TableRow>
@@ -2905,14 +2910,14 @@ export default function OverviewPage() {
                   </div>
                   <div className="space-y-2">
                     {categorySpendData.length === 0 ? (
-                      <p className="text-sm text-[#aea8be]">Sin gastos del mes.</p>
+                      <p className="text-sm text-[#9a9aa6]">Sin gastos del mes.</p>
                     ) : categorySpendData.map((item, index) => (
                       <div key={item.name} className="flex items-center justify-between gap-3 text-xs">
                         <span className="flex min-w-0 items-center gap-2">
                           <span className="size-2 rounded-sm" style={{ backgroundColor: categoryColors[index % categoryColors.length] }} />
                           <span className="truncate font-bold">{item.name}</span>
                         </span>
-                        <span className="text-[#aea8be]">{categoryTotal > 0 ? Math.round((item.amount / categoryTotal) * 100) : 0}%</span>
+                        <span className="text-[#9a9aa6]">{categoryTotal > 0 ? Math.round((item.amount / categoryTotal) * 100) : 0}%</span>
                       </div>
                     ))}
                   </div>
@@ -2921,19 +2926,19 @@ export default function OverviewPage() {
               <OverviewPanel
                 title="Próximos compromisos"
                 aside={
-                  <Button type="button" variant="ghost" className="h-8 px-2 text-[#bb9eff]" onClick={() => navigate("/automation")}>
+                  <Button type="button" variant="ghost" className="h-8 px-2 text-[#cdfa46]" onClick={() => navigate("/automation")}>
                     Ver
                   </Button>
                 }
                 contentClassName="space-y-3"
               >
                   {upcomingCommitments.length === 0 ? (
-                    <p className="text-sm text-[#aea8be]">No hay compromisos pendientes del mes.</p>
+                    <p className="text-sm text-[#9a9aa6]">No hay compromisos pendientes del mes.</p>
                   ) : upcomingCommitments.map((tx) => (
                     <div key={tx.id} className="flex items-center justify-between gap-3 border-b border-white/7 pb-3 last:border-b-0 last:pb-0">
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold">{tx.name}</span>
-                        <span className="block text-xs text-[#8f879e]">{formatDate(tx.date)} · {transactionWorkspaceLabel(tx.workspace)}</span>
+                        <span className="block text-xs text-[#6c6c78]">{formatDate(tx.date)} · {transactionWorkspaceLabel(tx.workspace)}</span>
                       </span>
                       <span className="shrink-0 whitespace-nowrap font-mono text-sm font-bold tabular-nums">{formatCLP(tx.amount)}</span>
                     </div>
@@ -2948,7 +2953,7 @@ export default function OverviewPage() {
                           <span className="size-2 rounded-full" style={{ backgroundColor: row.color }} />
                           {row.label}
                         </span>
-                        <span className={`font-mono tabular-nums ${row.amount < 0 ? "text-[#ff6f8d]" : "text-[#9ef0cf]"}`}>
+                        <span className={`font-mono tabular-nums ${row.amount < 0 ? "text-[#e3e3ea]" : "text-[#cdfa46]"}`}>
                           {formatCLP(row.amount)}
                         </span>
                       </div>
@@ -2957,7 +2962,7 @@ export default function OverviewPage() {
                           className="h-full rounded-full"
                           style={{
                             width: `${Math.max(4, Math.min(100, (Math.abs(row.amount) / maxWorkspaceAbs) * 100))}%`,
-                            backgroundColor: row.amount < 0 ? "#ff6f8d" : row.color,
+                            backgroundColor: row.amount < 0 ? "#e3e3ea" : row.color,
                           }}
                         />
                       </div>
@@ -2971,7 +2976,7 @@ export default function OverviewPage() {
         <Button
           type="button"
           onClick={() => setShowCreateDialog(true)}
-          className="!fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#bb9eff] p-0 text-[#0f0c1c] shadow-[0_12px_35px_rgba(187,158,255,0.45)] transition-transform duration-200 hover:scale-105 hover:bg-[#ad89ff] active:scale-95 no-default-hover-elevate no-default-active-elevate"
+          className="!fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#cdfa46] p-0 text-[#0a0a0f] shadow-[0_12px_35px_rgba(187,158,255,0.45)] transition-transform duration-200 hover:scale-105 hover:bg-[#cdfa46] active:scale-95 no-default-hover-elevate no-default-active-elevate"
           data-testid="button-open-create-transaction-modal"
         >
           <Plus className="size-6" />
@@ -3404,11 +3409,11 @@ export default function OverviewPage() {
                     </TableCell>
                     <TableCell>
                       {normalized.movementType === "transfer" ? (
-                        <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-900/40 dark:text-blue-300">
+                        <Badge variant="outline" className="text-xs border-slate-300 text-slate-700 dark:border-slate-900/40 dark:text-slate-300">
                           Transferencia
                         </Badge>
                       ) : normalized.movementType === "credit_card_payment" ? (
-                        <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-900/40 dark:text-amber-300">
+                        <Badge variant="outline" className="text-xs border-zinc-300 text-zinc-700 dark:border-zinc-900/40 dark:text-zinc-300">
                           Pago TC
                         </Badge>
                       ) : (
@@ -3424,10 +3429,10 @@ export default function OverviewPage() {
                       <Badge
                         className={`text-xs ${
                           tx.status === "paid"
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                            ? "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400"
                             : tx.status === "pending"
-                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                            : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                            ? "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-400"
+                            : "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-400"
                         }`}
                       >
                         {tx.status === "paid" ? "Pagado" : tx.status === "pending" ? "Pendiente" : "Cancelado"}
@@ -3436,8 +3441,8 @@ export default function OverviewPage() {
                     <TableCell
                       className={`text-right tabular-nums text-sm font-medium ${
                         tx.type === "income"
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : "text-red-600 dark:text-red-400"
+                          ? "text-lime-600 dark:text-lime-400"
+                          : "text-zinc-600 dark:text-zinc-400"
                       }`}
                     >
                       {tx.type === "income" ? "+" : "-"}
@@ -3499,7 +3504,7 @@ export default function OverviewPage() {
       <Button
         type="button"
         onClick={() => setShowCreateDialog(true)}
-        className="!fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#bb9eff] p-0 text-[#0f0c1c] shadow-[0_12px_35px_rgba(187,158,255,0.45)] transition-transform duration-200 hover:scale-105 hover:bg-[#ad89ff] active:scale-95 animate-in fade-in zoom-in-95 slide-in-from-bottom-4 no-default-hover-elevate no-default-active-elevate"
+        className="!fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#cdfa46] p-0 text-[#0a0a0f] shadow-[0_12px_35px_rgba(187,158,255,0.45)] transition-transform duration-200 hover:scale-105 hover:bg-[#cdfa46] active:scale-95 animate-in fade-in zoom-in-95 slide-in-from-bottom-4 no-default-hover-elevate no-default-active-elevate"
         data-testid="button-open-create-transaction-modal"
       >
         <Plus className="size-6" />
@@ -3550,19 +3555,19 @@ export default function OverviewPage() {
             description={`Aplica cambios a ${selectedIds.size} movimiento${selectedIds.size === 1 ? "" : "s"}. Los campos en "No cambiar" se mantienen igual.`}
           />
           <FinanceDialogBody className="space-y-4">
-            <div className="rounded-xl border border-white/7 bg-[#171225] px-4 py-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-[#8f879e]">Selección actual</p>
-              <p className="mt-1 text-sm text-[#f1e9fc]">
+            <div className="rounded-xl border border-white/7 bg-[#15151c] px-4 py-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#6c6c78]">Selección actual</p>
+              <p className="mt-1 text-sm text-[#f4f4f7]">
                 {selectedIds.size} movimiento{selectedIds.size === 1 ? "" : "s"} seleccionado{selectedIds.size === 1 ? "" : "s"}
               </p>
-              <p className="mt-1 text-xs text-[#aea8be]">
+              <p className="mt-1 text-xs text-[#9a9aa6]">
                 Usa esta acción para corregir categoría, ámbito o estado en lote sin tocar montos ni fechas.
               </p>
             </div>
 
             <div className="grid gap-4">
               <div className="grid gap-2">
-                <p className="text-sm text-[#aea8be]">Categoría</p>
+                <p className="text-sm text-[#9a9aa6]">Categoría</p>
                 <Select value={bulkEditCategory} onValueChange={setBulkEditCategory}>
                   <SelectTrigger>
                     <SelectValue />
@@ -3579,7 +3584,7 @@ export default function OverviewPage() {
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-2">
-                  <p className="text-sm text-[#aea8be]">Ámbito</p>
+                  <p className="text-sm text-[#9a9aa6]">Ámbito</p>
                   <Select value={bulkEditWorkspace} onValueChange={setBulkEditWorkspace}>
                     <SelectTrigger>
                       <SelectValue />
@@ -3593,7 +3598,7 @@ export default function OverviewPage() {
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <p className="text-sm text-[#aea8be]">Estado</p>
+                  <p className="text-sm text-[#9a9aa6]">Estado</p>
                   <Select value={bulkEditStatus} onValueChange={setBulkEditStatus}>
                     <SelectTrigger>
                       <SelectValue />
@@ -3606,7 +3611,7 @@ export default function OverviewPage() {
                     </SelectContent>
                   </Select>
                   {bulkEditIncludesCreditCardPurchases ? (
-                    <p className="text-[11px] text-[#aea8be]">
+                    <p className="text-[11px] text-[#9a9aa6]">
                       Las compras con tarjeta se liquidan mediante un Pago TC, no marcándolas como pagadas en lote.
                     </p>
                   ) : null}

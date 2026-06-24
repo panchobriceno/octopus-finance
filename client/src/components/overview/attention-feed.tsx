@@ -13,10 +13,10 @@ const ORDER: Record<AuditSeverity, number> = {
 };
 
 const ACCENT: Record<AuditSeverity, string> = {
-  critical: "text-[#ff6f8d] bg-[#ff6f8d]/12",
-  high: "text-[#ff6f8d] bg-[#ff6f8d]/10",
-  medium: "text-amber-300 bg-amber-500/12",
-  low: "text-[#cdbcff] bg-[#bb9eff]/12",
+  critical: "text-[#e3e3ea] bg-[#e3e3ea]/12",
+  high: "text-[#e3e3ea] bg-[#e3e3ea]/10",
+  medium: "text-zinc-300 bg-zinc-500/12",
+  low: "text-[#cfcfd8] bg-[#cdfa46]/12",
 };
 
 const TARGET: Record<string, string> = {
@@ -48,11 +48,11 @@ export function AttentionFeed({ limit = 4 }: { limit?: number }) {
   if (top.length === 0) return null;
 
   return (
-    <Card className="border-[#bb9eff]/12 bg-card/90">
+    <Card className="border-[#cdfa46]/12 bg-card/90">
       <CardContent className="p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-sm font-bold">
-            <AlertTriangle className="size-4 text-amber-400" />
+            <AlertTriangle className="size-4 text-zinc-400" />
             Requiere tu atención
           </h3>
           <span className="text-xs text-muted-foreground">
@@ -65,7 +65,7 @@ export function AttentionFeed({ limit = 4 }: { limit?: number }) {
               key={issue.id}
               type="button"
               onClick={() => navigate(TARGET[issue.area] ?? "/data-health")}
-              className="flex w-full items-center gap-3 rounded-xl border border-[#bb9eff]/10 bg-background/30 px-3 py-2.5 text-left transition hover:bg-background/50"
+              className="flex w-full items-center gap-3 rounded-xl border border-[#cdfa46]/10 bg-background/30 px-3 py-2.5 text-left transition hover:bg-background/50"
               data-testid={`attention-issue-${issue.id}`}
             >
               <span
