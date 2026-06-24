@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { CashflowWaterfall } from "@/components/finance/cashflow-waterfall";
 import {
   CartesianGrid,
   Legend,
@@ -488,6 +489,16 @@ export default function CashFlowPage() {
           </CardContent>
         </Card>
       </div>
+
+      <CashflowWaterfall
+        openingBalance={selectedSummary.openingBalance}
+        realIncome={selectedSummary.realIncome}
+        realExpenses={selectedSummary.realExpenses}
+        realEndingBalance={selectedSummary.realEndingBalance}
+        plannedIncome={selectedSummary.plannedIncome}
+        plannedExpenses={selectedSummary.plannedExpenses}
+        projectedEndingBalance={selectedSummary.projectedEndingBalance}
+      />
 
       {workspace !== "family" && (
         <Card>

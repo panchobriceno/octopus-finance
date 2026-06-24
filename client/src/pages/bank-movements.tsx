@@ -48,6 +48,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { StepFlow } from "@/components/finance/step-flow";
 
 type StatusFilter = "active" | "pending" | "duplicate" | "converted" | "reconciled" | "discarded" | "all";
 
@@ -505,6 +506,14 @@ export default function BankMovementsPage() {
             </Button>
           </div>
         </div>
+
+        <StepFlow
+          steps={[
+            { label: "Importar cartola", hint: "Subí el CSV o PDF", href: "/import" },
+            { label: "Revisar y clasificar", hint: "Categoría, cuenta y duplicados" },
+            { label: "Confirmar", hint: "Convertir en transacciones" },
+          ]}
+        />
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <Card className="rounded-lg">

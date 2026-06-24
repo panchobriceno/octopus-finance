@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ClipboardList, LockKeyhole, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardList, LockKeyhole, RotateCcw } from "lucide-react";
+import { Link } from "wouter";
+import { AmountText } from "@/components/finance/amount-text";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -118,11 +120,28 @@ function buildSummaryRow(id: string, label: string, budget: number, actual: numb
   };
 }
 
+function getDeltaTone(row: MonthlyCloseSummaryRow): "auto" | "positive" | "negative" {
+  if (row.delta === 0) return "auto";
+  const isExpenseRow = row.id === "business-expenses" || row.id === "family-expenses";
+  const isFavorable = isExpenseRow ? row.delta < 0 : row.delta > 0;
+  return isFavorable ? "positive" : "negative";
+}
+
 function getChecklistTone(status: ChecklistStatus) {
   if (status === "ready") return "text-emerald-700 dark:text-emerald-300";
   if (status === "blocked") return "text-red-700 dark:text-red-300";
   return "text-amber-700 dark:text-amber-300";
 }
+
+// Cada ítem del checklist enlaza a la pantalla donde se resuelve (rutas existentes).
+const CHECKLIST_RESOLVE_ROUTE: Record<string, string> = {
+  "pending-transactions": "/movements",
+  "uncategorized-transactions": "/data-health",
+  "client-payments": "/client-payments",
+  "import-batches": "/movements",
+  "workspace-categories": "/categories",
+  "family-income-source": "/budget",
+};
 
 function isUncategorized(value: string | null | undefined) {
   const normalized = normalizeCategoryName(value ?? "");
@@ -598,6 +617,16 @@ export default function MonthlyClosePage() {
                             ) : null}
                           </div>
                           <p className={cn("text-xs mt-1", getChecklistTone(item.status))}>{item.detail}</p>
+                          {!isClosed && item.status !== "ready" && CHECKLIST_RESOLVE_ROUTE[item.id] ? (
+                            <Link
+                              href={CHECKLIST_RESOLVE_ROUTE[item.id]}
+                              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#bb9eff] hover:underline"
+                              data-testid={`checklist-resolve-${item.id}`}
+                            >
+                              Resolver
+                              <ArrowRight className="size-3" />
+                            </Link>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -693,8 +722,8 @@ export default function MonthlyClosePage() {
                       <TableCell className="pl-5 font-medium text-sm">{row.label}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(row.budget)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(row.actual)}</TableCell>
-                      <TableCell className={cn("text-right tabular-nums text-sm", row.delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
-                        {formatCLP(row.delta)}
+                      <TableCell className="text-right text-sm">
+                        <AmountText value={row.delta} tone={getDeltaTone(row)} className="text-sm" />
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-sm pr-5">
                         {row.deltaPercent === null ? "-" : `${Math.round(row.deltaPercent * 100)}%`}
