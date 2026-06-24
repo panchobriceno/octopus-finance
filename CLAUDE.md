@@ -8,10 +8,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev          # Start development server (Express + Vite on port 5000)
 npm run build        # Build for production (Vite + post-process dist)
 npm run check        # TypeScript type checking
+npm test             # Run Vitest unit tests
 npm run db:push      # Push Drizzle schema changes (see note below)
 ```
 
-There is no test runner configured.
+## Current Handoff
+
+Read `SESSION_HANDOFF_2026-06-24.md` before making larger changes. It documents the latest Codex/Claude consolidation, deployed commits, Railway production checks, UX decisions, and the current backlog.
 
 ## Architecture
 
