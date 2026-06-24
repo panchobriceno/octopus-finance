@@ -53,6 +53,7 @@ import {
   type MovementSeedInput,
 } from "@/domain/bank-imports";
 import {
+  buildTransactionFromCommitmentPayment,
   buildMissingCommitmentInstances,
   findCommitmentMatches,
 } from "@/domain/commitments";
@@ -108,6 +109,16 @@ export type BulkImportedMovementConversionPreflight = {
   duplicates: BulkImportedMovementConversionCandidate[];
   reviewRequired: BulkImportedMovementConversionCandidate[];
   blocked: BulkImportedMovementConversionCandidate[];
+};
+
+export type PayCommitmentInstanceInput = {
+  date?: string;
+  amount?: number;
+  paymentMethod?: string;
+  accountId?: string | null;
+  creditCardName?: string | null;
+  installmentCount?: number | null;
+  notes?: string | null;
 };
 
 // ── Helper: map Firestore snapshot to typed array ───────────────
@@ -1314,6 +1325,68 @@ export async function updateCommitmentInstance(id: string, data: Record<string, 
 
 export async function deleteCommitmentInstance(id: string) {
   await deleteDoc(doc(db, "commitmentInstances", id));
+}
+
+export async function payCommitmentInstance(id: string, data: PayCommitmentInstanceInput) {
+  const instanceRef = doc(db, "commitmentInstances", id);
+
+  return runTransaction(db, async (transaction) => {
+    const instanceSnapshot = await transaction.get(instanceRef);
+    if (!instanceSnapshot.exists()) {
+      throw new Error("No se encontro el compromiso.");
+    }
+
+    const instance = {
+      id: instanceSnapshot.id,
+      ...instanceSnapshot.data(),
+    } as CommitmentInstance;
+
+    if (instance.status === "paid" && instance.matchedTransactionId) {
+      throw new Error("Este compromiso ya tiene un movimiento asociado.");
+    }
+
+    const amount = Number(data.amount ?? instance.expectedAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("El monto del pago debe ser mayor a cero.");
+    }
+
+    const now = nowIso();
+    const paymentDate = data.date || todayDate();
+    const userNotes = String(data.notes ?? "").trim();
+    const instanceNotes = userNotes
+      ? `${instance.notes ? `${instance.notes}\n` : ""}Pago manual: ${userNotes}`
+      : instance.notes ?? null;
+
+    const transactionRef = doc(transactionsCol());
+    const transactionPayload = buildTransactionFromCommitmentPayment(instance, {
+      date: paymentDate,
+      amount,
+      paymentMethod: data.paymentMethod,
+      accountId: data.accountId,
+      creditCardName: data.creditCardName,
+      installmentCount: data.installmentCount,
+      notes: data.notes,
+    });
+
+    transaction.set(transactionRef, transactionPayload);
+    transaction.update(instanceRef, {
+      status: "paid",
+      matchedTransactionId: transactionRef.id,
+      matchedAt: now,
+      paidAt: paymentDate,
+      notes: instanceNotes,
+      updatedAt: now,
+    });
+
+    return {
+      commitmentId: instance.id,
+      transactionId: transactionRef.id,
+      transaction: {
+        id: transactionRef.id,
+        ...transactionPayload,
+      },
+    };
+  });
 }
 
 export async function generateCommitmentInstances(monthKey: string) {

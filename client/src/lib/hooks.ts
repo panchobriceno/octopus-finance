@@ -534,6 +534,17 @@ export function useUpdateCommitmentInstance() {
   });
 }
 
+export function usePayCommitmentInstance() {
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: fs.PayCommitmentInstanceInput }) =>
+      fs.payCommitmentInstance(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["commitment-instances"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    },
+  });
+}
+
 export function useDeleteCommitmentInstance() {
   return useMutation({
     mutationFn: (id: string) => fs.deleteCommitmentInstance(id),

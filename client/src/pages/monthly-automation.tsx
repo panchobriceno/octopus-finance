@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { CalendarClock, CheckCircle2, Play, Plus, RotateCw, Trash2, XCircle } from "lucide-react";
+import { Banknote, CalendarClock, CheckCircle2, CreditCard, Play, Plus, ReceiptText, RotateCw, Trash2, XCircle } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
 import {
   Sheet,
   SheetContent,
@@ -18,6 +19,7 @@ import {
   useCreateCommitmentTemplate,
   useDeleteCommitmentTemplate,
   useGenerateCommitmentInstances,
+  usePayCommitmentInstance,
   useReconcileCommitmentInstances,
   useTransactions,
   useUpdateCommitmentInstance,
@@ -36,6 +38,12 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  FinanceDialogBody,
+  FinanceDialogContent,
+  FinanceDialogFooter,
+  FinanceDialogHeader,
+} from "@/components/finance/finance-dialog";
 
 type TemplateForm = {
   name: string;
@@ -54,6 +62,16 @@ type TemplateForm = {
   notes: string;
 };
 
+type PaymentForm = {
+  date: string;
+  amount: string;
+  paymentMethod: "bank_account" | "credit_card" | "cash";
+  accountId: string;
+  creditCardName: string;
+  installmentCount: string;
+  notes: string;
+};
+
 const defaultForm: TemplateForm = {
   name: "",
   category: "",
@@ -68,6 +86,16 @@ const defaultForm: TemplateForm = {
   matchingKeywords: "",
   amountTolerance: "1000",
   dateToleranceDays: "5",
+  notes: "",
+};
+
+const defaultPaymentForm: PaymentForm = {
+  date: new Date().toISOString().slice(0, 10),
+  amount: "",
+  paymentMethod: "bank_account",
+  accountId: "none",
+  creditCardName: "",
+  installmentCount: "1",
   notes: "",
 };
 
@@ -109,11 +137,25 @@ function transactionLabel(transaction: Transaction | null) {
   return `${transaction.date} · ${transaction.name}`;
 }
 
+function buildPaymentForm(instance: CommitmentInstance): PaymentForm {
+  return {
+    date: new Date().toISOString().slice(0, 10),
+    amount: String(Number(instance.expectedAmount) || ""),
+    paymentMethod: (instance.paymentMethod as PaymentForm["paymentMethod"]) || "bank_account",
+    accountId: instance.accountId || "none",
+    creditCardName: instance.creditCardName || "",
+    installmentCount: "1",
+    notes: "",
+  };
+}
+
 export default function MonthlyAutomationPage() {
   const { toast } = useToast();
   const currentMonthKey = getCurrentMonthKey();
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
   const [form, setForm] = useState<TemplateForm>(defaultForm);
+  const [paymentTarget, setPaymentTarget] = useState<CommitmentInstance | null>(null);
+  const [paymentForm, setPaymentForm] = useState<PaymentForm>(defaultPaymentForm);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const { data: templates = [], isLoading: templatesLoading } = useCommitmentTemplates();
@@ -129,6 +171,7 @@ export default function MonthlyAutomationPage() {
   const reconcileMutation = useReconcileCommitmentInstances();
   const bootstrapTemplatesMutation = useBootstrapCommitmentTemplates();
   const updateInstanceMutation = useUpdateCommitmentInstance();
+  const payInstanceMutation = usePayCommitmentInstance();
 
   const monthOptions = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addMonths(currentMonthKey, index - 3)),
@@ -165,12 +208,23 @@ export default function MonthlyAutomationPage() {
     () =>
       Array.from(
         new Set(
-          transactions
-            .map((transaction) => transaction.creditCardName)
-            .filter((value): value is string => Boolean(value)),
+          [
+            ...transactions
+              .map((transaction) => transaction.creditCardName)
+              .filter((value): value is string => Boolean(value)),
+            ...accounts
+              .filter((account) => account.type === "credit_card")
+              .map((account) => account.name),
+            ...templates
+              .map((template) => template.creditCardName)
+              .filter((value): value is string => Boolean(value)),
+            ...instances
+              .map((instance) => instance.creditCardName)
+              .filter((value): value is string => Boolean(value)),
+          ],
         ),
       ).sort((left, right) => left.localeCompare(right, "es")),
-    [transactions],
+    [accounts, instances, templates, transactions],
   );
 
   const updateForm = <Key extends keyof TemplateForm>(key: Key, value: TemplateForm[Key]) => {
@@ -185,6 +239,29 @@ export default function MonthlyAutomationPage() {
       }
       return next;
     });
+  };
+
+  const updatePaymentForm = <Key extends keyof PaymentForm>(key: Key, value: PaymentForm[Key]) => {
+    setPaymentForm((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "paymentMethod" && value !== "credit_card") {
+        next.installmentCount = "1";
+      }
+      if (key === "paymentMethod" && value === "cash") {
+        next.accountId = "none";
+      }
+      return next;
+    });
+  };
+
+  const openPaymentDialog = (instance: CommitmentInstance) => {
+    setPaymentTarget(instance);
+    setPaymentForm(buildPaymentForm(instance));
+  };
+
+  const closePaymentDialog = () => {
+    setPaymentTarget(null);
+    setPaymentForm(defaultPaymentForm);
   };
 
   const handleCreateTemplate = async () => {
@@ -225,6 +302,62 @@ export default function MonthlyAutomationPage() {
     setForm(defaultForm);
     toast({ title: "Compromiso recurrente creado" });
     return true;
+  };
+
+  const handleRegisterPayment = async () => {
+    if (!paymentTarget) return;
+
+    const amount = Number(paymentForm.amount || 0);
+    const installmentCount = Number(paymentForm.installmentCount || 1);
+    if (!paymentForm.date || !Number.isFinite(amount) || amount <= 0) {
+      toast({
+        title: "Faltan datos",
+        description: "Completa fecha y monto del pago.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      (paymentForm.paymentMethod === "credit_card" || paymentTarget.movementType === "credit_card_payment") &&
+      !paymentForm.creditCardName.trim()
+    ) {
+      toast({
+        title: "Falta la tarjeta",
+        description: "Selecciona la tarjeta asociada al pago.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const result = await payInstanceMutation.mutateAsync({
+        id: paymentTarget.id,
+        data: {
+          date: paymentForm.date,
+          amount,
+          paymentMethod: paymentForm.paymentMethod,
+          accountId: paymentForm.accountId === "none" ? null : paymentForm.accountId,
+          creditCardName: paymentForm.creditCardName.trim() || null,
+          installmentCount:
+            paymentForm.paymentMethod === "credit_card" && Number.isFinite(installmentCount)
+              ? Math.max(1, installmentCount)
+              : null,
+          notes: paymentForm.notes.trim() || null,
+        },
+      });
+      toast({
+        title: "Pago registrado",
+        description: `Se creo el movimiento ${result.transaction.name}.`,
+      });
+      closePaymentDialog();
+    } catch (error) {
+      toast({
+        title: "No se pudo registrar",
+        description: error instanceof Error ? error.message : "Intenta nuevamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleGenerate = () => {
@@ -537,6 +670,143 @@ export default function MonthlyAutomationPage() {
           </SheetContent>
         </Sheet>
 
+        <Dialog
+          open={Boolean(paymentTarget)}
+          onOpenChange={(open) => {
+            if (!open) closePaymentDialog();
+          }}
+        >
+          <FinanceDialogContent size="sm">
+            <FinanceDialogHeader
+              title="Registrar pago"
+              description="Crea un movimiento real y marca el compromiso como pagado."
+              icon={<ReceiptText className="size-4" />}
+            />
+            <FinanceDialogBody className="space-y-5">
+              {paymentTarget ? (
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-sm font-semibold text-[#f1e9fc]">{paymentTarget.name}</p>
+                  <div className="mt-2 grid gap-2 text-xs text-[#aea8be] sm:grid-cols-3">
+                    <span>Vence {paymentTarget.dueDate}</span>
+                    <span>{WORKSPACE_LABELS[paymentTarget.workspace] ?? paymentTarget.workspace}</span>
+                    <span className="font-semibold text-[#f1e9fc]">{formatCLP(paymentTarget.expectedAmount)}</span>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Fecha de pago</Label>
+                  <Input
+                    type="date"
+                    value={paymentForm.date}
+                    onChange={(event) => updatePaymentForm("date", event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Monto pagado</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={paymentForm.amount}
+                    onChange={(event) => updatePaymentForm("amount", event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Metodo</Label>
+                  <Select
+                    value={paymentForm.paymentMethod}
+                    onValueChange={(value) =>
+                      updatePaymentForm("paymentMethod", value as PaymentForm["paymentMethod"])
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bank_account">
+                        <span className="inline-flex items-center gap-2">
+                          <Banknote className="size-3.5" />
+                          Cuenta
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="credit_card">
+                        <span className="inline-flex items-center gap-2">
+                          <CreditCard className="size-3.5" />
+                          Tarjeta
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="cash">Efectivo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Cuenta</Label>
+                  <Select
+                    value={paymentForm.accountId}
+                    onValueChange={(value) => updatePaymentForm("accountId", value)}
+                    disabled={paymentForm.paymentMethod === "cash"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin cuenta</SelectItem>
+                      {cashAccounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.name} - {account.bank}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Tarjeta</Label>
+                  <Input
+                    list="commitment-payment-card-names"
+                    value={paymentForm.creditCardName}
+                    onChange={(event) => updatePaymentForm("creditCardName", event.target.value)}
+                    disabled={paymentForm.paymentMethod !== "credit_card" && paymentTarget?.movementType !== "credit_card_payment"}
+                    placeholder="Ej: Santander Visa"
+                  />
+                  <datalist id="commitment-payment-card-names">
+                    {cardNames.map((cardName) => (
+                      <option key={cardName} value={cardName} />
+                    ))}
+                  </datalist>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Cuotas</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={paymentForm.installmentCount}
+                    onChange={(event) => updatePaymentForm("installmentCount", event.target.value)}
+                    disabled={paymentForm.paymentMethod !== "credit_card"}
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Notas</Label>
+                  <Textarea
+                    value={paymentForm.notes}
+                    onChange={(event) => updatePaymentForm("notes", event.target.value)}
+                    className="min-h-20"
+                    placeholder="Opcional: numero de comprobante, detalle o contexto."
+                  />
+                </div>
+              </div>
+            </FinanceDialogBody>
+            <FinanceDialogFooter>
+              <Button variant="ghost" onClick={closePaymentDialog} disabled={payInstanceMutation.isPending}>
+                Cancelar
+              </Button>
+              <Button onClick={handleRegisterPayment} disabled={payInstanceMutation.isPending}>
+                {payInstanceMutation.isPending ? "Registrando" : "Crear movimiento y pagar"}
+              </Button>
+            </FinanceDialogFooter>
+          </FinanceDialogContent>
+        </Dialog>
+
         <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
           <Card>
             <CardHeader className="pb-3">
@@ -602,13 +872,13 @@ export default function MonthlyAutomationPage() {
                             <TableCell className="pr-5">
                               <div className="flex justify-end gap-1">
                                 <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-8"
-                                  onClick={() => setInstanceStatus(instance, "paid")}
-                                  disabled={updateInstanceMutation.isPending}
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openPaymentDialog(instance)}
+                                  disabled={updateInstanceMutation.isPending || instance.status === "paid"}
                                 >
                                   <CheckCircle2 className="size-4 text-emerald-600" />
+                                  Pago
                                 </Button>
                                 <Button
                                   variant="ghost"

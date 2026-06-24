@@ -20,6 +20,16 @@ export type CommitmentDashboard = {
   coveragePct: number;
 };
 
+export type CommitmentPaymentInput = {
+  date: string;
+  amount: number;
+  paymentMethod?: string;
+  accountId?: string | null;
+  creditCardName?: string | null;
+  installmentCount?: number | null;
+  notes?: string | null;
+};
+
 function normalizeText(value: unknown) {
   return String(value ?? "")
     .normalize("NFD")
@@ -43,6 +53,10 @@ function daysBetween(left: string, right: string) {
 function clampDay(year: number, month: number, day: number) {
   const daysInMonth = new Date(year, month, 0).getDate();
   return Math.min(Math.max(day, 1), daysInMonth);
+}
+
+function explicitOrFallback<T>(value: T | undefined, fallback: T) {
+  return value === undefined ? fallback : value;
 }
 
 export function getCurrentMonthKey() {
@@ -101,6 +115,40 @@ export function buildMissingCommitmentInstances(
     .filter((template) => template.isActive !== false)
     .filter((template) => !existingKeys.has(getCommitmentIdentity(template.id, monthKey)))
     .map((template) => buildCommitmentInstanceFromTemplate(template, monthKey));
+}
+
+export function buildTransactionFromCommitmentPayment(
+  instance: CommitmentInstance,
+  input: CommitmentPaymentInput,
+): Omit<Transaction, "id"> {
+  const userNotes = String(input.notes ?? "").trim();
+  const baseNotes = `Registrado desde compromiso mensual: ${instance.name}.`;
+
+  return {
+    name: instance.name,
+    category: instance.category,
+    amount: input.amount,
+    type: "expense",
+    date: input.date,
+    notes: userNotes ? `${baseNotes}\n${userNotes}` : baseNotes,
+    subtype: "actual",
+    status: "paid",
+    itemId: null,
+    workspace: instance.workspace || "family",
+    movementType: instance.movementType || "expense",
+    paymentMethod: input.paymentMethod || instance.paymentMethod || "bank_account",
+    destinationWorkspace: null,
+    destinationAccountId: instance.destinationAccountId ?? null,
+    accountId: explicitOrFallback(input.accountId, instance.accountId ?? null),
+    creditCardName: explicitOrFallback(input.creditCardName, instance.creditCardName ?? null),
+    installmentCount: explicitOrFallback(input.installmentCount, null),
+    sourceClientPaymentId: null,
+    sourceCommitmentInstanceId: instance.id,
+    sourceCommitmentTemplateId: instance.templateId,
+    importBatchId: null,
+    importBatchLabel: null,
+    importedAt: null,
+  };
 }
 
 function includesKeyword(transaction: Transaction, keywords: string[]) {

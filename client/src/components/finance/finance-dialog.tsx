@@ -33,7 +33,7 @@ export function FinanceDialogContent({
   return (
     <DialogContent
       className={cn(
-        "grid max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-2xl border-white/10 bg-[#11101b] p-0 text-[#f1e9fc] shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:max-h-[calc(100dvh-4rem)]",
+        "grid max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-2xl border-white/10 bg-[#11101b] p-0 text-[#f1e9fc] shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:max-h-[calc(100dvh-4rem)]",
         "outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-[#bb9eff]/40",
         sizeClass[size],
         className,

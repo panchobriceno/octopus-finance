@@ -26,6 +26,8 @@ export interface Transaction {
   installmentCount?: number | null;
   accountId?: string | null;
   sourceClientPaymentId?: string | null;
+  sourceCommitmentInstanceId?: string | null;
+  sourceCommitmentTemplateId?: string | null;
   importBatchId?: string | null;
   importBatchLabel?: string | null;
   importedAt?: string | null;
@@ -50,6 +52,8 @@ export interface InsertTransaction {
   installmentCount?: number | null;
   accountId?: string | null;
   sourceClientPaymentId?: string | null;
+  sourceCommitmentInstanceId?: string | null;
+  sourceCommitmentTemplateId?: string | null;
   importBatchId?: string | null;
   importBatchLabel?: string | null;
   importedAt?: string | null;
@@ -561,6 +565,8 @@ export const insertTransactionSchema = z.object({
   installmentCount: z.number().int().nullable().optional(),
   accountId: z.string().nullable().optional(),
   sourceClientPaymentId: z.string().nullable().optional(),
+  sourceCommitmentInstanceId: z.string().nullable().optional(),
+  sourceCommitmentTemplateId: z.string().nullable().optional(),
   importBatchId: z.string().nullable().optional(),
   importBatchLabel: z.string().nullable().optional(),
   importedAt: z.string().nullable().optional(),
