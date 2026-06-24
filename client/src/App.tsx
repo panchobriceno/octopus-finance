@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "@/components/command-palette";
+import { MobileTabBar } from "@/components/mobile-tab-bar";
 import { ImportWizardDialog } from "@/components/finance/import-wizard-dialog";
 import { QuickExpenseCapture } from "@/components/finance/quick-expense-capture";
 import NotFound from "@/pages/not-found";
@@ -116,6 +117,7 @@ function App() {
                 <main className="flex-1 overflow-hidden">
                   <AppRouter />
                 </main>
+                <MobileTabBar />
               </div>
             </div>
           </SidebarProvider>

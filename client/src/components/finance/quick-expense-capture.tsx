@@ -358,7 +358,7 @@ export function QuickExpenseCapture() {
         type="button"
         onClick={openCapture}
         className={cn(
-          "!fixed z-[60] h-12 rounded-full bg-[#cdfa46] px-4 text-[#07130f] shadow-[0_12px_35px_rgba(158,240,207,0.35)] hover:bg-[#8be7c2] active:scale-95 no-default-hover-elevate no-default-active-elevate",
+          "!fixed z-[60] hidden h-12 rounded-full bg-[#cdfa46] px-4 text-[#0a0a0f] shadow-[0_12px_35px_rgba(205,250,70,0.35)] hover:bg-[#bdf03a] active:scale-95 no-default-hover-elevate no-default-active-elevate md:inline-flex",
           quickButtonOffset,
         )}
         aria-label="Registrar gasto rápido"

@@ -17,8 +17,8 @@ const ITEM_CLASS =
   "mx-0 h-10 rounded-lg px-3 text-[#9a9aa6]/62 transition-all duration-200 " +
   "hover:bg-[#22222b] hover:text-[#f4f4f7] " +
   "data-[active=true]:border data-[active=true]:border-[#cdfa46]/24 " +
-  "data-[active=true]:bg-[#2a213d] data-[active=true]:text-[#d8c7ff] " +
-  "data-[active=true]:shadow-[inset_0_0_0_1px_rgba(187,158,255,0.1)]";
+  "data-[active=true]:bg-[#17171f] data-[active=true]:text-[#cdfa46] " +
+  "data-[active=true]:shadow-[inset_0_0_0_1px_rgba(205,250,70,0.12)]";
 
 export function AppSidebar() {
   const [location] = useLocation();

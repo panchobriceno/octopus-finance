@@ -2976,7 +2976,7 @@ export default function OverviewPage() {
         <Button
           type="button"
           onClick={() => setShowCreateDialog(true)}
-          className="!fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#cdfa46] p-0 text-[#0a0a0f] shadow-[0_12px_35px_rgba(187,158,255,0.45)] transition-transform duration-200 hover:scale-105 hover:bg-[#cdfa46] active:scale-95 no-default-hover-elevate no-default-active-elevate"
+          className="!fixed bottom-6 right-6 z-50 hidden h-14 w-14 rounded-full bg-[#cdfa46] p-0 text-[#0a0a0f] shadow-[0_12px_35px_rgba(205,250,70,0.35)] md:flex transition-transform duration-200 hover:scale-105 hover:bg-[#cdfa46] active:scale-95 no-default-hover-elevate no-default-active-elevate"
           data-testid="button-open-create-transaction-modal"
         >
           <Plus className="size-6" />
