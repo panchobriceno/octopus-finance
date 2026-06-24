@@ -7,12 +7,14 @@ export type MovementStatus =
   | "conciliado"
   | "duplicado";
 
+// Mono: los estados van en grises etiquetados. El lima queda reservado para
+// ingreso/marca/acciones, no para estados.
 const STYLES: Record<MovementStatus, string> = {
-  pagado: "bg-lime-500/15 text-lime-300 border-lime-400/20",
-  pendiente: "bg-zinc-500/15 text-zinc-300 border-zinc-400/20",
-  vencido: "bg-[#e3e3ea]/15 text-[#e3e3ea] border-[#e3e3ea]/25",
-  conciliado: "bg-[#cdfa46]/15 text-[#cfcfd8] border-[#cdfa46]/25",
-  duplicado: "bg-zinc-500/10 text-zinc-300 border-zinc-400/25",
+  pagado: "bg-[#9aa0aa]/12 text-[#9aa0aa] border-[#9aa0aa]/20",
+  pendiente: "bg-[#8a8a94]/12 text-[#8a8a94] border-[#8a8a94]/20",
+  vencido: "bg-[#e3e3ea]/12 text-[#e3e3ea] border-[#e3e3ea]/25",
+  conciliado: "bg-[#c8c8d2]/12 text-[#c8c8d2] border-[#c8c8d2]/20",
+  duplicado: "bg-[#8a8a94]/10 text-[#8a8a94] border-[#8a8a94]/20",
 };
 
 const LABELS: Record<MovementStatus, string> = {
