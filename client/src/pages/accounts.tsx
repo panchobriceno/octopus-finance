@@ -371,7 +371,7 @@ export default function AccountsPage() {
                           difference > 0
                             ? "text-lime-600 dark:text-lime-400"
                             : difference < 0
-                            ? "text-red-600 dark:text-red-400"
+                            ? "text-[#e3e3ea]"
                             : "text-muted-foreground"
                         }`}
                       >
@@ -472,7 +472,7 @@ export default function AccountsPage() {
                         totals.difference > 0
                           ? "text-lime-600 dark:text-lime-400"
                           : totals.difference < 0
-                          ? "text-red-600 dark:text-red-400"
+                          ? "text-[#e3e3ea]"
                           : "text-muted-foreground"
                       }`}
                     >

@@ -129,7 +129,7 @@ function getDeltaTone(row: MonthlyCloseSummaryRow): "auto" | "positive" | "negat
 
 function getChecklistTone(status: ChecklistStatus) {
   if (status === "ready") return "text-lime-700 dark:text-lime-300";
-  if (status === "blocked") return "text-red-700 dark:text-red-300";
+  if (status === "blocked") return "text-[#e3e3ea]";
   return "text-zinc-700 dark:text-zinc-300";
 }
 
@@ -652,7 +652,7 @@ export default function MonthlyClosePage() {
                   disabled={isClosed}
                 />
                 {!isClosed && checklistBlockedCount > 0 ? (
-                  <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                  <p className="text-xs text-[#e3e3ea] mt-2">
                     El cierre se puede congelar cuando no haya movimientos sin categoría útil.
                   </p>
                 ) : null}
@@ -678,7 +678,7 @@ export default function MonthlyClosePage() {
         <Card>
           <CardContent className="pt-5">
             <p className="text-sm text-muted-foreground">Remanente empresa real</p>
-            <p className={cn("text-xl font-semibold tabular-nums mt-1", (displaySummary.businessRemainderActual ?? 0) >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400")}>
+            <p className={cn("text-xl font-semibold tabular-nums mt-1", (displaySummary.businessRemainderActual ?? 0) >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]")}>
               {formatCLP(displaySummary.businessRemainderActual ?? 0)}
             </p>
           </CardContent>
@@ -686,7 +686,7 @@ export default function MonthlyClosePage() {
         <Card>
           <CardContent className="pt-5">
             <p className="text-sm text-muted-foreground">Saldo familiar real</p>
-            <p className={cn("text-xl font-semibold tabular-nums mt-1", (displaySummary.familyBalanceActual ?? 0) >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400")}>
+            <p className={cn("text-xl font-semibold tabular-nums mt-1", (displaySummary.familyBalanceActual ?? 0) >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]")}>
               {formatCLP(displaySummary.familyBalanceActual ?? 0)}
             </p>
           </CardContent>

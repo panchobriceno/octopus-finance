@@ -1058,7 +1058,7 @@ export default function BudgetPage() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Diferencia</p>
-                <p className={`text-xl font-semibold tabular-nums mt-1 ${totalDiff >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"}`}>
+                <p className={`text-xl font-semibold tabular-nums mt-1 ${totalDiff >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"}`}>
                   {formatCLP(totalDiff)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">{selectedWorkspace === "business" ? "Empresa" : "Familia"}</p>
@@ -1096,7 +1096,7 @@ export default function BudgetPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Remanente empresa</p>
-              <p className={`text-lg font-semibold tabular-nums mt-1 ${businessRemainder >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"}`}>
+              <p className={`text-lg font-semibold tabular-nums mt-1 ${businessRemainder >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"}`}>
                 {formatCLP(businessRemainder)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">Ingreso cobrado menos presupuesto empresa</p>
@@ -1132,7 +1132,7 @@ export default function BudgetPage() {
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
               <p className="text-sm text-muted-foreground">Saldo familiar vs presupuesto</p>
-              <p className={`text-lg font-semibold tabular-nums mt-1 ${familyBalanceAfterBudget >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"}`}>
+              <p className={`text-lg font-semibold tabular-nums mt-1 ${familyBalanceAfterBudget >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"}`}>
                 {formatCLP(familyBalanceAfterBudget)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">Ingreso agencia + ingreso Javi - presupuesto familia del mes</p>
@@ -1324,7 +1324,7 @@ export default function BudgetPage() {
                               </TableCell>
                               <TableCell
                                 className={`text-right tabular-nums text-sm font-medium ${
-                                  diff >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"
+                                  diff >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"
                                 }`}
                               >
                                 {budget > 0 || executionReference > 0 ? formatCLP(diff) : <span className="text-muted-foreground">—</span>}
@@ -1362,7 +1362,7 @@ export default function BudgetPage() {
                           <TableCell className="pl-5 text-sm">Total</TableCell>
                           <TableCell className="tabular-nums text-sm">{formatCLP(totalBudget)}</TableCell>
                           <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalReferenceAmount)}</TableCell>
-                          <TableCell className={`text-right tabular-nums text-sm ${totalDiff >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"}`}>
+                          <TableCell className={`text-right tabular-nums text-sm ${totalDiff >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"}`}>
                             {formatCLP(totalDiff)}
                           </TableCell>
                           <TableCell />
@@ -1415,7 +1415,7 @@ export default function BudgetPage() {
                           <TableCell className="text-right tabular-nums text-sm">{formatCLP(budget)}</TableCell>
                           <TableCell className="text-right tabular-nums text-sm">{formatCLP(committed)}</TableCell>
                           <TableCell className="text-right tabular-nums text-sm">{formatCLP(actual)}</TableCell>
-                          <TableCell className={`text-right tabular-nums text-sm font-medium ${diff >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"}`}>
+                          <TableCell className={`text-right tabular-nums text-sm font-medium ${diff >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"}`}>
                             {budget > 0 || executionReference > 0 ? formatCLP(diff) : <span className="text-muted-foreground">—</span>}
                           </TableCell>
                           <TableCell className="text-right pr-5">
@@ -1444,7 +1444,7 @@ export default function BudgetPage() {
                         <TableCell className="text-right tabular-nums text-sm">$0</TableCell>
                         <TableCell className="text-right tabular-nums text-sm">{formatCLP(committedByGroup["Sin Agrupadora"] ?? 0)}</TableCell>
                         <TableCell className="text-right tabular-nums text-sm">{formatCLP(actualByGroup["Sin Agrupadora"] ?? 0)}</TableCell>
-                        <TableCell className="text-right tabular-nums text-sm font-medium text-red-600 dark:text-red-400">
+                        <TableCell className="text-right tabular-nums text-sm font-medium text-[#e3e3ea]">
                           {formatCLP(
                             -getExecutionReferenceAmount(
                               actualByGroup["Sin Agrupadora"] ?? 0,
@@ -1462,7 +1462,7 @@ export default function BudgetPage() {
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalBudget)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalCommitted)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalActual)}</TableCell>
-                      <TableCell className={`text-right tabular-nums text-sm ${totalDiff >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"}`}>
+                      <TableCell className={`text-right tabular-nums text-sm ${totalDiff >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"}`}>
                         {formatCLP(totalDiff)}
                       </TableCell>
                       <TableCell className="text-right pr-5">
@@ -1634,7 +1634,7 @@ export default function BudgetPage() {
                             {tx.subtype === "planned" ? "Comprometido" : "Ejecutado"}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right tabular-nums text-sm font-medium text-red-600 dark:text-red-400 pr-5">
+                        <TableCell className="text-right tabular-nums text-sm font-medium text-[#e3e3ea] pr-5">
                           {formatCLP(tx.amount)}
                         </TableCell>
                       </TableRow>

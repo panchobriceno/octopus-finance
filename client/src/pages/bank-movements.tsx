@@ -112,7 +112,7 @@ function statusTone(status: string) {
 function confidenceTone(value: number) {
   if (value >= 85) return "text-lime-700 dark:text-lime-300";
   if (value >= 70) return "text-zinc-700 dark:text-zinc-300";
-  return "text-red-700 dark:text-red-300";
+  return "text-[#e3e3ea]";
 }
 
 function confidenceBorder(value: number) {

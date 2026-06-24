@@ -736,7 +736,7 @@ export default function DataHealthPage() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Alta prioridad</p>
-                  <p className={`mt-1 text-2xl font-semibold tabular-nums ${highPriorityCount > 0 ? "text-red-600 dark:text-red-300" : "text-lime-600 dark:text-lime-300"}`}>
+                  <p className={`mt-1 text-2xl font-semibold tabular-nums ${highPriorityCount > 0 ? "text-[#e3e3ea]" : "text-lime-600 dark:text-lime-300"}`}>
                     {highPriorityCount}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">Críticos y altos</p>

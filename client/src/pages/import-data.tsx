@@ -1368,7 +1368,7 @@ export default function ImportDataPage({
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className={`text-right tabular-nums text-sm font-medium ${transaction.type === "income" ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"}`}>
+                      <TableCell className={`text-right tabular-nums text-sm font-medium ${transaction.type === "income" ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"}`}>
                         {transaction.type === "income" ? "+" : "-"}
                         {formatCLP(transaction.amount)}
                       </TableCell>
@@ -1484,7 +1484,7 @@ export default function ImportDataPage({
                                 : "Cuenta origen: sin vínculo por defecto"}
                             </p>
                           ) : null}
-                          {row.error && <p className="text-xs text-red-600 dark:text-red-400">{row.error}</p>}
+                          {row.error && <p className="text-xs text-[#e3e3ea]">{row.error}</p>}
                           {row.ccMovementType === "tc_payment" && row.duplicate && !row.error ? (
                             <p className="text-xs text-zinc-600 dark:text-zinc-400">
                               Pago TC ya registrado — se enviará como duplicado para revisar
@@ -1614,7 +1614,7 @@ export default function ImportDataPage({
                       </TableCell>
                       <TableCell
                         className={`text-right tabular-nums text-sm font-medium ${
-                          row.type === "income" ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"
+                          row.type === "income" ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"
                         }`}
                       >
                         {row.type === "income" ? "+" : "-"}

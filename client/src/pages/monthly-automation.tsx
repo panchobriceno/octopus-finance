@@ -467,7 +467,7 @@ export default function MonthlyAutomationPage() {
           <Card>
             <CardContent className="pt-5">
               <p className="text-sm text-muted-foreground">Vencidos</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums text-red-600 dark:text-red-300">{dashboard.overdue}</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums text-[#e3e3ea]">{dashboard.overdue}</p>
             </CardContent>
           </Card>
           <Card>

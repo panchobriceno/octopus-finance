@@ -469,7 +469,7 @@ export default function ReconciliationPage() {
                                   <span className="text-sm text-muted-foreground">Sin candidato</span>
                                 )}
                               </TableCell>
-                              <TableCell className={row.importedImpact >= 0 ? "text-right tabular-nums text-lime-700 dark:text-lime-300" : "text-right tabular-nums text-red-700 dark:text-red-300"}>
+                              <TableCell className={row.importedImpact >= 0 ? "text-right tabular-nums text-lime-700 dark:text-lime-300" : "text-right tabular-nums text-[#e3e3ea]"}>
                                 {formatCLP(row.importedImpact)}
                               </TableCell>
                               <TableCell>

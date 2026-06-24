@@ -453,7 +453,7 @@ export default function CashFlowPage() {
               </div>
               <div className="rounded-lg bg-red-50/60 p-3 dark:bg-red-950/20">
                 <p className="text-muted-foreground">Gastos reales</p>
-                <p className="font-semibold tabular-nums text-red-600 dark:text-red-400">
+                <p className="font-semibold tabular-nums text-[#e3e3ea]">
                   {formatCLP(selectedSummary.realExpenses)}
                 </p>
               </div>
@@ -593,14 +593,14 @@ export default function CashFlowPage() {
                   ))}
                 </TableRow>
                 <TableRow className="bg-red-50/40 dark:bg-red-950/10">
-                  <TableCell className="pl-5 font-medium text-sm text-red-700 dark:text-red-300">
+                  <TableCell className="pl-5 font-medium text-sm text-[#e3e3ea]">
                     Gastos presupuestados
                   </TableCell>
                   {weeklyBreakdown.map((week, index) => (
                     <TableCell key={`planned-${weeklyColumns[index]?.key}`} className="text-right">
                       <Button
                         variant="ghost"
-                        className="h-auto p-0 text-right font-medium tabular-nums text-red-700 dark:text-red-300"
+                        className="h-auto p-0 text-right font-medium tabular-nums text-[#e3e3ea]"
                         onClick={() => openWeeklyDetail("plannedExpenses", index, weeklyColumns[index].label, "Gastos presupuestados")}
                       >
                         {formatCLP(week.plannedExpenses)}
@@ -609,14 +609,14 @@ export default function CashFlowPage() {
                   ))}
                 </TableRow>
                 <TableRow className="bg-red-50/40 dark:bg-red-950/10">
-                  <TableCell className="pl-5 font-medium text-sm text-red-700 dark:text-red-300">
+                  <TableCell className="pl-5 font-medium text-sm text-[#e3e3ea]">
                     Pagos tarjeta de crédito
                   </TableCell>
                   {weeklyBreakdown.map((week, index) => (
                     <TableCell key={`cards-${weeklyColumns[index]?.key}`} className="text-right">
                       <Button
                         variant="ghost"
-                        className="h-auto p-0 text-right font-medium tabular-nums text-red-700 dark:text-red-300"
+                        className="h-auto p-0 text-right font-medium tabular-nums text-[#e3e3ea]"
                         onClick={() => openWeeklyDetail("pendingCreditCard", index, weeklyColumns[index].label, "Pagos tarjeta de crédito")}
                       >
                         {formatCLP(week.pendingCreditCard)}
@@ -630,7 +630,7 @@ export default function CashFlowPage() {
                     const isNegative = week.endingBalance < 0;
                     const isLowWarning = !isNegative && week.openingBalance > 0 && week.endingBalance < week.openingBalance * 0.2;
                     const cellClass = isNegative
-                      ? "text-red-700 dark:text-red-300"
+                      ? "text-[#e3e3ea]"
                       : isLowWarning
                       ? "text-zinc-700 dark:text-zinc-300"
                       : "text-slate-700 dark:text-slate-300";
@@ -751,7 +751,7 @@ export default function CashFlowPage() {
                     <TableCell className="text-right tabular-nums text-sm text-lime-600 dark:text-lime-400">
                       {formatCLP(summary.realIncome)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-red-600 dark:text-red-400">
+                    <TableCell className="text-right tabular-nums text-sm text-[#e3e3ea]">
                       {formatCLP(summary.realExpenses)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm font-semibold text-slate-700 dark:text-slate-300">
@@ -798,7 +798,7 @@ export default function CashFlowPage() {
                     <TableCell className="text-sm">{item.date ?? "—"}</TableCell>
                     <TableCell className="text-sm font-medium">{item.label}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{item.meta ?? "—"}</TableCell>
-                    <TableCell className={`text-right text-sm tabular-nums ${item.amount < 0 ? "text-red-700 dark:text-red-300" : ""}`}>
+                    <TableCell className={`text-right text-sm tabular-nums ${item.amount < 0 ? "text-[#e3e3ea]" : ""}`}>
                       {formatCLP(item.amount)}
                     </TableCell>
                   </TableRow>

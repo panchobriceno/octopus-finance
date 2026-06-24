@@ -33,7 +33,7 @@ function PnlCell({ value }: { value: CellTotals }) {
       </div>
       <div
         className={`tabular-nums text-xs font-medium ${
-          variance >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"
+          variance >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"
         }`}
       >
         Var. {formatCLP(variance)}
@@ -217,7 +217,7 @@ export default function PnLPage() {
               <TrendingDown className="size-4 text-red-500" />
               <p className="text-sm text-muted-foreground">Total Gastos Reales</p>
             </div>
-            <p className="text-xl font-semibold tabular-nums text-red-600 dark:text-red-400">
+            <p className="text-xl font-semibold tabular-nums text-[#e3e3ea]">
               {formatCLP(model.grandExpense.real)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
@@ -233,7 +233,7 @@ export default function PnLPage() {
             </div>
             <p
               className={`text-xl font-semibold tabular-nums ${
-                model.grandNet.real >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"
+                model.grandNet.real >= 0 ? "text-lime-600 dark:text-lime-400" : "text-[#e3e3ea]"
               }`}
             >
               {formatCLP(model.grandNet.real)}
@@ -333,7 +333,7 @@ export default function PnLPage() {
                 </TableRow>
 
                 <TableRow className="bg-red-50/50 dark:bg-red-950/20">
-                  <TableCell className="pl-5 font-semibold text-sm text-red-700 dark:text-red-400">
+                  <TableCell className="pl-5 font-semibold text-sm text-[#e3e3ea]">
                     Gastos
                   </TableCell>
                   {model.monthKeys.map((monthKey) => (
