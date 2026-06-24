@@ -96,22 +96,22 @@ const BATCH_STATUS_LABELS: Record<string, string> = {
 };
 
 function batchStatusTone(status: string) {
-  if (status === "closed") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
-  if (status === "completed") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
-  if (status === "partially_converted") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
+  if (status === "closed") return "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300";
+  if (status === "completed") return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
+  if (status === "partially_converted") return "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300";
   return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
 }
 
 function statusTone(status: string) {
-  if (status === "converted" || status === "reconciled") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
-  if (status === "duplicate") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
+  if (status === "converted" || status === "reconciled") return "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300";
+  if (status === "duplicate") return "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300";
   if (status === "discarded") return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
-  return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
+  return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
 }
 
 function confidenceTone(value: number) {
-  if (value >= 85) return "text-emerald-700 dark:text-emerald-300";
-  if (value >= 70) return "text-amber-700 dark:text-amber-300";
+  if (value >= 85) return "text-lime-700 dark:text-lime-300";
+  if (value >= 70) return "text-zinc-700 dark:text-zinc-300";
   return "text-red-700 dark:text-red-300";
 }
 
@@ -664,7 +664,7 @@ export default function BankMovementsPage({
               <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 px-6 text-center">
                 {isSelectedBatchComplete ? (
                   <>
-                    <CheckCircle2 className="size-10 text-emerald-500" />
+                    <CheckCircle2 className="size-10 text-lime-500" />
                     <div>
                       <div className="font-medium">Lote procesado</div>
                       <p className="mt-1 max-w-md text-sm text-muted-foreground">
@@ -741,7 +741,7 @@ export default function BankMovementsPage({
                         <TableRow
                           key={movement.id}
                           className={`${canReview ? confidenceBorder(Number(movement.confidence) || 0) : "border-l-4 border-l-transparent"} ${
-                            movement.status === "duplicate" ? "bg-amber-50/50 dark:bg-amber-950/10" : ""
+                            movement.status === "duplicate" ? "bg-zinc-50/50 dark:bg-zinc-950/10" : ""
                           }`}
                         >
                           <TableCell className="align-top">
@@ -759,7 +759,7 @@ export default function BankMovementsPage({
                             </div>
                           </TableCell>
                           <TableCell className="align-top">
-                            <div className={movement.direction === "income" ? "font-semibold text-emerald-700 dark:text-emerald-300" : "font-semibold"}>
+                            <div className={movement.direction === "income" ? "font-semibold text-lime-700 dark:text-lime-300" : "font-semibold"}>
                               {movement.direction === "income" ? "+" : "-"}{formatCLP(movement.amount)}
                             </div>
                             <div className="mt-1 text-xs text-muted-foreground">{movement.currency}</div>
@@ -892,19 +892,19 @@ export default function BankMovementsPage({
           }
         />
         <FinanceDialogBody className="space-y-4">
-          <div className="rounded-xl border border-[#f59e0b]/20 bg-[#f59e0b]/10 px-4 py-3 text-sm text-[#ffd89a]">
+          <div className="rounded-xl border border-[#8a8a94]/20 bg-[#8a8a94]/10 px-4 py-3 text-sm text-[#ffd89a]">
             Los {dashboard.converted} convertidos y {dashboard.reconciled} conciliados permanecerán como movimientos resueltos.
           </div>
         </FinanceDialogBody>
         <FinanceDialogFooter>
           <AlertDialogCancel
-            className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]"
+            className="border-white/10 bg-[#15151c] text-[#f4f4f7] hover:bg-[#22222b]"
             disabled={rollbackBatchMutation.isPending}
           >
             Cancelar
           </AlertDialogCancel>
           <AlertDialogAction
-            className="bg-[#f59e0b] text-[#0f0c1c] hover:bg-[#fbbf24]"
+            className="bg-[#8a8a94] text-[#0a0a0f] hover:bg-[#fbbf24]"
             onClick={(event) => {
               event.preventDefault();
               void handleRollbackBatch();
@@ -931,29 +931,29 @@ export default function BankMovementsPage({
         />
         <FinanceDialogBody>
           <div className="grid gap-2 sm:grid-cols-3">
-            <div className="rounded-xl border border-white/7 bg-[#171225] px-4 py-3">
-              <p className="text-xs text-[#aea8be]">Convertidos</p>
-              <p className="mt-1 text-xl font-bold tabular-nums text-[#9ef0cf]">{dashboard.converted}</p>
+            <div className="rounded-xl border border-white/7 bg-[#15151c] px-4 py-3">
+              <p className="text-xs text-[#9a9aa6]">Convertidos</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-[#cdfa46]">{dashboard.converted}</p>
             </div>
-            <div className="rounded-xl border border-white/7 bg-[#171225] px-4 py-3">
-              <p className="text-xs text-[#aea8be]">Conciliados</p>
-              <p className="mt-1 text-xl font-bold tabular-nums text-[#bb9eff]">{dashboard.reconciled}</p>
+            <div className="rounded-xl border border-white/7 bg-[#15151c] px-4 py-3">
+              <p className="text-xs text-[#9a9aa6]">Conciliados</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-[#cdfa46]">{dashboard.reconciled}</p>
             </div>
-            <div className="rounded-xl border border-white/7 bg-[#171225] px-4 py-3">
-              <p className="text-xs text-[#aea8be]">Omitidos</p>
-              <p className="mt-1 text-xl font-bold tabular-nums text-[#f59e0b]">{dashboard.discarded}</p>
+            <div className="rounded-xl border border-white/7 bg-[#15151c] px-4 py-3">
+              <p className="text-xs text-[#9a9aa6]">Omitidos</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-[#8a8a94]">{dashboard.discarded}</p>
             </div>
           </div>
         </FinanceDialogBody>
         <FinanceDialogFooter>
           <AlertDialogCancel
-            className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]"
+            className="border-white/10 bg-[#15151c] text-[#f4f4f7] hover:bg-[#22222b]"
             disabled={closeBatchMutation.isPending}
           >
             Cancelar
           </AlertDialogCancel>
           <AlertDialogAction
-            className="bg-[#bb9eff] text-[#0f0c1c] hover:bg-[#a48bf6]"
+            className="bg-[#cdfa46] text-[#0a0a0f] hover:bg-[#cdfa46]"
             onClick={(event) => {
               event.preventDefault();
               void handleCloseBatch();
@@ -980,7 +980,7 @@ export default function BankMovementsPage({
             <div className="divide-y divide-border/40 rounded-xl border border-border/60 bg-card/60">
               <div className="flex items-center justify-between px-4 py-3">
                 <span className="text-sm">Movimientos a crear</span>
-                <span className="font-mono text-lg font-semibold tabular-nums text-[#bcf8df]">{bulkPreflight.ready}</span>
+                <span className="font-mono text-lg font-semibold tabular-nums text-[#cdfa46]">{bulkPreflight.ready}</span>
               </div>
               <div className="flex items-center justify-between px-4 py-3">
                 <span className="text-sm text-muted-foreground">Duplicados a descartar</span>
@@ -988,12 +988,12 @@ export default function BankMovementsPage({
               </div>
               <div className="flex items-center justify-between px-4 py-3">
                 <span className="text-sm text-muted-foreground">Pendientes de revisar después</span>
-                <span className="font-mono text-lg font-semibold tabular-nums text-amber-300">{bulkPreflight.reviewRequired.length}</span>
+                <span className="font-mono text-lg font-semibold tabular-nums text-zinc-300">{bulkPreflight.reviewRequired.length}</span>
               </div>
               {bulkPreflight.blocked.length > 0 ? (
                 <div className="flex items-center justify-between px-4 py-3">
                   <span className="text-sm text-muted-foreground">Bloqueados</span>
-                  <span className="font-mono text-lg font-semibold tabular-nums text-[#ff8da3]">{bulkPreflight.blocked.length}</span>
+                  <span className="font-mono text-lg font-semibold tabular-nums text-[#e3e3ea]">{bulkPreflight.blocked.length}</span>
                 </div>
               ) : null}
             </div>
@@ -1015,7 +1015,7 @@ export default function BankMovementsPage({
                 ) : null}
               </div>
             ) : (
-              <div className="rounded-xl border border-[#9ef0cf]/20 bg-[#9ef0cf]/10 p-3 text-sm text-[#9ef0cf]">
+              <div className="rounded-xl border border-[#cdfa46]/20 bg-[#cdfa46]/10 p-3 text-sm text-[#cdfa46]">
                 No hay duplicados ni bloqueos detectados para este lote.
               </div>
             )}
@@ -1026,13 +1026,13 @@ export default function BankMovementsPage({
         ) : null}
         <FinanceDialogFooter>
           <AlertDialogCancel
-            className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]"
+            className="border-white/10 bg-[#15151c] text-[#f4f4f7] hover:bg-[#22222b]"
             disabled={bulkConvertMutation.isPending}
           >
             Atrás
           </AlertDialogCancel>
           <AlertDialogAction
-            className="bg-[#bb9eff] text-[#0f0c1c] hover:bg-[#a48bf6]"
+            className="bg-[#cdfa46] text-[#0a0a0f] hover:bg-[#cdfa46]"
             onClick={(event) => {
               event.preventDefault();
               void handleConfirmBulkConvert();

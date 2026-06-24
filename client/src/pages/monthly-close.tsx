@@ -128,9 +128,9 @@ function getDeltaTone(row: MonthlyCloseSummaryRow): "auto" | "positive" | "negat
 }
 
 function getChecklistTone(status: ChecklistStatus) {
-  if (status === "ready") return "text-emerald-700 dark:text-emerald-300";
+  if (status === "ready") return "text-lime-700 dark:text-lime-300";
   if (status === "blocked") return "text-red-700 dark:text-red-300";
-  return "text-amber-700 dark:text-amber-300";
+  return "text-zinc-700 dark:text-zinc-300";
 }
 
 // Cada ítem del checklist enlaza a la pantalla donde se resuelve (rutas existentes).
@@ -518,7 +518,7 @@ export default function MonthlyClosePage() {
         </div>
         <Badge
           variant={isClosed ? "default" : "outline"}
-          className={cn("w-fit", isClosed ? "bg-emerald-600 text-white hover:bg-emerald-600" : "border-amber-300 text-amber-700 dark:text-amber-300")}
+          className={cn("w-fit", isClosed ? "bg-lime-600 text-white hover:bg-lime-600" : "border-zinc-300 text-zinc-700 dark:text-zinc-300")}
         >
           {isClosed ? "Cerrado" : selectedCloseSnapshot?.status === "reopened" ? "Reabierto" : "Abierto"}
         </Badge>
@@ -605,9 +605,9 @@ export default function MonthlyClosePage() {
                     <div key={item.id} className="rounded-lg border bg-background p-3">
                       <div className="flex items-start gap-2">
                         {item.status === "ready" ? (
-                          <CheckCircle2 className="size-4 mt-0.5 text-emerald-600" />
+                          <CheckCircle2 className="size-4 mt-0.5 text-lime-600" />
                         ) : (
-                          <AlertTriangle className={cn("size-4 mt-0.5", item.status === "blocked" ? "text-red-600" : "text-amber-600")} />
+                          <AlertTriangle className={cn("size-4 mt-0.5", item.status === "blocked" ? "text-red-600" : "text-zinc-600")} />
                         )}
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
@@ -620,7 +620,7 @@ export default function MonthlyClosePage() {
                           {!isClosed && item.status !== "ready" && CHECKLIST_RESOLVE_ROUTE[item.id] ? (
                             <Link
                               href={CHECKLIST_RESOLVE_ROUTE[item.id]}
-                              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#bb9eff] hover:underline"
+                              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#cdfa46] hover:underline"
                               data-testid={`checklist-resolve-${item.id}`}
                             >
                               Resolver
@@ -636,7 +636,7 @@ export default function MonthlyClosePage() {
 
               <div className="rounded-lg border bg-background p-4">
                 <div className="flex items-center gap-2">
-                  <LockKeyhole className={cn("size-4", isClosed ? "text-emerald-600" : "text-muted-foreground")} />
+                  <LockKeyhole className={cn("size-4", isClosed ? "text-lime-600" : "text-muted-foreground")} />
                   <h3 className="text-sm font-semibold">{isClosed ? "Snapshot congelado" : "Notas para congelar"}</h3>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
@@ -672,13 +672,13 @@ export default function MonthlyClosePage() {
         <Card>
           <CardContent className="pt-5">
             <p className="text-sm text-muted-foreground">IVA del mes</p>
-            <p className="text-xl font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">{formatCLP(displaySummary.businessPaidVat ?? 0)}</p>
+            <p className="text-xl font-semibold tabular-nums mt-1 text-zinc-700 dark:text-zinc-300">{formatCLP(displaySummary.businessPaidVat ?? 0)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-5">
             <p className="text-sm text-muted-foreground">Remanente empresa real</p>
-            <p className={cn("text-xl font-semibold tabular-nums mt-1", (displaySummary.businessRemainderActual ?? 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
+            <p className={cn("text-xl font-semibold tabular-nums mt-1", (displaySummary.businessRemainderActual ?? 0) >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400")}>
               {formatCLP(displaySummary.businessRemainderActual ?? 0)}
             </p>
           </CardContent>
@@ -686,7 +686,7 @@ export default function MonthlyClosePage() {
         <Card>
           <CardContent className="pt-5">
             <p className="text-sm text-muted-foreground">Saldo familiar real</p>
-            <p className={cn("text-xl font-semibold tabular-nums mt-1", (displaySummary.familyBalanceActual ?? 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
+            <p className={cn("text-xl font-semibold tabular-nums mt-1", (displaySummary.familyBalanceActual ?? 0) >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400")}>
               {formatCLP(displaySummary.familyBalanceActual ?? 0)}
             </p>
           </CardContent>

@@ -708,7 +708,7 @@ export default function CreditCardsPanelPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
               <div className="rounded-lg border bg-background p-4">
                 <p className="text-sm text-muted-foreground">Saldo TC calculado</p>
-                <p className={cn("text-2xl font-semibold tabular-nums mt-1", totals.debt >= 0 ? "text-amber-700 dark:text-amber-300" : "text-emerald-600 dark:text-emerald-400")}>
+                <p className={cn("text-2xl font-semibold tabular-nums mt-1", totals.debt >= 0 ? "text-zinc-700 dark:text-zinc-300" : "text-lime-600 dark:text-lime-400")}>
                   {formatCLP(totals.debt)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">Histórico registrado menos pagos cargados.</p>
@@ -725,7 +725,7 @@ export default function CreditCardsPanelPage() {
               </div>
               <div className="rounded-lg border bg-background p-4">
                 <p className="text-sm text-muted-foreground">Balance del mes</p>
-                <p className={cn("text-2xl font-semibold tabular-nums mt-1", monthlyNet > 0 ? "text-amber-700 dark:text-amber-300" : "text-emerald-600 dark:text-emerald-400")}>
+                <p className={cn("text-2xl font-semibold tabular-nums mt-1", monthlyNet > 0 ? "text-zinc-700 dark:text-zinc-300" : "text-lime-600 dark:text-lime-400")}>
                   {formatCLP(monthlyNet)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">Compras menos pagos del periodo.</p>
@@ -768,7 +768,7 @@ export default function CreditCardsPanelPage() {
                                 Cuenta OK
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="shrink-0 border-amber-300 text-amber-700 dark:text-amber-300">
+                              <Badge variant="outline" className="shrink-0 border-zinc-300 text-zinc-700 dark:text-zinc-300">
                                 Sin cuenta
                               </Badge>
                             )}
@@ -789,9 +789,9 @@ export default function CreditCardsPanelPage() {
               <div className="rounded-lg border bg-background p-4">
                 <div className="flex items-center gap-2">
                   {hasPaymentAccountAlert ? (
-                    <AlertTriangle className="size-4 text-amber-600" />
+                    <AlertTriangle className="size-4 text-zinc-600" />
                   ) : (
-                    <CheckCircle2 className="size-4 text-emerald-600" />
+                    <CheckCircle2 className="size-4 text-lime-600" />
                   )}
                   <h4 className="text-sm font-semibold">Estado operativo</h4>
                 </div>
@@ -824,11 +824,11 @@ export default function CreditCardsPanelPage() {
                     </p>
                   </div>
                   {totals.debt > 0 ? (
-                    <div className="rounded-md bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                    <div className="rounded-md bg-zinc-50 p-3 text-zinc-900 dark:bg-zinc-950/40 dark:text-zinc-200">
                       Hay saldo de tarjeta abierto. Revisa pagos cargados antes de cerrar el mes.
                     </div>
                   ) : (
-                    <div className="rounded-md bg-emerald-50 p-3 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                    <div className="rounded-md bg-lime-50 p-3 text-lime-900 dark:bg-lime-950/40 dark:text-lime-200">
                       No hay saldo abierto en el filtro actual.
                     </div>
                   )}

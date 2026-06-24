@@ -715,7 +715,7 @@ export default function ClientPaymentsPage() {
         <Card>
           <CardContent className="pt-5">
             <p className="text-sm text-muted-foreground">Pagado</p>
-            <p className="text-xl font-semibold tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">
+            <p className="text-xl font-semibold tabular-nums mt-1 text-lime-600 dark:text-lime-400">
               {formatCLP(summary.paid)}
             </p>
           </CardContent>
@@ -731,7 +731,7 @@ export default function ClientPaymentsPage() {
         <Card>
           <CardContent className="pt-5">
             <p className="text-sm text-muted-foreground">Por cobrar</p>
-            <p className="text-xl font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">
+            <p className="text-xl font-semibold tabular-nums mt-1 text-zinc-700 dark:text-zinc-300">
               {formatCLP(summary.receivable)}
             </p>
           </CardContent>
@@ -739,7 +739,7 @@ export default function ClientPaymentsPage() {
         <Card>
           <CardContent className="pt-5">
             <p className="text-sm text-muted-foreground">Proyectado</p>
-            <p className="text-xl font-semibold tabular-nums mt-1 text-blue-700 dark:text-blue-300">
+            <p className="text-xl font-semibold tabular-nums mt-1 text-slate-700 dark:text-slate-300">
               {formatCLP(summary.projected)}
             </p>
           </CardContent>
@@ -1152,7 +1152,7 @@ export default function ClientPaymentsPage() {
                                 onClick={handleSaveEdit}
                                 disabled={updateMutation.isPending}
                               >
-                                <Check className="size-3.5 text-emerald-500" />
+                                <Check className="size-3.5 text-lime-500" />
                               </Button>
                               <Button
                                 variant="ghost"

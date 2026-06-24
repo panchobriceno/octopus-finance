@@ -55,7 +55,7 @@ export function BudgetBar({
       <div
         className={cn(
           "h-full rounded-full transition-[width] duration-300",
-          over ? "bg-[#ff6f8d]" : "bg-[#bb9eff]",
+          over ? "bg-[#e3e3ea]" : "bg-[#cdfa46]",
         )}
         style={{ width: hasBudget ? `${over ? 100 : fillPct}%` : "100%" }}
       />

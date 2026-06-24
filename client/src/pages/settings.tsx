@@ -23,9 +23,9 @@ const STORAGE_KEY = "octopus_app_logo";
 
 function StateBadge({ children, tone }: { children: string; tone: "good" | "warn" | "muted" }) {
   const toneClasses = {
-    good: "border-emerald-500/20 bg-emerald-500/10 text-emerald-200",
-    warn: "border-amber-500/20 bg-amber-500/10 text-amber-200",
-    muted: "border-[#bb9eff]/10 bg-[#bb9eff]/10 text-[#ece5fc]",
+    good: "border-lime-500/20 bg-lime-500/10 text-lime-200",
+    warn: "border-zinc-500/20 bg-zinc-500/10 text-zinc-200",
+    muted: "border-[#cdfa46]/10 bg-[#cdfa46]/10 text-[#f4f4f7]",
   }[tone];
 
   return (
@@ -63,7 +63,7 @@ function QuickLink({
       <Button
         variant="outline"
         onClick={onClick}
-        className="h-auto justify-start rounded-2xl border-[#bb9eff]/10 bg-background/40 px-4 py-4 text-left"
+        className="h-auto justify-start rounded-2xl border-[#cdfa46]/10 bg-background/40 px-4 py-4 text-left"
       >
         {content}
       </Button>
@@ -71,7 +71,7 @@ function QuickLink({
   }
 
   return (
-    <Button asChild variant="outline" className="h-auto justify-start rounded-2xl border-[#bb9eff]/10 bg-background/40 px-4 py-4 text-left">
+    <Button asChild variant="outline" className="h-auto justify-start rounded-2xl border-[#cdfa46]/10 bg-background/40 px-4 py-4 text-left">
       <Link href={href ?? "/"}>{content}</Link>
     </Button>
   );
@@ -135,7 +135,7 @@ export default function SettingsPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-7xl space-y-6 p-6">
-        <div className="rounded-3xl border border-[#bb9eff]/10 bg-gradient-to-br from-[#151223] via-[#11101b] to-[#0f0c1c] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+        <div className="rounded-3xl border border-[#cdfa46]/10 bg-gradient-to-br from-[#151223] via-[#0d0d12] to-[#0a0a0f] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="space-y-2">
               <div className="flex items-center gap-3">
@@ -149,7 +149,7 @@ export default function SettingsPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline" className="rounded-full border-[#bb9eff]/15 bg-background/40">
+              <Button asChild variant="outline" className="rounded-full border-[#cdfa46]/15 bg-background/40">
                 <Link href="/">
                   <BadgeCheck className="mr-2 size-4" />
                   Ir al resumen
@@ -166,7 +166,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-3">
-          <Card className="border-[#bb9eff]/10 bg-card/90">
+          <Card className="border-[#cdfa46]/10 bg-card/90">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base font-semibold">
                 <ImagePlus className="size-4 text-primary" />
@@ -178,7 +178,7 @@ export default function SettingsPage() {
                 <img
                   src={logoSrc}
                   alt="Logo de Octopus"
-                  className="size-20 rounded-2xl border border-[#bb9eff]/15 object-cover shadow-lg"
+                  className="size-20 rounded-2xl border border-[#cdfa46]/15 object-cover shadow-lg"
                 />
                 <div className="space-y-2">
                   <StateBadge tone={logoDataUrl ? "good" : "warn"}>{logoDataUrl ? "Logo personalizado" : "Logo base"}</StateBadge>
@@ -206,7 +206,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-[#bb9eff]/10 bg-card/90">
+          <Card className="border-[#cdfa46]/10 bg-card/90">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base font-semibold">
                 <Workflow className="size-4 text-primary" />
@@ -215,21 +215,21 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#bb9eff]/10 bg-background/30 px-4 py-3">
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#cdfa46]/10 bg-background/30 px-4 py-3">
                   <div>
                     <p className="text-sm font-semibold">Branding</p>
                     <p className="text-xs text-muted-foreground">Logo visible en toda la app</p>
                   </div>
                   <StateBadge tone={logoDataUrl ? "good" : "warn"}>{logoDataUrl ? "Listo" : "Pendiente"}</StateBadge>
                 </div>
-                <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#bb9eff]/10 bg-background/30 px-4 py-3">
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#cdfa46]/10 bg-background/30 px-4 py-3">
                   <div>
                     <p className="text-sm font-semibold">Flujo principal</p>
                     <p className="text-xs text-muted-foreground">Edición directa dentro de la app</p>
                   </div>
                   <StateBadge tone="good">Activo</StateBadge>
                 </div>
-                <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#bb9eff]/10 bg-background/30 px-4 py-3">
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#cdfa46]/10 bg-background/30 px-4 py-3">
                   <div>
                     <p className="text-sm font-semibold">Automatizaciones externas</p>
                     <p className="text-xs text-muted-foreground">No son el camino principal para operar</p>
@@ -244,7 +244,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-[#bb9eff]/10 bg-card/90">
+          <Card className="border-[#cdfa46]/10 bg-card/90">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base font-semibold">
                 <Rocket className="size-4 text-primary" />
@@ -260,7 +260,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <Card className="border-[#bb9eff]/10 bg-card/90">
+          <Card className="border-[#cdfa46]/10 bg-card/90">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base font-semibold">
                 <ImagePlus className="size-4 text-primary" />
@@ -269,7 +269,7 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-4">
-                <div className="flex size-20 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-[#bb9eff]/20 bg-background/40">
+                <div className="flex size-20 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-[#cdfa46]/20 bg-background/40">
                   <img src={logoSrc} alt="Previsualización del logo" className="size-full object-cover" />
                 </div>
                 <div className="space-y-2">
@@ -299,7 +299,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-[#bb9eff]/10 bg-card/90">
+          <Card className="border-[#cdfa46]/10 bg-card/90">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base font-semibold">
                 <CreditCard className="size-4 text-primary" />
@@ -307,7 +307,7 @@ export default function SettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-[#bb9eff]/10 bg-background/30 p-4">
+              <div className="rounded-2xl border border-[#cdfa46]/10 bg-background/30 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-2xl font-black tracking-tight">{creditCards.length}</p>
@@ -333,12 +333,12 @@ export default function SettingsPage() {
 
               <div className="space-y-2">
                 {creditCards.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[#bb9eff]/15 p-4">
+                  <div className="rounded-2xl border border-dashed border-[#cdfa46]/15 p-4">
                     <p className="text-sm text-muted-foreground">Aún no hay tarjetas guardadas.</p>
                   </div>
                 ) : (
                   creditCards.map((card) => (
-                    <div key={card} className="flex items-center justify-between rounded-2xl border border-[#bb9eff]/10 bg-background/30 px-4 py-3">
+                    <div key={card} className="flex items-center justify-between rounded-2xl border border-[#cdfa46]/10 bg-background/30 px-4 py-3">
                       <span className="text-sm font-medium">{card}</span>
                       <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveCreditCard(card)}>
                         <Trash2 className="size-4 text-muted-foreground" />

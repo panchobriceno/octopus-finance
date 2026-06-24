@@ -64,9 +64,9 @@ export function ImportWizardDialog({
                   className={cn(
                     "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
                     active
-                      ? "bg-[#bb9eff] text-[#0f0c1c]"
+                      ? "bg-[#cdfa46] text-[#0a0a0f]"
                       : done
-                        ? "bg-[#bcf8df] text-[#0f0c1c]"
+                        ? "bg-[#cdfa46] text-[#0a0a0f]"
                         : "bg-muted text-muted-foreground",
                   )}
                 >

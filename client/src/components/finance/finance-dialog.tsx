@@ -33,8 +33,8 @@ export function FinanceDialogContent({
   return (
     <DialogContent
       className={cn(
-        "grid max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-2xl border-white/10 bg-[#11101b] p-0 text-[#f1e9fc] shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:max-h-[calc(100dvh-4rem)]",
-        "outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-[#bb9eff]/40",
+        "grid max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-2xl border-white/10 bg-[#0d0d12] p-0 text-[#f4f4f7] shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:max-h-[calc(100dvh-4rem)]",
+        "outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-[#cdfa46]/40",
         sizeClass[size],
         className,
       )}
@@ -59,16 +59,16 @@ export function FinanceDialogHeader({
     <DialogHeader className="border-b border-white/7 px-5 py-4 pr-12 text-left sm:px-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
-          <DialogTitle className="flex items-center gap-2 text-lg font-extrabold tracking-tight text-[#f1e9fc]">
+          <DialogTitle className="flex items-center gap-2 text-lg font-extrabold tracking-tight text-[#f4f4f7]">
             {icon ? (
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#bb9eff]/15 text-[#d8c7ff]">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#cdfa46]/15 text-[#d8c7ff]">
                 {icon}
               </span>
             ) : null}
             <span className="min-w-0 truncate">{title}</span>
           </DialogTitle>
           {description ? (
-            <DialogDescription className="mt-2 text-sm text-[#aea8be]">
+            <DialogDescription className="mt-2 text-sm text-[#9a9aa6]">
               {description}
             </DialogDescription>
           ) : null}
@@ -91,8 +91,8 @@ export function FinanceAlertDialogContent({
   return (
     <AlertDialogContent
       className={cn(
-        "max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border-white/10 bg-[#11101b] p-0 text-[#f1e9fc] shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:max-h-[calc(100dvh-4rem)]",
-        "outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-[#bb9eff]/40",
+        "max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border-white/10 bg-[#0d0d12] p-0 text-[#f4f4f7] shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:max-h-[calc(100dvh-4rem)]",
+        "outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-[#cdfa46]/40",
         sizeClass[size],
         className,
       )}
@@ -113,16 +113,16 @@ export function FinanceAlertDialogHeader({
 }) {
   return (
     <AlertDialogHeader className="border-b border-white/7 px-5 py-4 text-left sm:px-6">
-      <AlertDialogTitle className="flex items-center gap-2 text-lg font-extrabold tracking-tight text-[#f1e9fc]">
+      <AlertDialogTitle className="flex items-center gap-2 text-lg font-extrabold tracking-tight text-[#f4f4f7]">
         {icon ? (
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#ff6f8d]/25 bg-[#ff6f8d]/15 text-[#ff9aaf]">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#e3e3ea]/25 bg-[#e3e3ea]/15 text-[#ff9aaf]">
             {icon}
           </span>
         ) : null}
         <span className="min-w-0 truncate">{title}</span>
       </AlertDialogTitle>
       {description ? (
-        <AlertDialogDescription className="mt-2 text-sm text-[#aea8be]">
+        <AlertDialogDescription className="mt-2 text-sm text-[#9a9aa6]">
           {description}
         </AlertDialogDescription>
       ) : null}
@@ -178,7 +178,7 @@ export function FinanceSegmentedControl<TValue extends string>({
       role="radiogroup"
       aria-label={ariaLabel}
       data-testid={testId}
-      className={cn("inline-flex rounded-lg border border-white/10 bg-[#1a1528] p-1 text-xs font-bold", className)}
+      className={cn("inline-flex rounded-lg border border-white/10 bg-[#15151c] p-1 text-xs font-bold", className)}
     >
       {options.map((option) => (
         <button
@@ -188,8 +188,8 @@ export function FinanceSegmentedControl<TValue extends string>({
           aria-checked={value === option.value}
           data-testid={option.testId}
           className={cn(
-            "whitespace-nowrap rounded-md px-3 py-2 text-[#aea8be] outline-none transition hover:text-[#f1e9fc] focus-visible:ring-2 focus-visible:ring-[#bb9eff]/55 sm:px-4",
-            value === option.value && "bg-[#36304a] text-[#f1e9fc]",
+            "whitespace-nowrap rounded-md px-3 py-2 text-[#9a9aa6] outline-none transition hover:text-[#f4f4f7] focus-visible:ring-2 focus-visible:ring-[#cdfa46]/55 sm:px-4",
+            value === option.value && "bg-[#2a2a34] text-[#f4f4f7]",
           )}
           onClick={() => onChange(option.value)}
         >

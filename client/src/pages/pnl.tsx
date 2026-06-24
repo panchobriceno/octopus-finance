@@ -33,7 +33,7 @@ function PnlCell({ value }: { value: CellTotals }) {
       </div>
       <div
         className={`tabular-nums text-xs font-medium ${
-          variance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+          variance >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"
         }`}
       >
         Var. {formatCLP(variance)}
@@ -200,10 +200,10 @@ export default function PnLPage() {
         <Card>
           <CardContent className="pt-5 pb-4 px-5">
             <div className="flex items-center gap-2 mb-1">
-              <TrendingUp className="size-4 text-emerald-500" />
+              <TrendingUp className="size-4 text-lime-500" />
               <p className="text-sm text-muted-foreground">Total Ingresos Reales</p>
             </div>
-            <p className="text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+            <p className="text-xl font-semibold tabular-nums text-lime-600 dark:text-lime-400">
               {formatCLP(model.grandIncome.real)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
@@ -228,12 +228,12 @@ export default function PnLPage() {
         <Card>
           <CardContent className="pt-5 pb-4 px-5">
             <div className="flex items-center gap-2 mb-1">
-              <FileText className="size-4 text-blue-500" />
+              <FileText className="size-4 text-slate-500" />
               <p className="text-sm text-muted-foreground">Resultado Neto</p>
             </div>
             <p
               className={`text-xl font-semibold tabular-nums ${
-                model.grandNet.real >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                model.grandNet.real >= 0 ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"
               }`}
             >
               {formatCLP(model.grandNet.real)}
@@ -261,8 +261,8 @@ export default function PnLPage() {
               <span className="size-2 rounded-full border border-muted-foreground" />
               Presupuestado
             </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/70 bg-amber-50/60 px-3 py-1 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
-              <span className="size-2 rounded-full bg-amber-500" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-zinc-50/60 px-3 py-1 text-zinc-700 dark:border-zinc-900/40 dark:bg-zinc-950/20 dark:text-zinc-300">
+              <span className="size-2 rounded-full bg-zinc-500" />
               Mes con datos mixtos
             </div>
           </div>
@@ -284,7 +284,7 @@ export default function PnLPage() {
                           {status.real && !status.planned && <Badge variant="secondary" className="text-[10px]">Real</Badge>}
                           {!status.real && status.planned && <Badge variant="outline" className="text-[10px]">Solo proyección</Badge>}
                           {status.real && status.planned && (
-                            <Badge variant="secondary" className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                            <Badge variant="secondary" className="text-[10px] bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300">
                               Mixto
                             </Badge>
                           )}
@@ -296,8 +296,8 @@ export default function PnLPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow className="bg-emerald-50/50 dark:bg-emerald-950/20">
-                  <TableCell className="pl-5 font-semibold text-sm text-emerald-700 dark:text-emerald-400">
+                <TableRow className="bg-lime-50/50 dark:bg-lime-950/20">
+                  <TableCell className="pl-5 font-semibold text-sm text-lime-700 dark:text-lime-400">
                     Ingresos
                   </TableCell>
                   {model.monthKeys.map((monthKey) => (
@@ -320,7 +320,7 @@ export default function PnLPage() {
                   </TableRow>
                 ))}
 
-                <TableRow className="border-t border-border bg-emerald-50/30 dark:bg-emerald-950/10">
+                <TableRow className="border-t border-border bg-lime-50/30 dark:bg-lime-950/10">
                   <TableCell className="pl-5 font-semibold text-sm">Total Ingresos</TableCell>
                   {model.incomeTotalsByMonth.map((value, index) => (
                     <TableCell key={`income-total-${model.monthKeys[index]}`}>

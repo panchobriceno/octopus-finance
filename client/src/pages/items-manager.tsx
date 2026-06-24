@@ -228,7 +228,7 @@ export default function ItemsManagerPage() {
                           className="size-7"
                           onClick={saveEdit}
                         >
-                          <Check className="size-3.5 text-emerald-500" />
+                          <Check className="size-3.5 text-lime-500" />
                         </Button>
                         <Button
                           variant="ghost"

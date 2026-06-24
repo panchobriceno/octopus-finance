@@ -51,11 +51,11 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const STATUS_TONE: Record<ReconciliationStatus, string> = {
-  confident_match: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
-  possible_match: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+  confident_match: "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300",
+  possible_match: "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300",
   missing_transaction: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
   possible_duplicate: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
-  resolved: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  resolved: "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300",
   discarded: "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300",
 };
 
@@ -342,7 +342,7 @@ export default function ReconciliationPage() {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Diferencia</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
-                  <div className={Math.abs(workspace.difference) <= 1 ? "text-2xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-300" : "text-2xl font-semibold tabular-nums text-amber-700 dark:text-amber-300"}>
+                  <div className={Math.abs(workspace.difference) <= 1 ? "text-2xl font-semibold tabular-nums text-lime-700 dark:text-lime-300" : "text-2xl font-semibold tabular-nums text-zinc-700 dark:text-zinc-300"}>
                     {formatCLP(workspace.difference)}
                   </div>
                   <div className="mt-2 flex gap-2">
@@ -367,7 +367,7 @@ export default function ReconciliationPage() {
                     <p className="text-sm text-muted-foreground">Confiables</p>
                     <p className="text-xl font-semibold">{workspace.confidentMatchCount}</p>
                   </div>
-                  <CheckCircle2 className="size-5 text-emerald-600" />
+                  <CheckCircle2 className="size-5 text-lime-600" />
                 </CardContent>
               </Card>
               <Card className="rounded-lg">
@@ -376,7 +376,7 @@ export default function ReconciliationPage() {
                     <p className="text-sm text-muted-foreground">Por revisar</p>
                     <p className="text-xl font-semibold">{workspace.unresolvedCount}</p>
                   </div>
-                  <CircleAlert className="size-5 text-amber-600" />
+                  <CircleAlert className="size-5 text-zinc-600" />
                 </CardContent>
               </Card>
               <Card className="rounded-lg">
@@ -385,7 +385,7 @@ export default function ReconciliationPage() {
                     <p className="text-sm text-muted-foreground">Sin cartola</p>
                     <p className="text-xl font-semibold">{workspace.unmatchedRegisteredCount}</p>
                   </div>
-                  <FileSearch className="size-5 text-blue-600" />
+                  <FileSearch className="size-5 text-slate-600" />
                 </CardContent>
               </Card>
               <Card className="rounded-lg">
@@ -469,7 +469,7 @@ export default function ReconciliationPage() {
                                   <span className="text-sm text-muted-foreground">Sin candidato</span>
                                 )}
                               </TableCell>
-                              <TableCell className={row.importedImpact >= 0 ? "text-right tabular-nums text-emerald-700 dark:text-emerald-300" : "text-right tabular-nums text-red-700 dark:text-red-300"}>
+                              <TableCell className={row.importedImpact >= 0 ? "text-right tabular-nums text-lime-700 dark:text-lime-300" : "text-right tabular-nums text-red-700 dark:text-red-300"}>
                                 {formatCLP(row.importedImpact)}
                               </TableCell>
                               <TableCell>

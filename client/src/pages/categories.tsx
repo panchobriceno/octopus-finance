@@ -32,13 +32,13 @@ const FAMILY_SUGGESTED_CATEGORIES = [
   { name: "Comisiones bancarias", color: "#92400e" },
   { name: "Viajes", color: "#0f766e" },
   { name: "Transporte", color: "#1d4ed8" },
-  { name: "Pago tarjeta", color: "#7c3aed" },
+  { name: "Pago tarjeta", color: "#a9e028" },
 ];
 
 export default function CategoriesPage() {
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<"income" | "expense">("expense");
-  const [newColor, setNewColor] = useState("#10b981");
+  const [newColor, setNewColor] = useState("#cdfa46");
   const [newWorkspace, setNewWorkspace] = useState<"business" | "family" | "dentist">("business");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -256,7 +256,7 @@ export default function CategoriesPage() {
                         onClick={saveEdit}
                         data-testid={`button-save-${cat.id}`}
                       >
-                        <Check className="size-3.5 text-emerald-500" />
+                        <Check className="size-3.5 text-lime-500" />
                       </Button>
                       <Button
                         variant="ghost"

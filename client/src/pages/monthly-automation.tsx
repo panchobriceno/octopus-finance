@@ -126,10 +126,10 @@ function parseKeywords(value: string) {
 }
 
 function getStatusTone(instance: CommitmentInstance) {
-  if (instance.status === "paid") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
+  if (instance.status === "paid") return "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300";
   if (instance.status === "skipped") return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
   if (instance.dueDate < new Date().toISOString().slice(0, 10)) return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300";
-  return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
+  return "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300";
 }
 
 function transactionLabel(transaction: Transaction | null) {
@@ -455,13 +455,13 @@ export default function MonthlyAutomationPage() {
           <Card>
             <CardContent className="pt-5">
               <p className="text-sm text-muted-foreground">Pagados</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">{dashboard.paid}</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums text-lime-600 dark:text-lime-300">{dashboard.paid}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-5">
               <p className="text-sm text-muted-foreground">Pendientes</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums text-amber-700 dark:text-amber-300">{dashboard.pending}</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">{dashboard.pending}</p>
             </CardContent>
           </Card>
           <Card>
@@ -489,13 +489,13 @@ export default function MonthlyAutomationPage() {
           <Card>
             <CardContent className="pt-5">
               <p className="text-sm text-muted-foreground">Ya pagado</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">{formatCLP(dashboard.paidOutflow)}</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-lime-600 dark:text-lime-300">{formatCLP(dashboard.paidOutflow)}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-5">
               <p className="text-sm text-muted-foreground">Por salir</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-amber-700 dark:text-amber-300">{formatCLP(dashboard.pendingOutflow)}</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">{formatCLP(dashboard.pendingOutflow)}</p>
             </CardContent>
           </Card>
         </div>
@@ -685,11 +685,11 @@ export default function MonthlyAutomationPage() {
             <FinanceDialogBody className="space-y-5">
               {paymentTarget ? (
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-sm font-semibold text-[#f1e9fc]">{paymentTarget.name}</p>
-                  <div className="mt-2 grid gap-2 text-xs text-[#aea8be] sm:grid-cols-3">
+                  <p className="text-sm font-semibold text-[#f4f4f7]">{paymentTarget.name}</p>
+                  <div className="mt-2 grid gap-2 text-xs text-[#9a9aa6] sm:grid-cols-3">
                     <span>Vence {paymentTarget.dueDate}</span>
                     <span>{WORKSPACE_LABELS[paymentTarget.workspace] ?? paymentTarget.workspace}</span>
-                    <span className="font-semibold text-[#f1e9fc]">{formatCLP(paymentTarget.expectedAmount)}</span>
+                    <span className="font-semibold text-[#f4f4f7]">{formatCLP(paymentTarget.expectedAmount)}</span>
                   </div>
                 </div>
               ) : null}
@@ -877,7 +877,7 @@ export default function MonthlyAutomationPage() {
                                   onClick={() => openPaymentDialog(instance)}
                                   disabled={updateInstanceMutation.isPending || instance.status === "paid"}
                                 >
-                                  <CheckCircle2 className="size-4 text-emerald-600" />
+                                  <CheckCircle2 className="size-4 text-lime-600" />
                                   Pago
                                 </Button>
                                 <Button

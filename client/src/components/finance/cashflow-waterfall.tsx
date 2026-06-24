@@ -62,7 +62,7 @@ export function CashflowWaterfall({
               key={step.label}
               className={cn(
                 "flex items-center justify-between rounded-lg px-3 py-2 text-sm",
-                step.kind === "final" && "bg-[#bb9eff]/10 font-semibold",
+                step.kind === "final" && "bg-[#cdfa46]/10 font-semibold",
                 step.kind === "subtotal" && "border-t border-border/60 font-medium",
                 step.kind === "delta" && (step.planned ? "opacity-70" : ""),
               )}

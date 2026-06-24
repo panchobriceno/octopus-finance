@@ -32,7 +32,7 @@ export function StepFlow({
       {steps.map((step, index) => {
         const inner = (
           <span className="flex items-center gap-2">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#bb9eff]/15 text-xs font-bold text-[#bb9eff]">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#cdfa46]/15 text-xs font-bold text-[#cdfa46]">
               {index + 1}
             </span>
             <span className="min-w-0">

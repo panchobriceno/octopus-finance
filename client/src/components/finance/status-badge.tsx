@@ -8,11 +8,11 @@ export type MovementStatus =
   | "duplicado";
 
 const STYLES: Record<MovementStatus, string> = {
-  pagado: "bg-emerald-500/15 text-emerald-300 border-emerald-400/20",
-  pendiente: "bg-amber-500/15 text-amber-300 border-amber-400/20",
-  vencido: "bg-[#ff6f8d]/15 text-[#ff8da3] border-[#ff6f8d]/25",
-  conciliado: "bg-[#bb9eff]/15 text-[#cdbcff] border-[#bb9eff]/25",
-  duplicado: "bg-amber-500/10 text-amber-300 border-amber-400/25",
+  pagado: "bg-lime-500/15 text-lime-300 border-lime-400/20",
+  pendiente: "bg-zinc-500/15 text-zinc-300 border-zinc-400/20",
+  vencido: "bg-[#e3e3ea]/15 text-[#e3e3ea] border-[#e3e3ea]/25",
+  conciliado: "bg-[#cdfa46]/15 text-[#cfcfd8] border-[#cdfa46]/25",
+  duplicado: "bg-zinc-500/10 text-zinc-300 border-zinc-400/25",
 };
 
 const LABELS: Record<MovementStatus, string> = {

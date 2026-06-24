@@ -92,7 +92,7 @@ const SEVERITY_LABELS: Record<AuditSeverity, string> = {
 const SEVERITY_BADGE: Record<AuditSeverity, string> = {
   critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
   high: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
-  medium: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+  medium: "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300",
   low: "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300",
 };
 
@@ -258,7 +258,7 @@ function renderRepairPlanPreview(plan: RepairPlan | null) {
 
   if (plan.operations.length === 0) {
     return (
-      <div className="rounded-xl border border-[#bb9eff]/10 bg-background/30 px-3 py-4 text-sm text-muted-foreground">
+      <div className="rounded-xl border border-[#cdfa46]/10 bg-background/30 px-3 py-4 text-sm text-muted-foreground">
         No hay operaciones para aplicar.
       </div>
     );
@@ -270,7 +270,7 @@ function renderRepairPlanPreview(plan: RepairPlan | null) {
         {visibleOperations.map((operation) => {
           const fields = getOperationFields(operation);
           return (
-            <div key={operation.id} className="rounded-xl border border-[#bb9eff]/10 bg-background/30 p-3">
+            <div key={operation.id} className="rounded-xl border border-[#cdfa46]/10 bg-background/30 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{operation.title}</p>
@@ -693,7 +693,7 @@ export default function DataHealthPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-7xl space-y-6 p-6">
-        <div className="rounded-3xl border border-[#bb9eff]/10 bg-gradient-to-br from-[#151223] via-[#11101b] to-[#0f0c1c] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+        <div className="rounded-3xl border border-[#cdfa46]/10 bg-gradient-to-br from-[#151223] via-[#0d0d12] to-[#0a0a0f] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-2">
               <div className="flex items-center gap-3">
@@ -707,23 +707,23 @@ export default function DataHealthPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" className="rounded-full border-[#bb9eff]/15 bg-background/40" onClick={refreshAuditData}>
+              <Button type="button" variant="outline" className="rounded-full border-[#cdfa46]/15 bg-background/40" onClick={refreshAuditData}>
                 Re-auditar
               </Button>
               <Button type="button" className="rounded-full" onClick={exportAudit}>
                 Exportar JSON
               </Button>
-              <Button type="button" variant="outline" className="rounded-full border-[#bb9eff]/15 bg-background/40 gap-2" onClick={exportDataSnapshot}>
+              <Button type="button" variant="outline" className="rounded-full border-[#cdfa46]/15 bg-background/40 gap-2" onClick={exportDataSnapshot}>
                 <FileDown className="size-4" />
                 Snapshot
               </Button>
-              <Badge variant="outline" className="rounded-full border-[#bb9eff]/20 bg-[#bb9eff]/10 px-3 py-1">
+              <Badge variant="outline" className="rounded-full border-[#cdfa46]/20 bg-[#cdfa46]/10 px-3 py-1">
                 {audit.issues.length} {pluralize(audit.issues.length, "hallazgo", "hallazgos")}
               </Badge>
-              <Badge variant="outline" className="rounded-full border-[#bb9eff]/20 bg-[#bb9eff]/10 px-3 py-1">
+              <Badge variant="outline" className="rounded-full border-[#cdfa46]/20 bg-[#cdfa46]/10 px-3 py-1">
                 {audit.counts.transactions} movimientos
               </Badge>
-              <Badge variant="outline" className="rounded-full border-[#bb9eff]/20 bg-[#bb9eff]/10 px-3 py-1">
+              <Badge variant="outline" className="rounded-full border-[#cdfa46]/20 bg-[#cdfa46]/10 px-3 py-1">
                 {audit.counts.categories} categorías
               </Badge>
             </div>
@@ -731,12 +731,12 @@ export default function DataHealthPage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Card className="border-[#bb9eff]/10 bg-card/90">
+          <Card className="border-[#cdfa46]/10 bg-card/90">
             <CardContent className="pt-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Alta prioridad</p>
-                  <p className={`mt-1 text-2xl font-semibold tabular-nums ${highPriorityCount > 0 ? "text-red-600 dark:text-red-300" : "text-emerald-600 dark:text-emerald-300"}`}>
+                  <p className={`mt-1 text-2xl font-semibold tabular-nums ${highPriorityCount > 0 ? "text-red-600 dark:text-red-300" : "text-lime-600 dark:text-lime-300"}`}>
                     {highPriorityCount}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">Críticos y altos</p>
@@ -746,7 +746,7 @@ export default function DataHealthPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-[#bb9eff]/10 bg-card/90">
+          <Card className="border-[#cdfa46]/10 bg-card/90">
             <CardContent className="pt-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -754,12 +754,12 @@ export default function DataHealthPage() {
                   <p className="mt-1 text-2xl font-semibold tabular-nums">{duplicateCount}</p>
                   <p className="mt-1 text-xs text-muted-foreground">Categorías, movimientos o presupuestos</p>
                 </div>
-                <Tags className="size-5 text-amber-500" />
+                <Tags className="size-5 text-zinc-500" />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-[#bb9eff]/10 bg-card/90">
+          <Card className="border-[#cdfa46]/10 bg-card/90">
             <CardContent className="pt-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -767,12 +767,12 @@ export default function DataHealthPage() {
                   <p className="mt-1 text-2xl font-semibold tabular-nums">{orphanCount}</p>
                   <p className="mt-1 text-xs text-muted-foreground">Datos que apuntan a algo inexistente</p>
                 </div>
-                <ShieldCheck className="size-5 text-blue-500" />
+                <ShieldCheck className="size-5 text-slate-500" />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-[#bb9eff]/10 bg-card/90">
+          <Card className="border-[#cdfa46]/10 bg-card/90">
             <CardContent className="pt-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -787,7 +787,7 @@ export default function DataHealthPage() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <Card className="border-[#bb9eff]/10 bg-card/90">
+          <Card className="border-[#cdfa46]/10 bg-card/90">
             <CardHeader className="pb-3">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <CardTitle className="flex items-center gap-2 text-base font-semibold">
@@ -842,7 +842,7 @@ export default function DataHealthPage() {
             <CardContent className="px-0">
               {filteredIssues.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-3 px-5 py-16 text-center">
-                  <CheckCircle2 className="size-10 text-emerald-500" />
+                  <CheckCircle2 className="size-10 text-lime-500" />
                   <div>
                     <p className="font-semibold">Sin hallazgos para este filtro</p>
                     <p className="mt-1 text-sm text-muted-foreground">La vista actual no tiene problemas pendientes.</p>
@@ -948,7 +948,7 @@ export default function DataHealthPage() {
           </Card>
 
           <div className="space-y-4">
-            <Card className="border-[#bb9eff]/10 bg-card/90">
+            <Card className="border-[#cdfa46]/10 bg-card/90">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold">Severidad</CardTitle>
               </CardHeader>
@@ -957,7 +957,7 @@ export default function DataHealthPage() {
                   <button
                     key={severity}
                     type="button"
-                    className="flex w-full items-center justify-between rounded-xl border border-[#bb9eff]/10 bg-background/30 px-3 py-2 text-left text-sm transition hover:bg-background/50"
+                    className="flex w-full items-center justify-between rounded-xl border border-[#cdfa46]/10 bg-background/30 px-3 py-2 text-left text-sm transition hover:bg-background/50"
                     onClick={() => setSeverityFilter(severity)}
                   >
                     <span>{SEVERITY_LABELS[severity]}</span>
@@ -970,7 +970,7 @@ export default function DataHealthPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-[#bb9eff]/10 bg-card/90">
+            <Card className="border-[#cdfa46]/10 bg-card/90">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold">Revisión</CardTitle>
               </CardHeader>
@@ -990,10 +990,10 @@ export default function DataHealthPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-[#bb9eff]/10 bg-card/90" data-testid="card-broken-reference-repair">
+            <Card className="border-[#cdfa46]/10 bg-card/90" data-testid="card-broken-reference-repair">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                  <Wrench className="size-4 text-blue-500" />
+                  <Wrench className="size-4 text-slate-500" />
                   Reparaciones disponibles
                 </CardTitle>
               </CardHeader>
@@ -1003,23 +1003,23 @@ export default function DataHealthPage() {
                   <span className="font-medium tabular-nums">{summaryNumber(brokenReferenceRepairPlan, "total")}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                  <div className="rounded-lg border border-[#bb9eff]/10 bg-background/30 px-2 py-2">
+                  <div className="rounded-lg border border-[#cdfa46]/10 bg-background/30 px-2 py-2">
                     <p className="font-medium text-foreground">{summaryNumber(brokenReferenceRepairPlan, "items.update")}</p>
                     <p>Items</p>
                   </div>
-                  <div className="rounded-lg border border-[#bb9eff]/10 bg-background/30 px-2 py-2">
+                  <div className="rounded-lg border border-[#cdfa46]/10 bg-background/30 px-2 py-2">
                     <p className="font-medium text-foreground">
                       {summaryNumber(brokenReferenceRepairPlan, "transactions.update")}
                     </p>
                     <p>Movimientos</p>
                   </div>
-                  <div className="rounded-lg border border-[#bb9eff]/10 bg-background/30 px-2 py-2">
+                  <div className="rounded-lg border border-[#cdfa46]/10 bg-background/30 px-2 py-2">
                     <p className="font-medium text-foreground">
                       {summaryNumber(brokenReferenceRepairPlan, "budgets.update")}
                     </p>
                     <p>Presupuestos</p>
                   </div>
-                  <div className="rounded-lg border border-[#bb9eff]/10 bg-background/30 px-2 py-2">
+                  <div className="rounded-lg border border-[#cdfa46]/10 bg-background/30 px-2 py-2">
                     <p className="font-medium text-foreground">{summaryNumber(brokenReferenceRepairPlan, "categories.create")}</p>
                     <p>Categorías</p>
                   </div>
@@ -1038,23 +1038,23 @@ export default function DataHealthPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-[#bb9eff]/10 bg-card/90" data-testid="card-duplicate-category-merge">
+            <Card className="border-[#cdfa46]/10 bg-card/90" data-testid="card-duplicate-category-merge">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                  <Tags className="size-4 text-amber-500" />
+                  <Tags className="size-4 text-zinc-500" />
                   Categorías duplicadas
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {duplicateCategoryGroups.length === 0 ? (
-                  <div className="rounded-xl border border-[#bb9eff]/10 bg-background/30 px-3 py-4 text-sm text-muted-foreground">
+                  <div className="rounded-xl border border-[#cdfa46]/10 bg-background/30 px-3 py-4 text-sm text-muted-foreground">
                     No hay grupos de categorías repetidas por nombre, tipo y ámbito.
                   </div>
                 ) : (
                   duplicateCategoryGroups.map((group) => (
                     <div
                       key={group.key}
-                      className="rounded-xl border border-[#bb9eff]/10 bg-background/30 p-3"
+                      className="rounded-xl border border-[#cdfa46]/10 bg-background/30 p-3"
                       data-testid={`duplicate-category-group-${getSafeTestId(group.key)}`}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -1094,7 +1094,7 @@ export default function DataHealthPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-[#bb9eff]/10 bg-card/90">
+            <Card className="border-[#cdfa46]/10 bg-card/90">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold">Métricas base</CardTitle>
               </CardHeader>
@@ -1151,7 +1151,7 @@ export default function DataHealthPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {pendingMergeGroup ? (
-            <div className="space-y-3 rounded-xl border border-[#bb9eff]/10 bg-background/30 p-3 text-sm">
+            <div className="space-y-3 rounded-xl border border-[#cdfa46]/10 bg-background/30 p-3 text-sm">
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
                   <p className="font-semibold tabular-nums">{summaryNumber(pendingMergePlan, "items.update") + summaryNumber(pendingMergePlan, "items.delete")}</p>
@@ -1204,7 +1204,7 @@ export default function DataHealthPage() {
               "Sin categoría" y moverá presupuestos que apuntan a items inexistentes a esa misma categoría.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-3 rounded-xl border border-[#bb9eff]/10 bg-background/30 p-3 text-sm">
+          <div className="space-y-3 rounded-xl border border-[#cdfa46]/10 bg-background/30 p-3 text-sm">
             <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
               <div className="rounded-lg bg-background/40 px-2 py-2">
                 <p className="font-semibold text-foreground tabular-nums">{summaryNumber(brokenReferenceRepairPlan, "items.update")}</p>

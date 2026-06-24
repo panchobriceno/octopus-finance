@@ -106,10 +106,10 @@ function App() {
             <div className="flex h-screen w-full">
               <AppSidebar />
               <div className="flex min-h-0 flex-1 flex-col min-w-0">
-                <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/10 bg-[#0b0914]/95 px-3 text-[#f1e9fc] backdrop-blur-xl md:hidden">
+                <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/10 bg-[#0a0a0f]/95 px-3 text-[#f4f4f7] backdrop-blur-xl md:hidden">
                   <SidebarTrigger
                     aria-label="Abrir navegación"
-                    className="size-9 rounded-lg border border-white/10 bg-[#171225] text-[#f1e9fc] hover:bg-[#211a31]"
+                    className="size-9 rounded-lg border border-white/10 bg-[#15151c] text-[#f4f4f7] hover:bg-[#22222b]"
                   />
                   <span className="text-sm font-extrabold tracking-tight">Octopus Finance</span>
                 </div>

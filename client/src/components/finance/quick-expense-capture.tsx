@@ -358,7 +358,7 @@ export function QuickExpenseCapture() {
         type="button"
         onClick={openCapture}
         className={cn(
-          "!fixed z-[60] h-12 rounded-full bg-[#9ef0cf] px-4 text-[#07130f] shadow-[0_12px_35px_rgba(158,240,207,0.35)] hover:bg-[#8be7c2] active:scale-95 no-default-hover-elevate no-default-active-elevate",
+          "!fixed z-[60] h-12 rounded-full bg-[#cdfa46] px-4 text-[#07130f] shadow-[0_12px_35px_rgba(158,240,207,0.35)] hover:bg-[#8be7c2] active:scale-95 no-default-hover-elevate no-default-active-elevate",
           quickButtonOffset,
         )}
         aria-label="Registrar gasto rápido"
@@ -381,7 +381,7 @@ export function QuickExpenseCapture() {
             description="Sube un voucher para prellenar o completa solo lo esencial."
             icon={<ReceiptText className="size-4" />}
             actions={
-              <div className="hidden rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-[#aea8be] sm:block">
+              <div className="hidden rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-[#9a9aa6] sm:block">
                 Cmd/Ctrl + Shift + G
               </div>
             }
@@ -392,19 +392,19 @@ export function QuickExpenseCapture() {
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-extrabold text-[#f1e9fc]">Foto o pantallazo</p>
-                      <p className="mt-1 text-xs text-[#aea8be]">JPG, PNG, WEBP o GIF.</p>
+                      <p className="text-sm font-extrabold text-[#f4f4f7]">Foto o pantallazo</p>
+                      <p className="mt-1 text-xs text-[#9a9aa6]">JPG, PNG, WEBP o GIF.</p>
                     </div>
-                    <Sparkles className="size-4 text-[#9ef0cf]" />
+                    <Sparkles className="size-4 text-[#cdfa46]" />
                   </div>
 
-                  <div className="mt-4 overflow-hidden rounded-xl border border-dashed border-white/12 bg-[#0b0914]">
+                  <div className="mt-4 overflow-hidden rounded-xl border border-dashed border-white/12 bg-[#0a0a0f]">
                     {imagePreview ? (
                       <img src={imagePreview} alt="Voucher seleccionado" className="h-44 w-full object-cover" />
                     ) : (
                       <button
                         type="button"
-                        className="flex h-44 w-full flex-col items-center justify-center gap-2 text-[#aea8be] transition hover:bg-white/[0.03] hover:text-[#f1e9fc]"
+                        className="flex h-44 w-full flex-col items-center justify-center gap-2 text-[#9a9aa6] transition hover:bg-white/[0.03] hover:text-[#f4f4f7]"
                         onClick={() => fileInputRef.current?.click()}
                       >
                         <Camera className="size-8" />
@@ -427,7 +427,7 @@ export function QuickExpenseCapture() {
                       variant="outline"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isReading}
-                      className="border-white/12 text-[#f1e9fc]"
+                      className="border-white/12 text-[#f4f4f7]"
                     >
                       {ocrPending ? <Loader2 className="size-4 animate-spin" /> : ocrResult ? <Upload className="size-4" /> : <Camera className="size-4" />}
                       {ocrPending ? "Leyendo" : ocrResult ? "Cambiar imagen" : "Leer voucher"}
@@ -442,14 +442,14 @@ export function QuickExpenseCapture() {
                         setImagePreview(null);
                       }}
                       disabled={isReading || (!imagePreview && !ocrResult && !ocrError)}
-                      className="text-[#aea8be]"
+                      className="text-[#9a9aa6]"
                     >
                       Limpiar
                     </Button>
                   </div>
 
                   {ocrResult ? (
-                    <div className="mt-3 rounded-lg border border-[#9ef0cf]/20 bg-[#9ef0cf]/8 p-3 text-xs text-[#c9f8e6]">
+                    <div className="mt-3 rounded-lg border border-[#cdfa46]/20 bg-[#cdfa46]/8 p-3 text-xs text-[#c9f8e6]">
                       OCR aplicado {formatConfidence(ocrResult.confidence) ? `· ${formatConfidence(ocrResult.confidence)}` : ""}
                       {ocrResult.warnings.length ? (
                         <p className="mt-1 text-[#f5c77a]">{ocrResult.warnings.join(" · ")}</p>
@@ -458,7 +458,7 @@ export function QuickExpenseCapture() {
                   ) : null}
 
                   {ocrError ? (
-                    <div className="mt-3 rounded-lg border border-[#ff6f8d]/20 bg-[#ff6f8d]/10 p-3 text-xs text-[#ffb4c2]">
+                    <div className="mt-3 rounded-lg border border-[#e3e3ea]/20 bg-[#e3e3ea]/10 p-3 text-xs text-[#ffb4c2]">
                       {ocrError}
                     </div>
                   ) : null}
@@ -608,8 +608,8 @@ export function QuickExpenseCapture() {
                 ) : null}
 
                 {form.paymentMethod === "cash" ? (
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-[#aea8be] sm:col-span-2">
-                    <Wallet className="mr-2 inline size-4 text-[#9ef0cf]" />
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-[#9a9aa6] sm:col-span-2">
+                    <Wallet className="mr-2 inline size-4 text-[#cdfa46]" />
                     El gasto quedará pagado sin afectar una cuenta bancaria.
                   </div>
                 ) : null}

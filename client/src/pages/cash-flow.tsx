@@ -422,7 +422,7 @@ export default function CashFlowPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">Línea sólida: ejecutado</Badge>
             <Badge variant="outline">Línea punteada: proyectado</Badge>
-            <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+            <Badge variant="secondary" className="bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300">
               Saldo final real: {formatCLP(selectedSummary.realEndingBalance)}
             </Badge>
             <Badge variant="outline">
@@ -445,9 +445,9 @@ export default function CashFlowPage() {
               {formatCLP(selectedSummary.openingBalance)} + {formatCLP(selectedSummary.realIncome)} - {formatCLP(selectedSummary.realExpenses)}
             </p>
             <div className="grid grid-cols-2 gap-3 pt-2 text-sm">
-              <div className="rounded-lg bg-emerald-50/60 p-3 dark:bg-emerald-950/20">
+              <div className="rounded-lg bg-lime-50/60 p-3 dark:bg-lime-950/20">
                 <p className="text-muted-foreground">Ingresos reales</p>
-                <p className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                <p className="font-semibold tabular-nums text-lime-600 dark:text-lime-400">
                   {formatCLP(selectedSummary.realIncome)}
                 </p>
               </div>
@@ -466,22 +466,22 @@ export default function CashFlowPage() {
             <CardTitle className="text-base font-semibold">Proyectado</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-2xl font-semibold tabular-nums text-blue-700 dark:text-blue-300">
+            <p className="text-2xl font-semibold tabular-nums text-slate-700 dark:text-slate-300">
               {formatCLP(selectedSummary.projectedEndingBalance)}
             </p>
             <p className="text-sm text-muted-foreground">
               {formatCLP(selectedSummary.realEndingBalance)} + {formatCLP(selectedSummary.plannedIncome)} - {formatCLP(selectedSummary.plannedExpenses)}
             </p>
             <div className="grid grid-cols-2 gap-3 pt-2 text-sm">
-              <div className="rounded-lg bg-emerald-50/60 p-3 dark:bg-emerald-950/20">
+              <div className="rounded-lg bg-lime-50/60 p-3 dark:bg-lime-950/20">
                 <p className="text-muted-foreground">Ingresos presupuestados</p>
-                <p className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                <p className="font-semibold tabular-nums text-lime-600 dark:text-lime-400">
                   {formatCLP(selectedSummary.plannedIncome)}
                 </p>
               </div>
-              <div className="rounded-lg bg-amber-50/60 p-3 dark:bg-amber-950/20">
+              <div className="rounded-lg bg-zinc-50/60 p-3 dark:bg-zinc-950/20">
                 <p className="text-muted-foreground">Gastos presupuestados</p>
-                <p className="font-semibold tabular-nums text-amber-700 dark:text-amber-300">
+                <p className="font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
                   {formatCLP(selectedSummary.plannedExpenses)}
                 </p>
               </div>
@@ -517,7 +517,7 @@ export default function CashFlowPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">IVA proyectado próximo 20</p>
-              <p className="text-lg font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">{formatCLP(selectedMonthPaidVat)}</p>
+              <p className="text-lg font-semibold tabular-nums mt-1 text-zinc-700 dark:text-zinc-300">{formatCLP(selectedMonthPaidVat)}</p>
               <p className="text-xs text-muted-foreground mt-1">{selectedMonthVatDueDate}</p>
             </div>
           </CardContent>
@@ -576,15 +576,15 @@ export default function CashFlowPage() {
                     </TableCell>
                   ))}
                 </TableRow>
-                <TableRow className="bg-emerald-50/40 dark:bg-emerald-950/10">
-                  <TableCell className="pl-5 font-medium text-sm text-emerald-700 dark:text-emerald-300">
+                <TableRow className="bg-lime-50/40 dark:bg-lime-950/10">
+                  <TableCell className="pl-5 font-medium text-sm text-lime-700 dark:text-lime-300">
                     Ingresos clientes
                   </TableCell>
                   {weeklyBreakdown.map((week, index) => (
                     <TableCell key={`income-${weeklyColumns[index]?.key}`} className="text-right">
                       <Button
                         variant="ghost"
-                        className="h-auto p-0 text-right font-medium tabular-nums text-emerald-700 dark:text-emerald-300"
+                        className="h-auto p-0 text-right font-medium tabular-nums text-lime-700 dark:text-lime-300"
                         onClick={() => openWeeklyDetail("clientIncome", index, weeklyColumns[index].label, "Ingresos clientes")}
                       >
                         {formatCLP(week.clientIncome)}
@@ -632,13 +632,13 @@ export default function CashFlowPage() {
                     const cellClass = isNegative
                       ? "text-red-700 dark:text-red-300"
                       : isLowWarning
-                      ? "text-amber-700 dark:text-amber-300"
-                      : "text-blue-700 dark:text-blue-300";
+                      ? "text-zinc-700 dark:text-zinc-300"
+                      : "text-slate-700 dark:text-slate-300";
 
                     return (
                       <TableCell
                         key={`ending-${weeklyColumns[index]?.key}`}
-                        className={`text-right ${isNegative ? "bg-red-50/60 dark:bg-red-950/15" : isLowWarning ? "bg-amber-50/60 dark:bg-amber-950/15" : ""}`}
+                        className={`text-right ${isNegative ? "bg-red-50/60 dark:bg-red-950/15" : isLowWarning ? "bg-zinc-50/60 dark:bg-zinc-950/15" : ""}`}
                       >
                         <Button
                           variant="ghost"
@@ -748,19 +748,19 @@ export default function CashFlowPage() {
                     <TableCell className="text-right tabular-nums text-sm">
                       {formatCLP(summary.openingBalance)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-emerald-600 dark:text-emerald-400">
+                    <TableCell className="text-right tabular-nums text-sm text-lime-600 dark:text-lime-400">
                       {formatCLP(summary.realIncome)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm text-red-600 dark:text-red-400">
                       {formatCLP(summary.realExpenses)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm font-semibold text-blue-700 dark:text-blue-300">
+                    <TableCell className="text-right tabular-nums text-sm font-semibold text-slate-700 dark:text-slate-300">
                       {formatCLP(summary.realEndingBalance)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-emerald-600/80 dark:text-emerald-300">
+                    <TableCell className="text-right tabular-nums text-sm text-lime-600/80 dark:text-lime-300">
                       {formatCLP(summary.plannedIncome)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-amber-700 dark:text-amber-300">
+                    <TableCell className="text-right tabular-nums text-sm text-zinc-700 dark:text-zinc-300">
                       {formatCLP(summary.plannedExpenses)}
                     </TableCell>
                     <TableCell className="text-right pr-5 tabular-nums text-sm font-semibold">

@@ -47,15 +47,15 @@ const MONTH_NAMES = [
 ];
 
 function workspacePill(workspace?: string | null) {
-  if (workspace === "family") return { label: "Familia", className: "bg-[#9ef0cf]/15 text-[#9ef0cf]" };
-  if (workspace === "dentist" || workspace === "shared") return { label: "Consulta", className: "bg-amber-500/15 text-amber-300" };
-  return { label: "Empresa", className: "bg-[#bb9eff]/15 text-[#d6c7ff]" };
+  if (workspace === "family") return { label: "Familia", className: "bg-[#cdfa46]/15 text-[#cdfa46]" };
+  if (workspace === "dentist" || workspace === "shared") return { label: "Consulta", className: "bg-zinc-500/15 text-zinc-300" };
+  return { label: "Empresa", className: "bg-[#cdfa46]/15 text-[#cfcfd8]" };
 }
 
 function statusPill(status: string) {
-  if (status === "paid") return { label: "Pagado", className: "bg-emerald-500/15 text-emerald-300" };
+  if (status === "paid") return { label: "Pagado", className: "bg-lime-500/15 text-lime-300" };
   if (status === "cancelled") return { label: "Anulado", className: "bg-muted text-muted-foreground" };
-  return { label: "Pendiente", className: "bg-amber-500/15 text-amber-300" };
+  return { label: "Pendiente", className: "bg-zinc-500/15 text-zinc-300" };
 }
 
 export default function TransactionsPage() {
@@ -167,7 +167,7 @@ export default function TransactionsPage() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0f0c1c] text-[#f1e9fc]">
+    <div className="h-full overflow-y-auto bg-[#0a0a0f] text-[#f4f4f7]">
       <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 py-6 lg:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -188,7 +188,7 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        <Card className="border-[#bb9eff]/10 bg-card/70">
+        <Card className="border-[#cdfa46]/10 bg-card/70">
           <CardContent className="flex flex-wrap items-center gap-2 p-3">
             <div className="relative min-w-[180px] flex-1">
               <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -239,7 +239,7 @@ export default function TransactionsPage() {
         </Card>
 
         {selectedIds.size > 0 ? (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-[#ff6f8d]/30 bg-[#ff6f8d]/5 px-4 py-2.5" data-testid="bulk-bar">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-[#e3e3ea]/30 bg-[#e3e3ea]/5 px-4 py-2.5" data-testid="bulk-bar">
             <span className="text-sm">{selectedIds.size} seleccionados</span>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
@@ -265,7 +265,7 @@ export default function TransactionsPage() {
           </div>
         ) : null}
 
-        <Card className="border-[#bb9eff]/10 bg-card/70">
+        <Card className="border-[#cdfa46]/10 bg-card/70">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <Table data-testid="table-all-transactions">
@@ -307,7 +307,7 @@ export default function TransactionsPage() {
                             <span className="block max-w-[320px] truncate text-sm font-semibold">{tx.name}</span>
                             <span className="block text-xs text-muted-foreground">{formatDate(tx.date)}</span>
                           </TableCell>
-                          <TableCell className="cursor-pointer text-sm text-[#cfc7dd]" onClick={() => setEditingTx(tx)}>
+                          <TableCell className="cursor-pointer text-sm text-[#9a9aa6]" onClick={() => setEditingTx(tx)}>
                             {tx.category || "Sin categoría"}
                           </TableCell>
                           <TableCell>

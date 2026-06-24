@@ -369,7 +369,7 @@ export default function AccountsPage() {
                       <span
                         className={`text-sm font-medium ${
                           difference > 0
-                            ? "text-emerald-600 dark:text-emerald-400"
+                            ? "text-lime-600 dark:text-lime-400"
                             : difference < 0
                             ? "text-red-600 dark:text-red-400"
                             : "text-muted-foreground"
@@ -391,7 +391,7 @@ export default function AccountsPage() {
                             onClick={saveEditAccount}
                             data-testid={`button-save-account-${account.id}`}
                           >
-                            <Check className="size-3.5 text-emerald-500" />
+                            <Check className="size-3.5 text-lime-500" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -470,7 +470,7 @@ export default function AccountsPage() {
                     <span
                       className={`text-sm font-medium ${
                         totals.difference > 0
-                          ? "text-emerald-600 dark:text-emerald-400"
+                          ? "text-lime-600 dark:text-lime-400"
                           : totals.difference < 0
                           ? "text-red-600 dark:text-red-400"
                           : "text-muted-foreground"

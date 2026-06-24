@@ -81,9 +81,9 @@ const IMPORT_BATCH_STATUS_LABELS: Record<string, string> = {
 };
 
 function importBatchStatusTone(status: string) {
-  if (status === "closed") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
-  if (status === "completed") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
-  if (status === "partially_converted") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
+  if (status === "closed") return "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300";
+  if (status === "completed") return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
+  if (status === "partially_converted") return "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300";
   return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
 }
 
@@ -951,7 +951,7 @@ export default function ImportDataPage({
 
           {fileName && (
             <div className="flex flex-wrap items-center gap-2 mt-4">
-              <CheckCircle2 className="size-4 text-emerald-500" />
+              <CheckCircle2 className="size-4 text-lime-500" />
               <span className="text-sm">
                 Archivo cargado: <span className="font-medium">{fileName}</span>
               </span>
@@ -1368,7 +1368,7 @@ export default function ImportDataPage({
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className={`text-right tabular-nums text-sm font-medium ${transaction.type === "income" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                      <TableCell className={`text-right tabular-nums text-sm font-medium ${transaction.type === "income" ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"}`}>
                         {transaction.type === "income" ? "+" : "-"}
                         {formatCLP(transaction.amount)}
                       </TableCell>
@@ -1438,7 +1438,7 @@ export default function ImportDataPage({
                 {importDueDate && (
                   <div className="flex items-center justify-between pt-1 border-t mt-1">
                     <span className="font-medium">Fecha límite de pago</span>
-                    <span className="tabular-nums font-medium text-amber-600 dark:text-amber-400">{importDueDate}</span>
+                    <span className="tabular-nums font-medium text-zinc-600 dark:text-zinc-400">{importDueDate}</span>
                   </div>
                 )}
               </div>
@@ -1486,7 +1486,7 @@ export default function ImportDataPage({
                           ) : null}
                           {row.error && <p className="text-xs text-red-600 dark:text-red-400">{row.error}</p>}
                           {row.ccMovementType === "tc_payment" && row.duplicate && !row.error ? (
-                            <p className="text-xs text-amber-600 dark:text-amber-400">
+                            <p className="text-xs text-zinc-600 dark:text-zinc-400">
                               Pago TC ya registrado — se enviará como duplicado para revisar
                             </p>
                           ) : null}
@@ -1502,7 +1502,7 @@ export default function ImportDataPage({
                             <button
                               type="button"
                               onClick={() => cycleCcMovementType(index)}
-                              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 cursor-pointer hover:opacity-80 transition-opacity"
+                              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-lime-100 text-lime-800 dark:bg-lime-900/40 dark:text-lime-300 cursor-pointer hover:opacity-80 transition-opacity"
                               title="Clic para cambiar tipo"
                             >
                               Compra
@@ -1512,7 +1512,7 @@ export default function ImportDataPage({
                             <button
                               type="button"
                               onClick={() => cycleCcMovementType(index)}
-                              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 cursor-pointer hover:opacity-80 transition-opacity"
+                              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-slate-100 text-slate-800 dark:bg-slate-900/40 dark:text-slate-300 cursor-pointer hover:opacity-80 transition-opacity"
                               title="Clic para cambiar tipo"
                             >
                               Pago TC
@@ -1605,7 +1605,7 @@ export default function ImportDataPage({
                         {row.error ? (
                           <Badge variant="outline">Inválida</Badge>
                         ) : row.duplicate ? (
-                          <Badge variant="outline" className="text-amber-700 dark:text-amber-300">
+                          <Badge variant="outline" className="text-zinc-700 dark:text-zinc-300">
                             Duplicada
                           </Badge>
                         ) : (
@@ -1614,7 +1614,7 @@ export default function ImportDataPage({
                       </TableCell>
                       <TableCell
                         className={`text-right tabular-nums text-sm font-medium ${
-                          row.type === "income" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                          row.type === "income" ? "text-lime-600 dark:text-lime-400" : "text-red-600 dark:text-red-400"
                         }`}
                       >
                         {row.type === "income" ? "+" : "-"}
