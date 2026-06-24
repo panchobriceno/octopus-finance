@@ -1,5 +1,13 @@
 import { useMemo, useState } from "react";
-import { CalendarClock, CheckCircle2, Play, RotateCw, Trash2, XCircle } from "lucide-react";
+import { CalendarClock, CheckCircle2, Play, Plus, RotateCw, Trash2, XCircle } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import type { CommitmentInstance, CommitmentTemplate, Transaction } from "@shared/schema";
 import {
   useAccounts,
@@ -106,6 +114,7 @@ export default function MonthlyAutomationPage() {
   const currentMonthKey = getCurrentMonthKey();
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
   const [form, setForm] = useState<TemplateForm>(defaultForm);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const { data: templates = [], isLoading: templatesLoading } = useCommitmentTemplates();
   const { data: instances = [], isLoading: instancesLoading } = useCommitmentInstances();
@@ -190,7 +199,7 @@ export default function MonthlyAutomationPage() {
         description: "Completa nombre, categoria y monto.",
         variant: "destructive",
       });
-      return;
+      return false;
     }
 
     await createTemplateMutation.mutateAsync({
@@ -215,6 +224,7 @@ export default function MonthlyAutomationPage() {
 
     setForm(defaultForm);
     toast({ title: "Compromiso recurrente creado" });
+    return true;
   };
 
   const handleGenerate = () => {
@@ -357,11 +367,29 @@ export default function MonthlyAutomationPage() {
           </Card>
         </div>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Nuevo compromiso recurrente</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-base font-semibold">Compromisos recurrentes</h3>
+              <p className="text-sm text-muted-foreground">
+                Plantillas que generan los compromisos de cada mes.
+              </p>
+            </div>
+            <SheetTrigger asChild>
+              <Button data-testid="button-new-commitment">
+                <Plus className="size-4 mr-2" />
+                Nuevo compromiso
+              </Button>
+            </SheetTrigger>
+          </div>
+          <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+            <SheetHeader>
+              <SheetTitle>Nuevo compromiso recurrente</SheetTitle>
+              <SheetDescription>
+                Definí la plantilla. Los campos avanzados ayudan a la conciliación automática.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5 xl:col-span-2">
               <Label>Nombre</Label>
               <Input value={form.name} onChange={(event) => updateForm("name", event.target.value)} placeholder="Ej: Seguro auto" />
@@ -489,13 +517,25 @@ export default function MonthlyAutomationPage() {
               <Label>Notas</Label>
               <Textarea value={form.notes} onChange={(event) => updateForm("notes", event.target.value)} className="min-h-10" />
             </div>
-            <div className="md:col-span-2 xl:col-span-6">
-              <Button onClick={handleCreateTemplate} disabled={createTemplateMutation.isPending}>
+            <div className="sm:col-span-2">
+              <Button
+                className="w-full"
+                onClick={async () => {
+                  try {
+                    const ok = await handleCreateTemplate();
+                    if (ok) setSheetOpen(false);
+                  } catch {
+                    // la mutación ya notifica el error; dejar el sheet abierto
+                  }
+                }}
+                disabled={createTemplateMutation.isPending}
+              >
                 {createTemplateMutation.isPending ? "Guardando" : "Crear compromiso"}
               </Button>
             </div>
-          </CardContent>
-        </Card>
+            </div>
+          </SheetContent>
+        </Sheet>
 
         <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
           <Card>
