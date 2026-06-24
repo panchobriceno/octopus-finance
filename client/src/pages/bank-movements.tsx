@@ -905,30 +905,32 @@ export default function BankMovementsPage() {
     }}>
       <AlertDialogContent className="max-w-2xl">
         <AlertDialogHeader>
-          <AlertDialogTitle>Revisar conversion masiva</AlertDialogTitle>
+          <AlertDialogTitle>Confirmar importación</AlertDialogTitle>
           <AlertDialogDescription>
-            Se revisaron {bulkPreflight?.total ?? 0} movimientos de alta confianza antes de crear transacciones reales.
+            Paso 3 de 3 · Revisá {bulkPreflight?.total ?? 0} movimientos de alta confianza antes de crear transacciones reales.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {bulkPreflight ? (
           <div className="space-y-4">
-            <div className="grid gap-2 sm:grid-cols-4">
-              <div className="rounded-lg border border-[#bb9eff]/10 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Listos</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.ready}</p>
+            <div className="divide-y divide-border/40 rounded-xl border border-border/60 bg-card/60">
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-sm">Movimientos a crear</span>
+                <span className="font-mono text-lg font-semibold tabular-nums text-[#bcf8df]">{bulkPreflight.ready}</span>
               </div>
-              <div className="rounded-lg border border-[#bb9eff]/10 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Duplicados</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.duplicates.length}</p>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-sm text-muted-foreground">Duplicados a descartar</span>
+                <span className="font-mono text-lg font-semibold tabular-nums">{bulkPreflight.duplicates.length}</span>
               </div>
-              <div className="rounded-lg border border-[#bb9eff]/10 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Por revisar</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.reviewRequired.length}</p>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-sm text-muted-foreground">Pendientes de revisar después</span>
+                <span className="font-mono text-lg font-semibold tabular-nums text-amber-300">{bulkPreflight.reviewRequired.length}</span>
               </div>
-              <div className="rounded-lg border border-[#bb9eff]/10 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Bloqueados</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.blocked.length}</p>
-              </div>
+              {bulkPreflight.blocked.length > 0 ? (
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-sm text-muted-foreground">Bloqueados</span>
+                  <span className="font-mono text-lg font-semibold tabular-nums text-[#ff8da3]">{bulkPreflight.blocked.length}</span>
+                </div>
+              ) : null}
             </div>
             {bulkPreflightIssues.length > 0 ? (
               <div className="max-h-64 overflow-auto rounded-lg border border-[#bb9eff]/10">
@@ -952,10 +954,13 @@ export default function BankMovementsPage() {
                 No hay duplicados ni bloqueos detectados para este lote.
               </div>
             )}
+            <p className="text-xs text-muted-foreground">
+              Se crean solo los movimientos listos. Podés deshacer el lote después con “Omitir lote”.
+            </p>
           </div>
         ) : null}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={bulkConvertMutation.isPending}>Cancelar</AlertDialogCancel>
+          <AlertDialogCancel disabled={bulkConvertMutation.isPending}>Atrás</AlertDialogCancel>
           <AlertDialogAction
             onClick={(event) => {
               event.preventDefault();
@@ -963,7 +968,7 @@ export default function BankMovementsPage() {
             }}
             disabled={!bulkPreflight?.ready || bulkConvertMutation.isPending}
           >
-            {bulkConvertMutation.isPending ? "Convirtiendo..." : `Convertir ${bulkPreflight?.ready ?? 0} listos`}
+            {bulkConvertMutation.isPending ? "Aplicando..." : "Aplicar importación"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
