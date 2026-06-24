@@ -2,7 +2,22 @@
  * Firestore data layer — replaces Express API + MemStorage.
  * Uses Firebase modular SDK v9.
  */
-import type { Category, Client, ClientPayment, Item, Transaction } from "@shared/schema";
+import type {
+  Account,
+  Budget,
+  Category,
+  Client,
+  ClientPayment,
+  CommitmentInstance,
+  CommitmentTemplate,
+  InsertMonthlyCloseSnapshot,
+  ImportBatch,
+  ImportedMovement,
+  Item,
+  MovementRule,
+  MonthlyCloseSnapshot,
+  Transaction,
+} from "@shared/schema";
 import {
   collection,
   doc,
@@ -12,15 +27,64 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  runTransaction,
   writeBatch,
   query,
   orderBy,
   where,
   limit,
   type QuerySnapshot,
+  type DocumentSnapshot,
   type DocumentData,
+  type Transaction as FirestoreTransaction,
 } from "firebase/firestore/lite";
 import { db } from "./firebase";
+import { getCurrentMonthKey } from "./finance";
+import {
+  buildImportedMovement,
+  buildTransactionFromImportedMovement,
+  buildTransactionMatchKey,
+  findBestMovementRule,
+  applyMovementRule,
+  type ImportedMovementOverride,
+  type MovementSeedInput,
+} from "@/domain/bank-imports";
+import {
+  buildMissingCommitmentInstances,
+  findCommitmentMatches,
+} from "@/domain/commitments";
+import {
+  buildBrokenReferencesPlan,
+  buildMergeDuplicateCategoriesPlan,
+  type RepairCollection,
+  type RepairOperation,
+  type RepairPlan,
+} from "@/domain/repair-plans";
+
+export type ImportedMovementBatchRow = Omit<
+  MovementSeedInput,
+  "batchId" | "createdAt" | "source" | "sourceName" | "sourceType"
+> & {
+  source?: string;
+  sourceName?: string;
+  sourceType?: "bank_account" | "credit_card";
+};
+
+export type CreateImportedMovementBatchInput = {
+  label: string;
+  source?: string;
+  sourceName: string;
+  sourceType: "bank_account" | "credit_card";
+  bankName?: string | null;
+  accountId?: string | null;
+  creditCardName?: string | null;
+  workspace?: string;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  notes?: string | null;
+  isDemo?: boolean;
+  movements: ImportedMovementBatchRow[];
+};
 
 // ── Helper: map Firestore snapshot to typed array ───────────────
 function snapToArray<T>(snap: QuerySnapshot<DocumentData>): T[] {
@@ -35,6 +99,29 @@ function normalizeText(value: unknown) {
     .trim();
 }
 
+function getCategoryMergeKey(category: Pick<Category, "name" | "type" | "workspace">) {
+  return `${normalizeText(category.name)}::${category.type}::${category.workspace ?? "business"}`;
+}
+
+function getWorkspaceKey(value: unknown) {
+  return String(value ?? "business");
+}
+
+function hasNormalizedName(value: unknown, normalizedNames: Set<string>) {
+  const normalized = normalizeText(value);
+  return Boolean(normalized) && normalizedNames.has(normalized);
+}
+
+async function commitWriteOperations(
+  operations: Array<(batch: ReturnType<typeof writeBatch>) => void>,
+) {
+  for (let i = 0; i < operations.length; i += 450) {
+    const batch = writeBatch(db);
+    operations.slice(i, i + 450).forEach((operation) => operation(batch));
+    await batch.commit();
+  }
+}
+
 // ── Collection references ───────────────────────────────────────
 const transactionsCol = () => collection(db, "transactions");
 const categoriesCol = () => collection(db, "categories");
@@ -45,8 +132,188 @@ const clientPaymentsCol = () => collection(db, "clientPayments");
 const clientsCol = () => collection(db, "clients");
 const accountsCol = () => collection(db, "accounts");
 const creditCardSettingsCol = () => collection(db, "credit_card_settings");
+const commitmentTemplatesCol = () => collection(db, "commitmentTemplates");
+const commitmentInstancesCol = () => collection(db, "commitmentInstances");
+const monthlyCloseSnapshotsCol = () => collection(db, "monthlyCloseSnapshots");
+const importBatchesCol = () => collection(db, "importBatches");
+const importedMovementsCol = () => collection(db, "importedMovements");
+const movementRulesCol = () => collection(db, "movementRules");
 const preferencesDoc = () => doc(db, "preferences", "dashboard");
 const ITEM_BUDGET_PREFIX = "item:";
+const FALLBACK_CATEGORY_NAME = "Sin categoría";
+const SYSTEM_CATEGORY_NAMES = new Set([
+  "ingresos clientes",
+  "iva por pagar",
+  "cuota tarjeta",
+  "pago tarjeta",
+  "pago tarjeta de credito",
+  "transferencia",
+  "transferencias",
+]);
+
+function repairCollectionDoc(collectionName: RepairCollection, id: string) {
+  const collectionPaths: Record<RepairCollection, string> = {
+    categories: "categories",
+    items: "items",
+    transactions: "transactions",
+    budgets: "budgets",
+    commitmentTemplates: "commitmentTemplates",
+    commitmentInstances: "commitmentInstances",
+    movementRules: "movementRules",
+    importedMovements: "importedMovements",
+  };
+  return doc(db, collectionPaths[collectionName], id);
+}
+
+function stripDocumentId(record: Record<string, any>) {
+  const { id: _id, ...data } = record;
+  return data;
+}
+
+function normalizeComparableValue(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (Array.isArray(value)) return value.map((entry) => normalizeComparableValue(entry));
+  if (typeof value === "number") {
+    if (Number.isNaN(value)) return "__NaN__";
+    if (value === Infinity) return "__Infinity__";
+    if (value === -Infinity) return "__-Infinity__";
+    return value;
+  }
+  if (typeof value !== "object") return value;
+
+  if (value instanceof Date) return value.toISOString();
+
+  const record = value as Record<string, any>;
+  if (typeof record.seconds === "number" && typeof record.nanoseconds === "number") {
+    return { seconds: record.seconds, nanoseconds: record.nanoseconds };
+  }
+  if (typeof record._seconds === "number" && typeof record._nanoseconds === "number") {
+    return { seconds: record._seconds, nanoseconds: record._nanoseconds };
+  }
+
+  return Object.keys(record)
+    .sort()
+    .reduce<Record<string, unknown>>((acc, key) => {
+      const normalized = normalizeComparableValue(record[key]);
+      if (normalized !== undefined) acc[key] = normalized;
+      return acc;
+    }, {});
+}
+
+function repairRecordsMatch(left: Record<string, any> | null, right: Record<string, any> | null) {
+  return JSON.stringify(normalizeComparableValue(left)) === JSON.stringify(normalizeComparableValue(right));
+}
+
+function isComparableRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function formatRepairPath(path: string[]) {
+  return path.length ? path.join(".") : "registro";
+}
+
+function formatRepairValue(value: unknown) {
+  const text = JSON.stringify(value);
+  const display = text ?? String(value);
+  return display.length > 120 ? `${display.slice(0, 117)}...` : display;
+}
+
+function findFirstRepairMismatch(actual: unknown, preview: unknown, path: string[] = []): string | null {
+  if (JSON.stringify(actual) === JSON.stringify(preview)) return null;
+
+  if (Array.isArray(actual) || Array.isArray(preview)) {
+    if (!Array.isArray(actual) || !Array.isArray(preview)) {
+      return `${formatRepairPath(path)} preview=${formatRepairValue(preview)} actual=${formatRepairValue(actual)}`;
+    }
+    const maxLength = Math.max(actual.length, preview.length);
+    for (let index = 0; index < maxLength; index += 1) {
+      const mismatch = findFirstRepairMismatch(actual[index], preview[index], [...path, String(index)]);
+      if (mismatch) return mismatch;
+    }
+    return `${formatRepairPath(path)} preview=${formatRepairValue(preview)} actual=${formatRepairValue(actual)}`;
+  }
+
+  if (isComparableRecord(actual) && isComparableRecord(preview)) {
+    const keys = Array.from(new Set([...Object.keys(actual), ...Object.keys(preview)])).sort();
+    for (const key of keys) {
+      const mismatch = findFirstRepairMismatch(actual[key], preview[key], [...path, key]);
+      if (mismatch) return mismatch;
+    }
+  }
+
+  return `${formatRepairPath(path)} preview=${formatRepairValue(preview)} actual=${formatRepairValue(actual)}`;
+}
+
+function getRepairMismatchDetail(actual: Record<string, any>, preview: Record<string, any> | null) {
+  const mismatch = findFirstRepairMismatch(
+    normalizeComparableValue(actual),
+    normalizeComparableValue(preview),
+  );
+  return mismatch ? ` Diferencia: ${mismatch}.` : "";
+}
+
+function validateRepairOperationSnapshotIsFresh(
+  operation: RepairOperation,
+  snapshot: DocumentSnapshot<DocumentData>,
+) {
+  if (operation.op === "create") {
+    if (snapshot.exists()) {
+      throw new Error(
+        `El plan ya no esta vigente: ${operation.collection}/${operation.recordId} ya existe. Regenera la auditoria antes de aplicar.`,
+      );
+    }
+    return;
+  }
+
+  if (!snapshot.exists()) {
+    throw new Error(
+      `El plan ya no esta vigente: ${operation.collection}/${operation.recordId} ya no existe. Regenera la auditoria antes de aplicar.`,
+    );
+  }
+
+  const current = { id: snapshot.id, ...snapshot.data() };
+  if (!repairRecordsMatch(current, operation.before)) {
+    throw new Error(
+      `El plan ya no esta vigente: ${operation.collection}/${operation.recordId} cambio desde el preview. Regenera la auditoria antes de aplicar.${getRepairMismatchDetail(current, operation.before)}`,
+    );
+  }
+}
+
+async function validateRepairChunkIsFresh(
+  transaction: FirestoreTransaction,
+  operations: RepairOperation[],
+) {
+  for (const operation of operations) {
+    const snapshot = await transaction.get(repairCollectionDoc(operation.collection, operation.recordId));
+    validateRepairOperationSnapshotIsFresh(operation, snapshot);
+  }
+}
+
+function applyRepairOperationToTransaction(
+  transaction: FirestoreTransaction,
+  operation: RepairOperation,
+) {
+  const ref = repairCollectionDoc(operation.collection, operation.recordId);
+  if (operation.op === "create") {
+    transaction.set(ref, stripDocumentId(operation.after ?? {}));
+  } else if (operation.op === "update") {
+    transaction.update(ref, operation.patch ?? stripDocumentId(operation.after ?? {}));
+  } else {
+    transaction.delete(ref);
+  }
+}
+
+async function applyRepairPlan(plan: RepairPlan) {
+  for (let i = 0; i < plan.operations.length; i += 450) {
+    const operations = plan.operations.slice(i, i + 450);
+    await runTransaction(db, async (transaction) => {
+      await validateRepairChunkIsFresh(transaction, operations);
+      operations.forEach((operation) => applyRepairOperationToTransaction(transaction, operation));
+    });
+  }
+  return plan;
+}
 
 function isItemBudgetKey(value: unknown): value is string {
   return typeof value === "string" && value.startsWith(ITEM_BUDGET_PREFIX);
@@ -183,6 +450,68 @@ export async function deleteCategory(id: string) {
   await deleteDoc(doc(db, "categories", id));
 }
 
+export async function mergeDuplicateCategories(primaryCategoryId: string, duplicateCategoryIds: string[]) {
+  const [
+    categoriesSnap,
+    itemsSnap,
+    transactionsSnap,
+    budgetsSnap,
+    commitmentTemplatesSnap,
+    commitmentInstancesSnap,
+    movementRulesSnap,
+    importedMovementsSnap,
+  ] = await Promise.all([
+    getDocs(categoriesCol()),
+    getDocs(itemsCol()),
+    getDocs(transactionsCol()),
+    getDocs(budgetsCol()),
+    getDocs(commitmentTemplatesCol()),
+    getDocs(commitmentInstancesCol()),
+    getDocs(movementRulesCol()),
+    getDocs(importedMovementsCol()),
+  ]);
+  const plan = buildMergeDuplicateCategoriesPlan(
+    {
+      categories: snapToArray<Category>(categoriesSnap),
+      items: snapToArray<Item>(itemsSnap),
+      transactions: snapToArray<Transaction>(transactionsSnap),
+      budgets: snapToArray<Budget>(budgetsSnap),
+      commitmentTemplates: snapToArray<CommitmentTemplate>(commitmentTemplatesSnap),
+      commitmentInstances: snapToArray<CommitmentInstance>(commitmentInstancesSnap),
+      movementRules: snapToArray<MovementRule>(movementRulesSnap),
+      importedMovements: snapToArray<ImportedMovement>(importedMovementsSnap),
+    },
+    primaryCategoryId,
+    duplicateCategoryIds,
+  );
+
+  await applyRepairPlan(plan);
+  return plan.summary;
+}
+
+export async function repairBrokenReferences() {
+  const [categoriesSnap, itemsSnap, transactionsSnap, budgetsSnap] = await Promise.all([
+    getDocs(categoriesCol()),
+    getDocs(itemsCol()),
+    getDocs(transactionsCol()),
+    getDocs(budgetsCol()),
+  ]);
+  const plan = buildBrokenReferencesPlan(
+    {
+      categories: snapToArray<Category>(categoriesSnap),
+      items: snapToArray<Item>(itemsSnap),
+      transactions: snapToArray<Transaction>(transactionsSnap),
+      budgets: snapToArray<Budget>(budgetsSnap),
+    },
+    {
+      createId: (collectionName, hint) => doc(collection(db, collectionName)).id,
+    },
+  );
+
+  await applyRepairPlan(plan);
+  return plan.summary;
+}
+
 // ════════════════════════════════════════════════════════════════
 // ITEMS (subcategories)
 // ════════════════════════════════════════════════════════════════
@@ -249,6 +578,7 @@ export async function generateMonthlyRecurringTransactions(year: number, month: 
     const budgetWorkspace = budget.workspace ?? "business";
     return (
       budgetWorkspace === workspace &&
+      !budget.isArchived &&
       budget.year === previousYear &&
       budget.month === previousMonth
     );
@@ -341,6 +671,7 @@ export async function generateMonthlyRecurringTransactions(year: number, month: 
           movementType: "expense",
           paymentMethod: "bank_account",
           destinationWorkspace: null,
+          destinationAccountId: null,
           creditCardName: null,
           installmentCount: null,
           accountId: null,
@@ -388,6 +719,7 @@ export async function generateMonthlyRecurringTransactions(year: number, month: 
       movementType: "expense",
       paymentMethod: "bank_account",
       destinationWorkspace: null,
+      destinationAccountId: null,
       creditCardName: null,
       installmentCount: null,
       accountId: null,
@@ -557,6 +889,7 @@ function buildClientPaymentSettlementTransaction(
     notes: null,
     itemId: null,
     destinationWorkspace: null,
+    destinationAccountId: null,
     creditCardName: null,
     installmentCount: null,
   };
@@ -832,6 +1165,1163 @@ export async function updateCreditCardSetting(id: string, data: Record<string, a
 
 export async function deleteCreditCardSetting(id: string) {
   await deleteDoc(doc(db, "credit_card_settings", id));
+}
+
+// ════════════════════════════════════════════════════════════════
+// COMMITMENT AUTOMATION
+// ════════════════════════════════════════════════════════════════
+function todayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+// ════════════════════════════════════════════════════════════════
+// MONTHLY CLOSE SNAPSHOTS
+// ════════════════════════════════════════════════════════════════
+export async function getMonthlyCloseSnapshots() {
+  const snap = await getDocs(monthlyCloseSnapshotsCol());
+  return snapToArray<MonthlyCloseSnapshot>(snap).sort((left, right) =>
+    right.monthKey.localeCompare(left.monthKey),
+  );
+}
+
+export async function saveMonthlyCloseSnapshot(data: InsertMonthlyCloseSnapshot) {
+  const ref = doc(db, "monthlyCloseSnapshots", data.monthKey);
+  const existingSnapshot = await getDoc(ref);
+  const existing = existingSnapshot.exists()
+    ? existingSnapshot.data() as Partial<MonthlyCloseSnapshot>
+    : null;
+  const now = nowIso();
+  const payload: Omit<MonthlyCloseSnapshot, "id"> = {
+    monthKey: data.monthKey,
+    year: data.year,
+    month: data.month,
+    status: "closed",
+    closedAt: data.closedAt ?? existing?.closedAt ?? now,
+    reopenedAt: null,
+    notes: data.notes ?? null,
+    summary: data.summary,
+    checklist: data.checklist,
+    rows: data.rows,
+    createdAt: existing?.createdAt ?? data.createdAt ?? now,
+    updatedAt: now,
+  };
+
+  await setDoc(ref, payload, { merge: true });
+  return { id: ref.id, ...payload };
+}
+
+export async function reopenMonthlyCloseSnapshot(monthKey: string) {
+  const ref = doc(db, "monthlyCloseSnapshots", monthKey);
+  const now = nowIso();
+  await updateDoc(ref, {
+    status: "reopened",
+    reopenedAt: now,
+    updatedAt: now,
+  });
+  return { id: monthKey, status: "reopened", reopenedAt: now, updatedAt: now };
+}
+
+export async function getCommitmentTemplates() {
+  const snap = await getDocs(commitmentTemplatesCol());
+  return snapToArray<CommitmentTemplate>(snap).sort((a, b) => {
+    const leftDay = Number(a.dayOfMonth) || 1;
+    const rightDay = Number(b.dayOfMonth) || 1;
+    if (leftDay !== rightDay) return leftDay - rightDay;
+    return `${a.name ?? ""}`.localeCompare(`${b.name ?? ""}`, "es");
+  });
+}
+
+export async function createCommitmentTemplate(data: Record<string, any>) {
+  const now = nowIso();
+  const payload = {
+    amountMode: "fixed",
+    workspace: "family",
+    movementType: "expense",
+    paymentMethod: "bank_account",
+    accountId: null,
+    destinationAccountId: null,
+    creditCardName: null,
+    frequency: "monthly",
+    matchingKeywords: [],
+    amountTolerance: 1000,
+    dateToleranceDays: 5,
+    sourceBudgetKey: null,
+    isActive: true,
+    notes: null,
+    createdAt: now,
+    updatedAt: now,
+    ...data,
+  };
+  const ref = await addDoc(commitmentTemplatesCol(), payload);
+  return { id: ref.id, ...payload };
+}
+
+export async function updateCommitmentTemplate(id: string, data: Record<string, any>) {
+  const ref = doc(db, "commitmentTemplates", id);
+  const payload = {
+    ...data,
+    updatedAt: nowIso(),
+  };
+  await updateDoc(ref, payload);
+  return { id, ...payload };
+}
+
+export async function deleteCommitmentTemplate(id: string) {
+  await deleteDoc(doc(db, "commitmentTemplates", id));
+}
+
+export async function getCommitmentInstances() {
+  const snap = await getDocs(query(commitmentInstancesCol(), orderBy("dueDate", "asc")));
+  return snapToArray<CommitmentInstance>(snap);
+}
+
+export async function updateCommitmentInstance(id: string, data: Record<string, any>) {
+  const payload = {
+    ...data,
+    updatedAt: nowIso(),
+  };
+  await updateDoc(doc(db, "commitmentInstances", id), payload);
+  return { id, ...payload };
+}
+
+export async function deleteCommitmentInstance(id: string) {
+  await deleteDoc(doc(db, "commitmentInstances", id));
+}
+
+export async function generateCommitmentInstances(monthKey: string) {
+  const [templatesSnap, instancesSnap] = await Promise.all([
+    getDocs(commitmentTemplatesCol()),
+    getDocs(query(commitmentInstancesCol(), where("monthKey", "==", monthKey))),
+  ]);
+  const templates = snapToArray<CommitmentTemplate>(templatesSnap);
+  const existingInstances = snapToArray<CommitmentInstance>(instancesSnap);
+  const missingInstances = buildMissingCommitmentInstances(templates, existingInstances, monthKey);
+
+  for (let index = 0; index < missingInstances.length; index += 450) {
+    const batch = writeBatch(db);
+    for (const instance of missingInstances.slice(index, index + 450)) {
+      const ref = doc(commitmentInstancesCol());
+      batch.set(ref, instance);
+    }
+    await batch.commit();
+  }
+
+  return {
+    created: missingInstances.length,
+    skipped: templates.filter((template) => template.isActive !== false).length - missingInstances.length,
+  };
+}
+
+export async function bootstrapCommitmentTemplatesFromRecurringBudgets() {
+  const [budgetsSnap, templatesSnap, itemsSnap, categoriesSnap] = await Promise.all([
+    getDocs(budgetsCol()),
+    getDocs(commitmentTemplatesCol()),
+    getDocs(itemsCol()),
+    getDocs(categoriesCol()),
+  ]);
+  const budgets = snapToArray<any>(budgetsSnap);
+  const templates = snapToArray<CommitmentTemplate>(templatesSnap);
+  const items = snapToArray<Item>(itemsSnap);
+  const categories = snapToArray<Category>(categoriesSnap);
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
+
+  const latestRecurringByKey = new Map<string, any>();
+  for (const budget of budgets) {
+    if (budget.isArchived) continue;
+    if (!budget.isRecurring) continue;
+    const workspace = budget.workspace ?? "business";
+    const sourceBudgetKey = `${workspace}::${budget.categoryGroup}`;
+    const current = latestRecurringByKey.get(sourceBudgetKey);
+    if (
+      !current ||
+      budget.year > current.year ||
+      (budget.year === current.year && budget.month > current.month)
+    ) {
+      latestRecurringByKey.set(sourceBudgetKey, budget);
+    }
+  }
+
+  const templateBySourceKey = new Map(
+    templates
+      .filter((template) => Boolean(template.sourceBudgetKey))
+      .map((template) => [template.sourceBudgetKey as string, template]),
+  );
+  const existingFallbackKeys = new Set(
+    templates.map((template) =>
+      `${template.workspace ?? "family"}::${normalizeText(template.name)}::${normalizeText(template.category)}`,
+    ),
+  );
+  const now = nowIso();
+  const templatesToUpdate: Array<{ id: string; data: Record<string, any> }> = [];
+  const payloads = Array.from(latestRecurringByKey.entries())
+    .map(([sourceBudgetKey, budget]) => {
+      const itemId = getItemBudgetId(budget.categoryGroup);
+      const item = itemId ? itemById.get(itemId) : null;
+      const category = item?.categoryId ? categoryById.get(item.categoryId) : null;
+      const name = item?.name ?? budget.categoryGroup;
+      const categoryName = category?.name ?? budget.categoryGroup;
+      const workspace = budget.workspace ?? "business";
+      const syncedData = {
+        name,
+        category: categoryName,
+        amount: Number(budget.amount) || 0,
+        workspace,
+        dayOfMonth: Math.max(1, Math.min(31, Number(budget.dayOfMonth ?? 5) || 5)),
+        sourceBudgetKey,
+        updatedAt: now,
+      };
+      const existingFromSource = templateBySourceKey.get(sourceBudgetKey);
+
+      if (existingFromSource) {
+        templatesToUpdate.push({
+          id: existingFromSource.id,
+          data: syncedData,
+        });
+        return null;
+      }
+
+      const fallbackKey = `${workspace}::${normalizeText(name)}::${normalizeText(categoryName)}`;
+
+      if (existingFallbackKeys.has(fallbackKey)) return null;
+      existingFallbackKeys.add(fallbackKey);
+
+      return {
+        ...syncedData,
+        amountMode: "fixed",
+        movementType: "expense",
+        paymentMethod: "bank_account",
+        accountId: null,
+        destinationAccountId: null,
+        creditCardName: null,
+        frequency: "monthly",
+        matchingKeywords: [name, categoryName].filter(Boolean),
+        amountTolerance: 1000,
+        dateToleranceDays: 5,
+        isActive: true,
+        notes: "Creado desde presupuesto recurrente.",
+        createdAt: now,
+      };
+    })
+    .filter((payload) => payload !== null);
+
+  for (let index = 0; index < templatesToUpdate.length; index += 450) {
+    const batch = writeBatch(db);
+    for (const template of templatesToUpdate.slice(index, index + 450)) {
+      batch.update(doc(db, "commitmentTemplates", template.id), template.data);
+    }
+    await batch.commit();
+  }
+
+  for (let index = 0; index < payloads.length; index += 450) {
+    const batch = writeBatch(db);
+    for (const payload of payloads.slice(index, index + 450)) {
+      batch.set(doc(commitmentTemplatesCol()), payload);
+    }
+    await batch.commit();
+  }
+
+  return {
+    created: payloads.length,
+    updated: templatesToUpdate.length,
+    scanned: latestRecurringByKey.size,
+  };
+}
+
+export async function generateBudgetCommitmentsForMonth(monthKey: string) {
+  const templateSync = await bootstrapCommitmentTemplatesFromRecurringBudgets();
+  const instanceSync = await generateCommitmentInstances(monthKey);
+
+  return {
+    templatesCreated: templateSync.created,
+    templatesUpdated: templateSync.updated,
+    templatesScanned: templateSync.scanned,
+    instancesCreated: instanceSync.created,
+    instancesSkipped: instanceSync.skipped,
+  };
+}
+
+export async function reconcileCommitmentInstances(monthKey: string) {
+  const monthStart = `${monthKey}-01`;
+  const monthEnd = `${monthKey}-31`;
+  const [templatesSnap, instancesSnap, transactionsSnap] = await Promise.all([
+    getDocs(commitmentTemplatesCol()),
+    getDocs(query(commitmentInstancesCol(), where("monthKey", "==", monthKey))),
+    getDocs(query(transactionsCol(), where("date", ">=", monthStart), where("date", "<=", monthEnd))),
+  ]);
+  const templates = snapToArray<CommitmentTemplate>(templatesSnap);
+  const instances = snapToArray<CommitmentInstance>(instancesSnap);
+  const transactions = snapToArray<Transaction>(transactionsSnap);
+  const matches = findCommitmentMatches(instances, templates, transactions);
+
+  for (let index = 0; index < matches.length; index += 450) {
+    const batch = writeBatch(db);
+    for (const match of matches.slice(index, index + 450)) {
+      batch.update(doc(db, "commitmentInstances", match.instance.id), {
+        status: "paid",
+        matchedTransactionId: match.transaction.id,
+        matchedAt: nowIso(),
+        paidAt: match.transaction.date || todayDate(),
+        updatedAt: nowIso(),
+        notes: match.instance.notes
+          ? `${match.instance.notes}\nConciliado: ${match.reasons.join(", ")}`
+          : `Conciliado: ${match.reasons.join(", ")}`,
+      });
+    }
+    await batch.commit();
+  }
+
+  return {
+    matched: matches.length,
+  };
+}
+
+// ════════════════════════════════════════════════════════════════
+// BANK IMPORT PIPELINE
+// ════════════════════════════════════════════════════════════════
+export async function getImportBatches() {
+  const snap = await getDocs(query(importBatchesCol(), orderBy("createdAt", "desc"), limit(100)));
+  return snapToArray<ImportBatch>(snap).sort((a, b) => {
+    const newerDate = b.createdAt ?? "";
+    const olderDate = a.createdAt ?? "";
+    return newerDate.localeCompare(olderDate);
+  });
+}
+
+export async function getImportedMovements(options: {
+  batchId?: string | null;
+  status?: string | null;
+  limitCount?: number;
+} = {}) {
+  const maxRows = Math.max(1, Math.min(Number(options.limitCount ?? 750) || 750, 1500));
+  const snap = options.batchId
+    ? options.status
+      ? await getDocs(query(
+          importedMovementsCol(),
+          where("batchId", "==", options.batchId),
+          where("status", "==", options.status),
+          limit(maxRows),
+        ))
+      : await getDocs(query(importedMovementsCol(), where("batchId", "==", options.batchId), limit(maxRows)))
+    : options.status
+      ? await getDocs(query(importedMovementsCol(), where("status", "==", options.status), limit(maxRows)))
+      : await getDocs(query(importedMovementsCol(), limit(maxRows)));
+  return snapToArray<ImportedMovement>(snap).sort((a, b) => {
+    if (a.status !== b.status) {
+      const order: Record<string, number> = {
+        pending: 0,
+        duplicate: 1,
+        converted: 2,
+        discarded: 3,
+      };
+      return (order[a.status] ?? 9) - (order[b.status] ?? 9);
+    }
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    return `${a.description ?? ""}`.localeCompare(`${b.description ?? ""}`, "es");
+  });
+}
+
+export async function updateImportedMovement(id: string, data: Record<string, any>) {
+  const payload = {
+    ...data,
+    updatedAt: nowIso(),
+  };
+  await updateDoc(doc(db, "importedMovements", id), payload);
+  return { id, ...payload };
+}
+
+export async function discardImportedMovement(id: string) {
+  return updateImportedMovement(id, {
+    status: "discarded",
+    discardReason: "manual",
+    discardedAt: nowIso(),
+  });
+}
+
+export async function rollbackImportBatch(batchId: string) {
+  const batchRef = doc(db, "importBatches", batchId);
+  const batchSnapshot = await getDoc(batchRef);
+  if (!batchSnapshot.exists()) {
+    throw new Error("Lote de importacion no encontrado.");
+  }
+
+  const convertedSnap = await getDocs(query(
+    importedMovementsCol(),
+    where("batchId", "==", batchId),
+    where("status", "==", "converted"),
+  ));
+  const convertedRemaining = convertedSnap.size;
+  const batchData = batchSnapshot.data() as ImportBatch;
+  if (batchData.status === "closed") {
+    return {
+      batchId,
+      discarded: 0,
+      convertedRemaining,
+      alreadyClosed: true,
+    };
+  }
+
+  const movementsSnap = await getDocs(query(
+    importedMovementsCol(),
+    where("batchId", "==", batchId),
+    where("status", "in", ["pending", "duplicate"]),
+  ));
+  const movements = snapToArray<ImportedMovement>(movementsSnap);
+  const now = nowIso();
+  const chunkSize = 450;
+
+  // Conversion is transaction-protected; rollback is a chunked status update because this is a personal single-user flow.
+  for (let index = 0; index < movements.length; index += chunkSize) {
+    const batch = writeBatch(db);
+    for (const movement of movements.slice(index, index + chunkSize)) {
+      batch.update(doc(db, "importedMovements", movement.id), {
+        status: "discarded",
+        discardReason: "batch_rollback",
+        discardedAt: now,
+        updatedAt: now,
+      });
+    }
+    await batch.commit();
+  }
+
+  await updateDoc(batchRef, {
+    status: "closed",
+    closedAt: now,
+    discardedOnRollback: movements.length,
+    updatedAt: now,
+  });
+
+  return {
+    batchId,
+    discarded: movements.length,
+    convertedRemaining,
+    alreadyClosed: false,
+  };
+}
+
+export async function deleteImportedMovement(id: string) {
+  await deleteDoc(doc(db, "importedMovements", id));
+}
+
+export async function getMovementRules() {
+  const snap = await getDocs(movementRulesCol());
+  return snapToArray<MovementRule>(snap).sort((a, b) => {
+    const priorityDiff = (Number(b.priority) || 0) - (Number(a.priority) || 0);
+    if (priorityDiff !== 0) return priorityDiff;
+    return `${a.name ?? ""}`.localeCompare(`${b.name ?? ""}`, "es");
+  });
+}
+
+export async function createMovementRule(data: Record<string, any>) {
+  const now = nowIso();
+  const payload = {
+    keywords: [],
+    workspace: "family",
+    movementType: "expense",
+    paymentMethod: "bank_account",
+    accountId: null,
+    creditCardName: null,
+    amountDirection: "any",
+    priority: 0,
+    isActive: true,
+    notes: null,
+    createdAt: now,
+    updatedAt: now,
+    ...data,
+  };
+  const ref = await addDoc(movementRulesCol(), payload);
+  return { id: ref.id, ...payload };
+}
+
+export async function updateMovementRule(id: string, data: Record<string, any>) {
+  const payload = {
+    ...data,
+    updatedAt: nowIso(),
+  };
+  await updateDoc(doc(db, "movementRules", id), payload);
+  return { id, ...payload };
+}
+
+export async function deleteMovementRule(id: string) {
+  await deleteDoc(doc(db, "movementRules", id));
+}
+
+function dateInMonth(monthKey: string, day: number) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const safeDay = Math.min(Math.max(day, 1), daysInMonth);
+  return `${monthKey}-${String(safeDay).padStart(2, "0")}`;
+}
+
+function accountMatchesBank(account: Account, bankHints: string[]) {
+  const haystack = normalizeText(`${account.bank ?? ""} ${account.name ?? ""}`);
+  return bankHints.some((hint) => haystack.includes(normalizeText(hint)));
+}
+
+function pickDemoAccount(
+  accounts: Account[],
+  workspace: string,
+  bankHints: string[],
+) {
+  const cashAccounts = accounts.filter(
+    (account) => account.type === "checking" || account.type === "savings",
+  );
+  return (
+    cashAccounts.find((account) => account.workspace === workspace && accountMatchesBank(account, bankHints)) ??
+    cashAccounts.find((account) => account.workspace === workspace) ??
+    cashAccounts.find((account) => accountMatchesBank(account, bankHints)) ??
+    null
+  );
+}
+
+function findCreditCardName(accounts: Account[]) {
+  const accountCard = accounts.find((account) => account.type === "credit_card");
+  return accountCard ? `${accountCard.bank} ${accountCard.name}`.trim() : "Tarjeta demo Santander";
+}
+
+function getLastDayOfMonth(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(year, month, 0).getDate();
+}
+
+function buildDemoMovementInputs(
+  batchId: string,
+  accounts: Account[],
+  monthKey: string,
+  now: string,
+): MovementSeedInput[] {
+  const businessAccount = pickDemoAccount(accounts, "business", ["santander", "itau"]);
+  const familyAccount = pickDemoAccount(accounts, "family", ["edwards", "santander"]);
+  const itauAccount = pickDemoAccount(accounts, "business", ["itau"]);
+  const demoItauAccount = itauAccount ?? businessAccount;
+  const cardName = findCreditCardName(accounts);
+
+  return [
+    {
+      batchId,
+      source: "demo",
+      sourceName: "Demo Santander Empresa",
+      sourceType: "bank_account",
+      bankName: businessAccount?.bank ?? "Santander",
+      accountId: businessAccount?.id ?? null,
+      date: dateInMonth(monthKey, 3),
+      description: "Transferencia cliente Demo Retainer Junio",
+      amount: 1850000,
+      direction: "income",
+      category: "Ingresos Clientes",
+      workspace: "business",
+      movementType: "income",
+      paymentMethod: "bank_account",
+      confidence: 88,
+      isDemo: true,
+      createdAt: now,
+    },
+    {
+      batchId,
+      source: "demo",
+      sourceName: "Demo Santander Empresa",
+      sourceType: "bank_account",
+      bankName: businessAccount?.bank ?? "Santander",
+      accountId: businessAccount?.id ?? null,
+      date: dateInMonth(monthKey, 4),
+      description: "Google Ads Chile facturacion",
+      amount: 324000,
+      direction: "expense",
+      category: "Publicidad",
+      workspace: "business",
+      movementType: "expense",
+      paymentMethod: "bank_account",
+      confidence: 84,
+      isDemo: true,
+      createdAt: now,
+    },
+    {
+      batchId,
+      source: "demo",
+      sourceName: "Demo Itau Empresa",
+      sourceType: "bank_account",
+      bankName: demoItauAccount?.bank ?? "Itau",
+      accountId: demoItauAccount?.id ?? null,
+      date: dateInMonth(monthKey, 5),
+      description: "Arriendo oficina Octopus",
+      amount: 720000,
+      direction: "expense",
+      category: "Arriendo",
+      workspace: "business",
+      movementType: "expense",
+      paymentMethod: "bank_account",
+      confidence: 80,
+      isDemo: true,
+      createdAt: now,
+    },
+    {
+      batchId,
+      source: "demo",
+      sourceName: "Demo Edwards Familia",
+      sourceType: "bank_account",
+      bankName: familyAccount?.bank ?? "Banco Edwards",
+      accountId: familyAccount?.id ?? null,
+      date: dateInMonth(monthKey, 8),
+      description: "Supermercado Jumbo Kennedy",
+      amount: 118430,
+      direction: "expense",
+      category: "Comida",
+      workspace: "family",
+      movementType: "expense",
+      paymentMethod: "bank_account",
+      confidence: 86,
+      isDemo: true,
+      createdAt: now,
+    },
+    {
+      batchId,
+      source: "demo",
+      sourceName: "Demo Edwards Familia",
+      sourceType: "bank_account",
+      bankName: familyAccount?.bank ?? "Banco Edwards",
+      accountId: familyAccount?.id ?? null,
+      date: dateInMonth(monthKey, 8),
+      description: "Supermercado Jumbo Kennedy",
+      amount: 118430,
+      direction: "expense",
+      category: "Comida",
+      workspace: "family",
+      movementType: "expense",
+      paymentMethod: "bank_account",
+      confidence: 86,
+      notes: "Fila duplicada intencional para probar deduplicacion.",
+      isDemo: true,
+      createdAt: now,
+    },
+    {
+      batchId,
+      source: "demo",
+      sourceName: "Demo Edwards Familia",
+      sourceType: "bank_account",
+      bankName: familyAccount?.bank ?? "Banco Edwards",
+      accountId: familyAccount?.id ?? null,
+      date: dateInMonth(monthKey, 9),
+      description: "Colegio mensualidad demo",
+      amount: 410000,
+      direction: "expense",
+      category: "Educacion",
+      workspace: "family",
+      movementType: "expense",
+      paymentMethod: "bank_account",
+      confidence: 74,
+      isDemo: true,
+      createdAt: now,
+    },
+    {
+      batchId,
+      source: "demo",
+      sourceName: "Demo Tarjeta Santander",
+      sourceType: "credit_card",
+      bankName: "Santander",
+      accountId: null,
+      creditCardName: cardName,
+      date: dateInMonth(monthKey, 10),
+      description: "Uber Eats Las Condes",
+      amount: 32890,
+      direction: "expense",
+      category: "Comida",
+      workspace: "family",
+      movementType: "expense",
+      paymentMethod: "credit_card",
+      confidence: 82,
+      isDemo: true,
+      createdAt: now,
+    },
+    {
+      batchId,
+      source: "demo",
+      sourceName: "Demo Edwards Familia",
+      sourceType: "bank_account",
+      bankName: familyAccount?.bank ?? "Banco Edwards",
+      accountId: familyAccount?.id ?? null,
+      creditCardName: cardName,
+      date: dateInMonth(monthKey, 12),
+      description: "Pago tarjeta Santander pesos",
+      amount: 450000,
+      direction: "expense",
+      category: "Pago tarjeta",
+      workspace: "family",
+      movementType: "credit_card_payment",
+      paymentMethod: "bank_account",
+      confidence: 90,
+      isDemo: true,
+      createdAt: now,
+    },
+    {
+      batchId,
+      source: "demo",
+      sourceName: "Demo Edwards Familia",
+      sourceType: "bank_account",
+      bankName: familyAccount?.bank ?? "Banco Edwards",
+      accountId: familyAccount?.id ?? null,
+      date: dateInMonth(monthKey, 13),
+      description: "Traspaso a cuenta empresa Octopus",
+      amount: 300000,
+      direction: "expense",
+      category: "Transferencias",
+      workspace: "family",
+      movementType: "transfer",
+      paymentMethod: "bank_account",
+      destinationWorkspace: "business",
+      destinationAccountId: businessAccount?.id ?? null,
+      confidence: 78,
+      isDemo: true,
+      createdAt: now,
+    },
+    {
+      batchId,
+      source: "demo",
+      sourceName: "Demo Itau Empresa",
+      sourceType: "bank_account",
+      bankName: demoItauAccount?.bank ?? "Itau",
+      accountId: demoItauAccount?.id ?? null,
+      date: dateInMonth(monthKey, 14),
+      description: "Fintoc suscripcion demo",
+      amount: 29900,
+      direction: "expense",
+      category: "Software",
+      workspace: "business",
+      movementType: "expense",
+      paymentMethod: "bank_account",
+      confidence: 76,
+      isDemo: true,
+      createdAt: now,
+    },
+  ];
+}
+
+function transactionKeysByMatch(transactions: Transaction[]) {
+  const keys = new Map<string, string>();
+  for (const transaction of transactions) {
+    if ((transaction.status ?? "paid") === "cancelled") continue;
+    const key = buildTransactionMatchKey({
+      date: transaction.date,
+      name: transaction.name,
+      amount: Number(transaction.amount) || 0,
+      movementType: transaction.movementType ?? (transaction.type === "income" ? "income" : "expense"),
+      accountId: transaction.accountId ?? null,
+      creditCardName: transaction.creditCardName ?? null,
+    });
+    keys.set(key, transaction.id);
+  }
+  return keys;
+}
+
+export async function seedDemoImportedMovements() {
+  const now = nowIso();
+  const monthKey = getCurrentMonthKey();
+  const batchRef = doc(importBatchesCol());
+  const batchId = batchRef.id;
+  const monthStart = `${monthKey}-01`;
+  const monthEnd = `${monthKey}-31`;
+
+  const [accountsSnap, transactionsSnap, movementsSnap, rulesSnap] = await Promise.all([
+    getDocs(accountsCol()),
+    getDocs(query(transactionsCol(), where("date", ">=", monthStart), where("date", "<=", monthEnd))),
+    getDocs(query(importedMovementsCol(), where("createdAt", ">=", `${monthKey}-01`))),
+    getDocs(movementRulesCol()),
+  ]);
+  const accounts = snapToArray<Account>(accountsSnap);
+  const transactions = snapToArray<Transaction>(transactionsSnap);
+  const existingMovements = snapToArray<ImportedMovement>(movementsSnap);
+  const rules = snapToArray<MovementRule>(rulesSnap);
+  const existingMovementByKey = new Map(
+    existingMovements
+      .filter((movement) => movement.status !== "discarded")
+      .map((movement) => [movement.dedupeKey, movement.id]),
+  );
+  const existingTransactionByKey = transactionKeysByMatch(transactions);
+  const seenInBatch = new Map<string, string>();
+
+  const movements = buildDemoMovementInputs(batchId, accounts, monthKey, now).map((input) => {
+    const base = buildImportedMovement(input);
+    const tempMovement = { id: "", ...base } as ImportedMovement;
+    const ruledMovement = applyMovementRule(
+      tempMovement,
+      findBestMovementRule(tempMovement, rules),
+    );
+    const transactionKey = buildTransactionMatchKey({
+      date: ruledMovement.date,
+      name: ruledMovement.suggestedName,
+      amount: ruledMovement.amount,
+      movementType: ruledMovement.suggestedMovementType,
+      accountId: ruledMovement.accountId,
+      creditCardName: ruledMovement.creditCardName,
+    });
+    const duplicateMovementId =
+      existingMovementByKey.get(ruledMovement.dedupeKey) ??
+      seenInBatch.get(ruledMovement.dedupeKey) ??
+      null;
+    const duplicateTransactionId = existingTransactionByKey.get(transactionKey) ?? null;
+    const status = duplicateMovementId || duplicateTransactionId ? "duplicate" : ruledMovement.status;
+    const movementId = doc(importedMovementsCol()).id;
+
+    if (!seenInBatch.has(ruledMovement.dedupeKey)) {
+      seenInBatch.set(ruledMovement.dedupeKey, movementId);
+    }
+
+    const { id: _unused, ...movementWithoutId } = ruledMovement;
+    return {
+      id: movementId,
+      data: {
+        ...movementWithoutId,
+        duplicateMovementId,
+        duplicateTransactionId,
+        status,
+        confidence: status === "duplicate" ? Math.min(99, ruledMovement.confidence + 5) : ruledMovement.confidence,
+      } satisfies Omit<ImportedMovement, "id">,
+    };
+  });
+
+  const totalIncome = movements
+    .filter((movement) => movement.data.direction === "income")
+    .reduce((sum, movement) => sum + movement.data.amount, 0);
+  const totalExpense = movements
+    .filter((movement) => movement.data.direction === "expense")
+    .reduce((sum, movement) => sum + movement.data.amount, 0);
+  const duplicateCount = movements.filter((movement) => movement.data.status === "duplicate").length;
+
+  const batchPayload: Omit<ImportBatch, "id"> = {
+    label: `Demo multicuenta ${monthKey}`,
+    source: "demo",
+    sourceName: "Cartola demo Santander, Edwards e Itau",
+    sourceType: "bank_account",
+    bankName: "Santander / Edwards / Itau",
+    accountId: null,
+    creditCardName: null,
+    workspace: "shared",
+    periodStart: dateInMonth(monthKey, 1),
+    periodEnd: dateInMonth(monthKey, getLastDayOfMonth(monthKey)),
+    rowCount: movements.length,
+    totalIncome,
+    totalExpense,
+    duplicateCount,
+    status: "reviewing",
+    isDemo: true,
+    notes: "Lote ficticio para probar revision, deduplicacion y conversion a transacciones.",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const batch = writeBatch(db);
+  batch.set(batchRef, batchPayload);
+  for (const movement of movements) {
+    batch.set(doc(db, "importedMovements", movement.id), movement.data);
+  }
+  await batch.commit();
+
+  return {
+    batchId,
+    created: movements.length,
+    pending: movements.filter((movement) => movement.data.status === "pending").length,
+    duplicates: duplicateCount,
+  };
+}
+
+function getDateRangeFromRows(rows: Array<{ date: string }>) {
+  const dates = rows
+    .map((row) => row.date)
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    .sort();
+
+  return {
+    start: dates[0] ?? null,
+    end: dates[dates.length - 1] ?? null,
+  };
+}
+
+export async function createImportedMovementBatch(input: CreateImportedMovementBatchInput) {
+  const now = nowIso();
+  const batchRef = doc(importBatchesCol());
+  const batchId = batchRef.id;
+  const source = input.source ?? "manual_file";
+  const { start, end } = getDateRangeFromRows(input.movements);
+  const periodStart = input.periodStart ?? start;
+  const periodEnd = input.periodEnd ?? end;
+
+  if (!start || !end) {
+    throw new Error("La carga necesita al menos una fecha valida para deduplicar por lote.");
+  }
+
+  const transactionQuery =
+    query(transactionsCol(), where("date", ">=", start), where("date", "<=", end));
+  const existingMovementQuery =
+    query(importedMovementsCol(), where("date", ">=", start), where("date", "<=", end));
+
+  const [transactionsSnap, movementsSnap, rulesSnap] = await Promise.all([
+    getDocs(transactionQuery),
+    getDocs(existingMovementQuery),
+    getDocs(movementRulesCol()),
+  ]);
+  const transactions = snapToArray<Transaction>(transactionsSnap);
+  const existingMovements = snapToArray<ImportedMovement>(movementsSnap);
+  const rules = snapToArray<MovementRule>(rulesSnap);
+  const existingMovementByKey = new Map(
+    existingMovements
+      .filter((movement) => movement.status !== "discarded")
+      .map((movement) => [movement.dedupeKey, movement.id]),
+  );
+  const existingTransactionByKey = transactionKeysByMatch(transactions);
+  const seenInBatch = new Map<string, string>();
+
+  const movements = input.movements.map((row) => {
+    const base = buildImportedMovement({
+      ...row,
+      batchId,
+      source,
+      sourceName: row.sourceName ?? input.sourceName,
+      sourceType: row.sourceType ?? input.sourceType,
+      bankName: row.bankName ?? input.bankName ?? null,
+      accountId: row.accountId ?? input.accountId ?? null,
+      creditCardName: row.creditCardName ?? input.creditCardName ?? null,
+      isDemo: input.isDemo ?? row.isDemo ?? false,
+      createdAt: now,
+    });
+    const tempMovement = { id: "", ...base } as ImportedMovement;
+    const ruledMovement = applyMovementRule(
+      tempMovement,
+      findBestMovementRule(tempMovement, rules),
+    );
+    const transactionKey = buildTransactionMatchKey({
+      date: ruledMovement.date,
+      name: ruledMovement.suggestedName,
+      amount: ruledMovement.amount,
+      movementType: ruledMovement.suggestedMovementType,
+      accountId: ruledMovement.accountId,
+      creditCardName: ruledMovement.creditCardName,
+    });
+    const duplicateMovementId =
+      existingMovementByKey.get(ruledMovement.dedupeKey) ??
+      seenInBatch.get(ruledMovement.dedupeKey) ??
+      null;
+    const duplicateTransactionId = existingTransactionByKey.get(transactionKey) ?? null;
+    const status = duplicateMovementId || duplicateTransactionId ? "duplicate" : ruledMovement.status;
+    const movementId = doc(importedMovementsCol()).id;
+
+    if (!seenInBatch.has(ruledMovement.dedupeKey)) {
+      seenInBatch.set(ruledMovement.dedupeKey, movementId);
+    }
+
+    const { id: _unused, ...movementWithoutId } = ruledMovement;
+    return {
+      id: movementId,
+      data: {
+        ...movementWithoutId,
+        duplicateMovementId,
+        duplicateTransactionId,
+        status,
+        confidence: status === "duplicate" ? Math.min(99, ruledMovement.confidence + 5) : ruledMovement.confidence,
+      } satisfies Omit<ImportedMovement, "id">,
+    };
+  });
+
+  const totalIncome = movements
+    .filter((movement) => movement.data.direction === "income")
+    .reduce((sum, movement) => sum + movement.data.amount, 0);
+  const totalExpense = movements
+    .filter((movement) => movement.data.direction === "expense")
+    .reduce((sum, movement) => sum + movement.data.amount, 0);
+  const duplicateCount = movements.filter((movement) => movement.data.status === "duplicate").length;
+
+  const batchPayload: Omit<ImportBatch, "id"> = {
+    label: input.label,
+    source,
+    sourceName: input.sourceName,
+    sourceType: input.sourceType,
+    bankName: input.bankName ?? null,
+    accountId: input.accountId ?? null,
+    creditCardName: input.creditCardName ?? null,
+    workspace: input.workspace ?? "shared",
+    periodStart,
+    periodEnd,
+    rowCount: movements.length,
+    totalIncome,
+    totalExpense,
+    duplicateCount,
+    status: "reviewing",
+    isDemo: input.isDemo ?? false,
+    notes: input.notes ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const chunkSize = 449;
+  for (let index = 0; index < Math.max(movements.length, 1); index += chunkSize) {
+    const batch = writeBatch(db);
+    if (index === 0) {
+      batch.set(batchRef, batchPayload);
+    }
+    for (const movement of movements.slice(index, index + chunkSize)) {
+      batch.set(doc(db, "importedMovements", movement.id), movement.data);
+    }
+    await batch.commit();
+  }
+
+  return {
+    batchId,
+    created: movements.length,
+    pending: movements.filter((movement) => movement.data.status === "pending").length,
+    duplicates: duplicateCount,
+  };
+}
+
+function getCategoryKey(categoryName: string, type: "income" | "expense", workspace: string) {
+  return `${type}::${workspace}::${normalizeText(categoryName)}`;
+}
+
+async function getExistingCategoryKeys() {
+  const snap = await getDocs(categoriesCol());
+  return new Set(
+    snapToArray<Category>(snap).map((category) =>
+      getCategoryKey(
+        category.name,
+        category.type === "income" ? "income" : "expense",
+        category.workspace ?? "business",
+      ),
+    ),
+  );
+}
+
+async function ensureCategoryExists(
+  categoryName: string,
+  type: "income" | "expense",
+  workspace: string,
+  categoryKeys?: Set<string>,
+) {
+  const normalizedCategory = normalizeText(categoryName);
+  if (!normalizedCategory) return;
+
+  const existingKeys = categoryKeys ?? await getExistingCategoryKeys();
+  const key = getCategoryKey(categoryName, type, workspace);
+  if (existingKeys.has(key)) return;
+
+  await addDoc(categoriesCol(), {
+    name: categoryName,
+    type,
+    color: type === "income" ? "#10b981" : "#64748b",
+    workspace,
+  });
+  existingKeys.add(key);
+}
+
+function assertCompleteTransfer(transactionPayload: Omit<Transaction, "id">) {
+  if (transactionPayload.movementType !== "transfer") return;
+
+  if (!transactionPayload.destinationWorkspace || !transactionPayload.destinationAccountId) {
+    throw new Error("El traspaso necesita workspace y cuenta destino antes de convertirse.");
+  }
+
+  if (transactionPayload.accountId && transactionPayload.accountId === transactionPayload.destinationAccountId) {
+    throw new Error("La cuenta origen y destino del traspaso no pueden ser la misma.");
+  }
+}
+
+export async function convertImportedMovementToTransaction(
+  id: string,
+  override: ImportedMovementOverride = {},
+  options: { forceDuplicate?: boolean; categoryKeys?: Set<string> } = {},
+) {
+  const movementRef = doc(db, "importedMovements", id);
+  const movementSnapshot = await getDoc(movementRef);
+  if (!movementSnapshot.exists()) {
+    throw new Error("Movimiento importado no encontrado.");
+  }
+
+  const movement = { id: movementSnapshot.id, ...movementSnapshot.data() } as ImportedMovement;
+  const canConvert = movement.status === "pending" || (options.forceDuplicate && movement.status === "duplicate");
+  if (!canConvert) {
+    throw new Error("Solo los movimientos pendientes o duplicados forzados se pueden convertir.");
+  }
+
+  const batchSnapshot = await getDoc(doc(db, "importBatches", movement.batchId));
+  const batchLabel = batchSnapshot.exists()
+    ? ((batchSnapshot.data() as Partial<ImportBatch>).label ?? movement.sourceName)
+    : movement.sourceName;
+  const transactionPayload = {
+    ...buildTransactionFromImportedMovement(movement, override),
+    importBatchLabel: batchLabel,
+  };
+  assertCompleteTransfer(transactionPayload);
+
+  const categoryType = transactionPayload.movementType === "income" ? "income" : "expense";
+  await ensureCategoryExists(
+    transactionPayload.category,
+    categoryType,
+    transactionPayload.workspace ?? "business",
+    options.categoryKeys,
+  );
+
+  return runTransaction(db, async (transaction) => {
+    const freshMovementSnapshot = await transaction.get(movementRef);
+    if (!freshMovementSnapshot.exists()) {
+      throw new Error("Movimiento importado no encontrado.");
+    }
+
+    const freshMovement = { id: freshMovementSnapshot.id, ...freshMovementSnapshot.data() } as ImportedMovement;
+    const freshCanConvert =
+      freshMovement.status === "pending" ||
+      (options.forceDuplicate && freshMovement.status === "duplicate");
+    if (!freshCanConvert) {
+      throw new Error("Solo los movimientos pendientes o duplicados forzados se pueden convertir.");
+    }
+
+    const freshBatchSnapshot = await transaction.get(doc(db, "importBatches", freshMovement.batchId));
+    const freshBatchLabel = freshBatchSnapshot.exists()
+      ? ((freshBatchSnapshot.data() as Partial<ImportBatch>).label ?? freshMovement.sourceName)
+      : freshMovement.sourceName;
+    const freshTransactionPayload = {
+      ...buildTransactionFromImportedMovement(freshMovement, override),
+      importBatchLabel: freshBatchLabel,
+    };
+    assertCompleteTransfer(freshTransactionPayload);
+
+    const transactionRef = doc(transactionsCol());
+    const convertedAt = nowIso();
+    transaction.set(transactionRef, freshTransactionPayload);
+    transaction.update(movementRef, {
+      status: "converted",
+      matchedTransactionId: transactionRef.id,
+      convertedAt,
+      updatedAt: convertedAt,
+    });
+
+    return {
+      transactionId: transactionRef.id,
+      transactionIds: [transactionRef.id],
+      movementId: id,
+    };
+  });
+}
+
+export async function bulkConvertImportedMovements(ids: string[]) {
+  let converted = 0;
+  let skipped = 0;
+  const failed: Array<{ id: string; error: string }> = [];
+  const categoryKeys = await getExistingCategoryKeys();
+
+  for (const id of ids) {
+    try {
+      await convertImportedMovementToTransaction(id, {}, { categoryKeys });
+      converted += 1;
+    } catch (error) {
+      skipped += 1;
+      failed.push({
+        id,
+        error: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  }
+
+  return { converted, skipped, failed };
 }
 
 // ════════════════════════════════════════════════════════════════

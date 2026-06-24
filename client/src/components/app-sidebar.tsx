@@ -10,7 +10,9 @@ import {
   ClipboardList,
   CreditCard,
   Landmark,
-  Sparkles,
+  CalendarClock,
+  Inbox,
+  Database,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useEffect, useState } from "react";
@@ -32,6 +34,8 @@ const mainNav = [
   { title: "Estado de Resultados", url: "/pnl", icon: FileText },
   { title: "Ingresos Clientes", url: "/client-payments", icon: BriefcaseBusiness },
   { title: "Presupuesto", url: "/budget", icon: Target },
+  { title: "Automatización", url: "/automation", icon: CalendarClock },
+  { title: "Movimientos", url: "/movements", icon: Inbox },
   { title: "Cierre Mensual", url: "/monthly-close", icon: ClipboardList },
   { title: "Panel de Tarjetas", url: "/credit-cards", icon: CreditCard },
   { title: "Importar Datos", url: "/import", icon: Upload },
@@ -39,6 +43,7 @@ const mainNav = [
 
 const settingsNav = [
   { title: "Branding", url: "/settings", icon: Settings },
+  { title: "Salud de Datos", url: "/data-health", icon: Database },
   { title: "Categorías", url: "/categories", icon: Tags },
   { title: "Cuentas", url: "/accounts", icon: Landmark },
   { title: "Items", url: "/items", icon: Settings },
@@ -47,6 +52,7 @@ const settingsNav = [
 export function AppSidebar() {
   const [location] = useLocation();
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const logoSrc = logoDataUrl ?? "/octopus-logo.svg";
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -63,17 +69,11 @@ export function AppSidebar() {
     >
       <SidebarHeader className="px-6 pb-8 pt-8">
         <div className="flex items-center gap-3 px-2">
-          {logoDataUrl ? (
-            <img
-              src={logoDataUrl}
-              alt="Octopus Finance Logo"
-              className="size-10 rounded-full object-cover ring-2 ring-[#bb9eff]/30 electric-glow"
-            />
-          ) : (
-            <div className="electric-glow flex size-10 items-center justify-center rounded-full bg-gradient-to-br from-[#bb9eff] to-[#a691f9]">
-              <Sparkles className="size-5 text-[#2c006d]" strokeWidth={2.75} />
-            </div>
-          )}
+          <img
+            src={logoSrc}
+            alt="Octopus Finance Logo"
+            className="size-10 rounded-2xl object-cover ring-2 ring-[#bb9eff]/30 electric-glow"
+          />
           <div>
             <h1 className="text-xl font-black tracking-tighter text-[#bb9eff] drop-shadow-[0_0_10px_rgba(187,158,255,0.6)]">
               Octopus Finance

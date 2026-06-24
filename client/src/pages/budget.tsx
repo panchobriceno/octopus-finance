@@ -12,16 +12,26 @@ import {
   useUpdateBudget,
   useDeleteBudget,
   useCreateCategory,
-  useGenerateMonthlyRecurringTransactions,
+  useGenerateBudgetCommitments,
 } from "@/lib/hooks";
 import { formatCLP } from "@/lib/utils";
 import type { Transaction, Budget, Category, Item } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -58,7 +68,8 @@ function normalizeCategoryName(value: string) {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+    .toLowerCase()
+    .trim();
 }
 
 function matchesWorkspace(category: Category, workspace: BudgetWorkspace) {
@@ -134,7 +145,7 @@ export default function BudgetPage() {
   const updateBudgetMutation = useUpdateBudget();
   const deleteBudgetMutation = useDeleteBudget();
   const createCategoryMutation = useCreateCategory();
-  const generateRecurringMutation = useGenerateMonthlyRecurringTransactions();
+  const generateBudgetCommitmentsMutation = useGenerateBudgetCommitments();
   const [familyIncomeJaviMap, setFamilyIncomeJaviMap] = useState<Record<string, number>>({});
 
   const selectedMonthKey = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
@@ -222,7 +233,7 @@ export default function BudgetPage() {
   }, [itemById, categoryById, categoryByName, categoryByNormalizedName]);
 
   // Filter budgets for selected period
-  const periodBudgets = useMemo(
+  const periodBudgetRecords = useMemo(
     () => allBudgets.filter(
       (b) =>
         b.year === selectedYear &&
@@ -230,6 +241,32 @@ export default function BudgetPage() {
         (b.workspace ?? "business") === selectedWorkspace
     ),
     [allBudgets, selectedYear, selectedMonth, selectedWorkspace]
+  );
+
+  const periodBudgets = useMemo(
+    () => periodBudgetRecords.filter((budget) => !budget.isArchived),
+    [periodBudgetRecords],
+  );
+
+  const archivedBudgetByGroup = useMemo(() => {
+    const map: Record<string, Budget> = {};
+    const activeGroups = new Set(
+      periodBudgetRecords
+        .filter((budget) => !budget.isArchived)
+        .map((budget) => budget.categoryGroup),
+    );
+
+    for (const budget of periodBudgetRecords) {
+      if (budget.isArchived && !activeGroups.has(budget.categoryGroup)) {
+        map[budget.categoryGroup] = budget;
+      }
+    }
+    return map;
+  }, [periodBudgetRecords]);
+
+  const archivedGroups = useMemo(
+    () => new Set(Object.keys(archivedBudgetByGroup)),
+    [archivedBudgetByGroup],
   );
 
   // Build map: group name → Budget record for this period
@@ -251,6 +288,11 @@ export default function BudgetPage() {
     ]);
 
     for (const group of Array.from(candidateGroups)) {
+      if (archivedGroups.has(group)) {
+        map[group] = undefined;
+        continue;
+      }
+
       const exact = budgetByGroup[group];
       if (exact) {
         map[group] = exact;
@@ -261,6 +303,7 @@ export default function BudgetPage() {
         .filter(
           (budget) =>
             budget.categoryGroup === group &&
+            !budget.isArchived &&
             (budget.workspace ?? "business") === selectedWorkspace &&
             (budget.year < selectedYear ||
               (budget.year === selectedYear && budget.month < selectedMonth)),
@@ -274,7 +317,7 @@ export default function BudgetPage() {
     }
 
     return map;
-  }, [allBudgets, budgetByGroup, draftGroupMap, groupNames, manualOrderMap, periodBudgets, selectedMonth, selectedScopeKey, selectedWorkspace, selectedYear]);
+  }, [allBudgets, archivedGroups, budgetByGroup, draftGroupMap, groupNames, manualOrderMap, periodBudgets, selectedMonth, selectedScopeKey, selectedWorkspace, selectedYear]);
 
   // Filter transactions: subtype = "actual", expense, matching year/month
   const periodTransactions = useMemo(() => {
@@ -284,6 +327,7 @@ export default function BudgetPage() {
         const normalized = normalizeTransaction(tx);
         return (
           normalized.subtype === "actual" &&
+          normalized.status !== "cancelled" &&
           normalized.type === "expense" &&
           normalized.movementType === "expense" &&
           normalized.workspace === selectedWorkspace &&
@@ -314,11 +358,13 @@ export default function BudgetPage() {
     const removedGroups = new Set(removedGroupMap[selectedScopeKey] ?? []);
 
     for (const budget of periodBudgets) {
+      if (archivedGroups.has(budget.categoryGroup)) continue;
       if (removedGroups.has(budget.categoryGroup)) continue;
       names.add(budget.categoryGroup);
     }
 
     for (const group of draftGroups) {
+      if (archivedGroups.has(group)) continue;
       if (removedGroups.has(group)) continue;
       names.add(group);
     }
@@ -326,6 +372,7 @@ export default function BudgetPage() {
     for (const [stateKey, value] of Object.entries(inputValues)) {
       if (!stateKey.startsWith(prefix)) continue;
       const group = stateKey.slice(prefix.length);
+      if (archivedGroups.has(group)) continue;
       if (removedGroups.has(group)) continue;
       if (value !== "" || names.has(group)) {
         names.add(group);
@@ -333,7 +380,7 @@ export default function BudgetPage() {
     }
 
     return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [draftGroupMap, inputValues, periodBudgets, removedGroupMap, selectedMonthKey, selectedScopeKey, selectedWorkspace]);
+  }, [archivedGroups, draftGroupMap, inputValues, periodBudgets, removedGroupMap, selectedMonthKey, selectedScopeKey, selectedWorkspace]);
 
   const orderedVisibleGroupNames = useMemo(() => {
     const manualOrder = manualOrderMap[selectedScopeKey];
@@ -378,22 +425,72 @@ export default function BudgetPage() {
     [orderedVisibleGroupNames, sortableIdByGroup],
   );
 
+  const categoryOptions = useMemo(() => {
+    const visibleCategoryKeys = new Set(
+      visibleGroupNames
+        .filter((group) => !isItemBudgetKey(group))
+        .map(normalizeCategoryName),
+    );
+    const byName = new Map<string, Category[]>();
+
+    for (const category of expenseCategories.filter((item) => matchesWorkspace(item, selectedWorkspace))) {
+      const key = normalizeCategoryName(category.name);
+      if (visibleCategoryKeys.has(key)) continue;
+      byName.set(key, [...(byName.get(key) ?? []), category]);
+    }
+
+    return Array.from(byName.values())
+      .map((matches) => {
+        const [primary] = [...matches].sort((left, right) => {
+          const leftRank = left.workspace === selectedWorkspace ? 0 : 1;
+          const rightRank = right.workspace === selectedWorkspace ? 0 : 1;
+          if (leftRank !== rightRank) return leftRank - rightRank;
+          return left.name.localeCompare(right.name, "es");
+        });
+
+        return {
+          value: primary.name,
+          label: primary.name,
+          duplicateCount: matches.length,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, "es"));
+  }, [expenseCategories, selectedWorkspace, visibleGroupNames]);
+
+  const itemOptions = useMemo(() => {
+    const visibleItemKeys = new Set(
+      visibleGroupNames
+        .filter(isItemBudgetKey)
+        .map((group) => {
+          const item = itemById[group.replace(ITEM_BUDGET_PREFIX, "")];
+          const category = item?.categoryId ? categoryById[item.categoryId] : null;
+          return `${normalizeCategoryName(item?.name ?? "")}::${normalizeCategoryName(category?.name ?? "Sin categoría")}`;
+        }),
+    );
+    const byItemAndParent = new Map<string, Array<{ item: Item; parentName: string }>>();
+
+    for (const item of workspaceBudgetItems) {
+      const parentName = item.categoryId ? categoryById[item.categoryId]?.name ?? "Sin categoría" : "Sin categoría";
+      const key = `${normalizeCategoryName(item.name)}::${normalizeCategoryName(parentName)}`;
+      if (visibleItemKeys.has(key)) continue;
+      byItemAndParent.set(key, [...(byItemAndParent.get(key) ?? []), { item, parentName }]);
+    }
+
+    return Array.from(byItemAndParent.values())
+      .map((matches) => {
+        const [primary] = matches;
+        return {
+          value: getItemBudgetKey(primary.item.id),
+          label: `${primary.item.name} · ${primary.parentName}`,
+          duplicateCount: matches.length,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, "es"));
+  }, [categoryById, itemById, visibleGroupNames, workspaceBudgetItems]);
+
   const availableCategoryOptions = useMemo(
-    () => [
-      ...expenseCategories
-        .filter((category) => matchesWorkspace(category, selectedWorkspace))
-        .map((category) => ({
-          value: category.name,
-          label: category.name,
-        })),
-      ...workspaceBudgetItems.map((item) => ({
-        value: getItemBudgetKey(item.id),
-        label: `${item.name} · ${categoryById[item.categoryId!]?.name ?? "Sin categoría"}`,
-      })),
-    ]
-      .filter((option) => !visibleGroupNames.includes(option.value))
-      .sort((a, b) => a.label.localeCompare(b.label)),
-    [categoryById, expenseCategories, selectedWorkspace, visibleGroupNames, workspaceBudgetItems],
+    () => [...categoryOptions, ...itemOptions],
+    [categoryOptions, itemOptions],
   );
 
   // Sync input values when period or budgets change
@@ -410,30 +507,36 @@ export default function BudgetPage() {
     }
     setInputValues((current) => {
       const next = { ...current };
+      let changed = false;
       for (const [key, value] of Object.entries(vals)) {
         if (next[key] === undefined) {
           next[key] = value;
+          changed = true;
         }
       }
-      return next;
+      return changed ? next : current;
     });
     setRecurringValues((current) => {
       const next = { ...current };
+      let changed = false;
       for (const [key, value] of Object.entries(recurring)) {
         if (next[key] === undefined) {
           next[key] = value;
+          changed = true;
         }
       }
-      return next;
+      return changed ? next : current;
     });
     setDayOfMonthValues((current) => {
       const next = { ...current };
+      let changed = false;
       for (const [key, value] of Object.entries(days)) {
         if (next[key] === undefined) {
           next[key] = value;
+          changed = true;
         }
       }
-      return next;
+      return changed ? next : current;
     });
   }, [effectiveBudgetByGroup, orderedVisibleGroupNames, selectedMonthKey, selectedWorkspace]);
 
@@ -547,21 +650,35 @@ export default function BudgetPage() {
               ? Math.max(1, Math.min(31, Number(dayOfMonthValues[stateKey] || 1)))
               : null,
             order,
+            isArchived: false,
           },
         });
       } else {
-        await createBudgetMutation.mutateAsync({
-          year: selectedYear,
-          month: selectedMonth,
-          categoryGroup: groupName,
+        const archived = archivedBudgetByGroup[groupName];
+        const payload = {
           amount,
-          workspace: selectedWorkspace,
           isRecurring: recurringValues[stateKey] ?? false,
           dayOfMonth: recurringValues[stateKey]
             ? Math.max(1, Math.min(31, Number(dayOfMonthValues[stateKey] || 1)))
             : null,
           order,
-        });
+          isArchived: false,
+        };
+
+        if (archived) {
+          await updateBudgetMutation.mutateAsync({
+            id: archived.id,
+            data: payload,
+          });
+        } else {
+          await createBudgetMutation.mutateAsync({
+            year: selectedYear,
+            month: selectedMonth,
+            categoryGroup: groupName,
+            workspace: selectedWorkspace,
+            ...payload,
+          });
+        }
       }
       toast({
         title: "Presupuesto guardado",
@@ -595,7 +712,8 @@ export default function BudgetPage() {
   const getEffectiveBudgetTotalForWorkspace = (workspace: BudgetWorkspace) => {
     const relevantBudgets = allBudgets
       .filter(
-        (budget) =>
+          (budget) =>
+          !budget.isArchived &&
           (budget.workspace ?? "business") === workspace &&
           (budget.year < selectedYear ||
             (budget.year === selectedYear && budget.month <= selectedMonth)),
@@ -621,7 +739,7 @@ export default function BudgetPage() {
   const familyBudgetTotal = getEffectiveBudgetTotalForWorkspace("family");
   const visibleBusinessBudgetTotal = selectedWorkspace === "business" ? totalBudget : businessBudgetTotal;
   const visibleFamilyBudgetTotal = selectedWorkspace === "family" ? totalBudget : familyBudgetTotal;
-  const businessRemainder = businessIncomeSummary.net - visibleBusinessBudgetTotal;
+  const businessRemainder = businessIncomeSummary.paidNet - visibleBusinessBudgetTotal;
   const familyIncomeTotal = businessRemainder + familyIncomeJavi;
   const familyBalanceAfterBudget = familyIncomeTotal - visibleFamilyBudgetTotal;
 
@@ -730,6 +848,19 @@ export default function BudgetPage() {
     try {
       if (existing) {
         await deleteBudgetMutation.mutateAsync(existing.id);
+      } else if (effectiveBudgetByGroup[groupName]) {
+        const inherited = effectiveBudgetByGroup[groupName];
+        await createBudgetMutation.mutateAsync({
+          year: selectedYear,
+          month: selectedMonth,
+          categoryGroup: groupName,
+          amount: 0,
+          workspace: selectedWorkspace,
+          isRecurring: false,
+          dayOfMonth: inherited?.dayOfMonth ?? null,
+          order: orderedVisibleGroupNames.indexOf(groupName),
+          isArchived: true,
+        });
       }
     } catch {
       setRemovedGroupMap((current) => ({
@@ -792,11 +923,27 @@ export default function BudgetPage() {
     try {
       await Promise.all(
         nextOrder.map((group, index) => {
-          const budget = budgetByGroup[group] ?? effectiveBudgetByGroup[group];
-          if (!budget?.id) return Promise.resolve();
-          return updateBudgetMutation.mutateAsync({
-            id: budget.id,
-            data: { order: index },
+          const budget = budgetByGroup[group];
+          if (budget?.id) {
+            return updateBudgetMutation.mutateAsync({
+              id: budget.id,
+              data: { order: index },
+            });
+          }
+
+          const inherited = effectiveBudgetByGroup[group];
+          if (!inherited) return Promise.resolve();
+
+          return createBudgetMutation.mutateAsync({
+            year: selectedYear,
+            month: selectedMonth,
+            categoryGroup: group,
+            amount: inherited.amount,
+            workspace: selectedWorkspace,
+            isRecurring: inherited.isRecurring ?? false,
+            dayOfMonth: inherited.dayOfMonth ?? null,
+            order: index,
+            isArchived: false,
           });
         }),
       );
@@ -827,7 +974,7 @@ export default function BudgetPage() {
       {/* Period Selector */}
       <Card>
         <CardContent className="pt-5 pb-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium text-muted-foreground">Período:</span>
             <Select
               value={selectedWorkspace}
@@ -935,23 +1082,23 @@ export default function BudgetPage() {
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <p className="text-sm text-muted-foreground">Ingresos clientes brutos</p>
-              <p className="text-lg font-semibold tabular-nums mt-1">{formatCLP(businessIncomeSummary.gross)}</p>
+              <p className="text-sm text-muted-foreground">Ingresos cobrados brutos</p>
+              <p className="text-lg font-semibold tabular-nums mt-1">{formatCLP(businessIncomeSummary.paidGross)}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">IVA comprometido</p>
-              <p className="text-lg font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">{formatCLP(businessIncomeSummary.vat)}</p>
+              <p className="text-sm text-muted-foreground">IVA cobrado</p>
+              <p className="text-lg font-semibold tabular-nums mt-1 text-amber-700 dark:text-amber-300">{formatCLP(businessIncomeSummary.paidVat)}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Ingreso neto empresa</p>
-              <p className="text-lg font-semibold tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">{formatCLP(businessIncomeSummary.net)}</p>
+              <p className="text-sm text-muted-foreground">Ingreso neto cobrado</p>
+              <p className="text-lg font-semibold tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">{formatCLP(businessIncomeSummary.paidNet)}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Remanente empresa</p>
               <p className={`text-lg font-semibold tabular-nums mt-1 ${businessRemainder >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                 {formatCLP(businessRemainder)}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Ingreso neto menos presupuesto empresa</p>
+              <p className="text-xs text-muted-foreground mt-1">Ingreso cobrado menos presupuesto empresa</p>
             </div>
           </CardContent>
         </Card>
@@ -995,401 +1142,455 @@ export default function BudgetPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">
-            Presupuesto y ejecución {selectedWorkspace === "business" ? "Empresa" : "Familia"} — {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
-          </CardTitle>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <CardTitle className="text-base font-semibold">
+              {selectedWorkspace === "business" ? "Empresa" : "Familia"} — {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+            </CardTitle>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>{orderedVisibleGroupNames.length} categorías</span>
+              <span>•</span>
+              <span>{formatCLP(totalReferenceAmount)} ejecutado + comprometido</span>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="px-0 space-y-4">
-          <div className="px-5 grid gap-3 lg:grid-cols-[minmax(0,320px)_auto_minmax(0,320px)_auto] lg:items-end">
-            <div className="w-full md:max-w-sm space-y-1.5">
-              <p className="text-xs text-muted-foreground">Agregar categoría o subcategoría al presupuesto</p>
-              <Select value={newBudgetCategory} onValueChange={setNewBudgetCategory}>
-                <SelectTrigger data-testid="select-add-budget-category">
-                  <SelectValue placeholder="Elegir categoría o subcategoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableCategoryOptions.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-muted-foreground">
-                      No hay más opciones disponibles
-                    </div>
-                  ) : (
-                    availableCategoryOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+        <CardContent className="px-0">
+          <Tabs defaultValue="plan" className="space-y-4">
+            <div className="px-5">
+              <TabsList className="grid w-full grid-cols-3 sm:w-auto">
+                <TabsTrigger value="plan">Plan</TabsTrigger>
+                <TabsTrigger value="execution">Ejecución</TabsTrigger>
+                <TabsTrigger value="recurring">Recurrentes</TabsTrigger>
+              </TabsList>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleAddBudgetCategory}
-              disabled={!newBudgetCategory}
-            >
-              Agregar categoría
-            </Button>
-            <div className="w-full md:max-w-sm space-y-1.5">
-              <p className="text-xs text-muted-foreground">Crear categoría nueva</p>
-              <Input
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="Nombre de la categoría"
-                data-testid="input-new-budget-category-name"
-              />
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCreateCategoryFromBudget}
-              disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
-            >
-              {createCategoryMutation.isPending ? "Creando..." : "Crear y agregar"}
-            </Button>
-          </div>
 
-          <div className="px-5">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() =>
-                generateRecurringMutation.mutate(
-                  { year: selectedYear, month: selectedMonth, workspace: selectedWorkspace },
-                  {
-                    onSuccess: (result) => {
-                      toast({
-                        title: "Compromisos generados",
-                        description: result.created > 0
-                          ? `${result.created} compromiso(s) creados para el mes`
-                          : "No había compromisos nuevos por crear",
-                      });
-                    },
-                  },
-                )
-              }
-              disabled={generateRecurringMutation.isPending}
-              data-testid="button-generate-recurring-transactions"
-            >
-              {generateRecurringMutation.isPending ? "Generando..." : "Generar compromisos del mes"}
-            </Button>
-          </div>
+            <TabsContent value="plan" className="mt-0 space-y-4">
+              <div className="px-5 grid gap-3 lg:grid-cols-[minmax(0,320px)_auto_minmax(0,320px)_auto] lg:items-end">
+                <div className="w-full md:max-w-sm space-y-1.5">
+                  <p className="text-xs text-muted-foreground">Agregar categoría o subcategoría al presupuesto</p>
+                  <Select value={newBudgetCategory} onValueChange={setNewBudgetCategory}>
+                    <SelectTrigger data-testid="select-add-budget-category">
+                      <SelectValue placeholder="Elegir categoría o subcategoría" />
+                    </SelectTrigger>
+                    <SelectContent className="max-w-[min(460px,calc(100vw-2rem))]">
+                      {availableCategoryOptions.length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">
+                          No hay más opciones disponibles
+                        </div>
+                      ) : (
+                        <>
+                          {categoryOptions.length > 0 ? (
+                            <SelectGroup>
+                              <SelectLabel className="pl-8 text-xs text-muted-foreground">Categorías</SelectLabel>
+                              {categoryOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  <span className="flex min-w-0 items-center justify-between gap-3">
+                                    <span className="truncate">{option.label}</span>
+                                    {option.duplicateCount > 1 ? (
+                                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                                        {option.duplicateCount} registros
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          ) : null}
+                          {categoryOptions.length > 0 && itemOptions.length > 0 ? <SelectSeparator /> : null}
+                          {itemOptions.length > 0 ? (
+                            <SelectGroup>
+                              <SelectLabel className="pl-8 text-xs text-muted-foreground">Subcategorías</SelectLabel>
+                              {itemOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  <span className="flex min-w-0 items-center justify-between gap-3">
+                                    <span className="truncate">{option.label}</span>
+                                    {option.duplicateCount > 1 ? (
+                                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                                        {option.duplicateCount} registros
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          ) : null}
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleAddBudgetCategory}
+                  disabled={!newBudgetCategory}
+                >
+                  Agregar
+                </Button>
+                <div className="w-full md:max-w-sm space-y-1.5">
+                  <p className="text-xs text-muted-foreground">Crear categoría nueva</p>
+                  <Input
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Nombre de la categoría"
+                    data-testid="input-new-budget-category-name"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCreateCategoryFromBudget}
+                  disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
+                >
+                  {createCategoryMutation.isPending ? "Creando..." : "Crear"}
+                </Button>
+              </div>
 
-          <div className="overflow-x-auto">
-            <Table className="zebra-stripe" data-testid="table-budget-comparison">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-5">Categoría Agrupadora</TableHead>
-                  <TableHead className="w-44">Presupuesto</TableHead>
-                  <TableHead className="text-right">Comprometido</TableHead>
-                  <TableHead className="text-center">Recurrente</TableHead>
-                  <TableHead className="w-32">Día de pago</TableHead>
-                  <TableHead className="text-right">Real Ejecutado</TableHead>
-                  <TableHead className="text-right">Diferencia</TableHead>
-                  <TableHead className="text-right">Ejecución</TableHead>
-                  <TableHead className="text-right">Acción</TableHead>
-                  <TableHead className="text-right pr-5">Orden</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+              <div className="overflow-x-auto">
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                   <SortableContext items={sortableBudgetRowIds} strategy={verticalListSortingStrategy}>
-                {orderedVisibleGroupNames.map((group) => {
-                  const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, group);
-                  const budget = getVisibleBudgetAmount(group);
-                  const committed = committedByGroup[group] ?? 0;
-                  const actual = actualByGroup[group] ?? 0;
-                  const executionReference = getExecutionReferenceAmount(actual, committed);
-                  const diff = budget - executionReference;
-                  const pct = budget > 0 ? (executionReference / budget) * 100 : executionReference > 0 ? 999 : 0;
-                  const carriedForward =
-                    !budgetByGroup[group] &&
-                    Boolean(effectiveBudgetByGroup[group]) &&
-                    selectedMonth !== (effectiveBudgetByGroup[group]?.month ?? selectedMonth);
+                    <Table className="zebra-stripe" data-testid="table-budget-comparison">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="pl-5">Categoría</TableHead>
+                          <TableHead className="w-44">Presupuesto</TableHead>
+                          <TableHead className="text-right">Ejecutado + comprometido</TableHead>
+                          <TableHead className="text-right">Disponible</TableHead>
+                          <TableHead className="text-right">Acción</TableHead>
+                          <TableHead className="text-right pr-5">Orden</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {orderedVisibleGroupNames.map((group) => {
+                          const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, group);
+                          const budget = getVisibleBudgetAmount(group);
+                          const executionReference = getExecutionReferenceAmount(
+                            actualByGroup[group] ?? 0,
+                            committedByGroup[group] ?? 0,
+                          );
+                          const diff = budget - executionReference;
+                          const carriedForward =
+                            !budgetByGroup[group] &&
+                            Boolean(effectiveBudgetByGroup[group]) &&
+                            selectedMonth !== (effectiveBudgetByGroup[group]?.month ?? selectedMonth);
 
-                  return (
-                    <SortableBudgetRow key={group} id={sortableIdByGroup.get(group) ?? `draft:${group}`}>
-                      <TableCell className="pl-5">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm">{getBudgetEntryLabel(group)}</span>
-                            {isItemBudgetKey(group) ? (
-                              <Badge variant="outline" className="text-[10px]">Subcategoría</Badge>
-                            ) : null}
-                          </div>
-                          {getBudgetEntryMeta(group) ? (
-                            <p className="text-[11px] text-muted-foreground">{getBudgetEntryMeta(group)}</p>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <Input
-                            type="number"
-                            min="0"
-                            step="1000"
-                            placeholder="0"
-                            className="h-8 w-36 tabular-nums"
-                            value={inputValues[stateKey] ?? ""}
-                            onChange={(e) =>
-                              setInputValues((prev) => ({ ...prev, [stateKey]: e.target.value }))
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleSave(group);
-                            }}
-                            data-testid={`input-budget-${group.replace(/\s+/g, "-").toLowerCase()}`}
-                          />
-                          {carriedForward && (
-                            <p className="text-[11px] text-muted-foreground">
-                              Arrastrado desde {MONTH_NAMES[(effectiveBudgetByGroup[group]?.month ?? 1) - 1]} {effectiveBudgetByGroup[group]?.year}
-                            </p>
+                          return (
+                            <SortableBudgetRow key={group} id={sortableIdByGroup.get(group) ?? `draft:${group}`}>
+                              <TableCell className="pl-5">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-sm">{getBudgetEntryLabel(group)}</span>
+                                    {isItemBudgetKey(group) ? (
+                                      <Badge variant="outline" className="text-[10px]">Subcategoría</Badge>
+                                    ) : null}
+                                  </div>
+                                  {getBudgetEntryMeta(group) ? (
+                                    <p className="text-[11px] text-muted-foreground">{getBudgetEntryMeta(group)}</p>
+                                  ) : null}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="1000"
+                                    placeholder="0"
+                                    className="h-8 w-36 tabular-nums"
+                                    value={inputValues[stateKey] ?? ""}
+                                    onChange={(e) =>
+                                      setInputValues((prev) => ({ ...prev, [stateKey]: e.target.value }))
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") handleSave(group);
+                                    }}
+                                    data-testid={`input-budget-${group.replace(/\s+/g, "-").toLowerCase()}`}
+                                  />
+                                  {carriedForward && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                      Desde {MONTH_NAMES[(effectiveBudgetByGroup[group]?.month ?? 1) - 1]} {effectiveBudgetByGroup[group]?.year}
+                                    </p>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums text-sm font-medium">
+                                {executionReference > 0 ? formatCLP(executionReference) : <span className="text-muted-foreground">$0</span>}
+                              </TableCell>
+                              <TableCell
+                                className={`text-right tabular-nums text-sm font-medium ${
+                                  diff >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                                }`}
+                              >
+                                {budget > 0 || executionReference > 0 ? formatCLP(diff) : <span className="text-muted-foreground">—</span>}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-1.5"
+                                    onClick={() => handleSave(group)}
+                                    disabled={savingGroup === group}
+                                    data-testid={`button-save-${group.replace(/\s+/g, "-").toLowerCase()}`}
+                                  >
+                                    <Save className="size-3.5" />
+                                    {savingGroup === group ? "..." : "Guardar"}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8"
+                                    aria-label={`Quitar ${getBudgetEntryLabel(group)}`}
+                                    onClick={() => handleRemoveBudgetCategory(group)}
+                                    disabled={deleteBudgetMutation.isPending}
+                                    data-testid={`button-remove-${group.replace(/\s+/g, "-").toLowerCase()}`}
+                                  >
+                                    <Trash2 className="size-4 text-muted-foreground" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </SortableBudgetRow>
+                          );
+                        })}
+                        <TableRow className="border-t-2 font-semibold">
+                          <TableCell className="pl-5 text-sm">Total</TableCell>
+                          <TableCell className="tabular-nums text-sm">{formatCLP(totalBudget)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalReferenceAmount)}</TableCell>
+                          <TableCell className={`text-right tabular-nums text-sm ${totalDiff >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                            {formatCLP(totalDiff)}
+                          </TableCell>
+                          <TableCell />
+                          <TableCell className="pr-5" />
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </SortableContext>
+                </DndContext>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="execution" className="mt-0">
+              <div className="overflow-x-auto">
+                <Table className="zebra-stripe">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-5">Categoría</TableHead>
+                      <TableHead className="text-right">Presupuesto</TableHead>
+                      <TableHead className="text-right">Comprometido</TableHead>
+                      <TableHead className="text-right">Real ejecutado</TableHead>
+                      <TableHead className="text-right">Diferencia</TableHead>
+                      <TableHead className="text-right pr-5">Ejecución</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {orderedVisibleGroupNames.map((group) => {
+                      const budget = getVisibleBudgetAmount(group);
+                      const committed = committedByGroup[group] ?? 0;
+                      const actual = actualByGroup[group] ?? 0;
+                      const executionReference = getExecutionReferenceAmount(actual, committed);
+                      const diff = budget - executionReference;
+                      const pct = budget > 0 ? (executionReference / budget) * 100 : executionReference > 0 ? 999 : 0;
+
+                      return (
+                        <TableRow key={group}>
+                          <TableCell className="pl-5">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm">{getBudgetEntryLabel(group)}</span>
+                                {isItemBudgetKey(group) ? (
+                                  <Badge variant="outline" className="text-[10px]">Subcategoría</Badge>
+                                ) : null}
+                              </div>
+                              {getBudgetEntryMeta(group) ? (
+                                <p className="text-[11px] text-muted-foreground">{getBudgetEntryMeta(group)}</p>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-sm">{formatCLP(budget)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-sm">{formatCLP(committed)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-sm">{formatCLP(actual)}</TableCell>
+                          <TableCell className={`text-right tabular-nums text-sm font-medium ${diff >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                            {budget > 0 || executionReference > 0 ? formatCLP(diff) : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-right pr-5">
+                            {budget > 0 ? (
+                              <Badge
+                                className={`text-xs ${
+                                  pct <= 100
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                    : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                                }`}
+                              >
+                                {pct.toFixed(0)}%
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {((actualByGroup["Sin Agrupadora"] ?? 0) > 0 || (committedByGroup["Sin Agrupadora"] ?? 0) > 0) && (
+                      <TableRow>
+                        <TableCell className="pl-5 font-medium text-sm text-muted-foreground italic">
+                          Sin Agrupadora
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">$0</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">{formatCLP(committedByGroup["Sin Agrupadora"] ?? 0)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">{formatCLP(actualByGroup["Sin Agrupadora"] ?? 0)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm font-medium text-red-600 dark:text-red-400">
+                          {formatCLP(
+                            -getExecutionReferenceAmount(
+                              actualByGroup["Sin Agrupadora"] ?? 0,
+                              committedByGroup["Sin Agrupadora"] ?? 0,
+                            ),
                           )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-sm font-medium">
-                        {committed > 0 ? formatCLP(committed) : <span className="text-muted-foreground">$0</span>}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex justify-center">
-                          <Switch
-                            checked={recurringValues[stateKey] ?? false}
-                            onCheckedChange={(checked) =>
-                              setRecurringValues((prev) => ({ ...prev, [stateKey]: checked }))
-                            }
-                            data-testid={`switch-recurring-${group.replace(/\s+/g, "-").toLowerCase()}`}
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {(recurringValues[stateKey] ?? false) ? (
-                          <Input
-                            type="number"
-                            min="1"
-                            max="31"
-                            placeholder="Día"
-                            className="h-8 w-24"
-                            value={dayOfMonthValues[stateKey] ?? ""}
-                            onChange={(e) =>
-                              setDayOfMonthValues((prev) => ({ ...prev, [stateKey]: e.target.value }))
-                            }
-                            data-testid={`input-day-of-month-${group.replace(/\s+/g, "-").toLowerCase()}`}
-                          />
-                        ) : (
+                        </TableCell>
+                        <TableCell className="text-right pr-5">
                           <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    <TableRow className="border-t-2 font-semibold">
+                      <TableCell className="pl-5 text-sm">Total</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalBudget)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalCommitted)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalActual)}</TableCell>
+                      <TableCell className={`text-right tabular-nums text-sm ${totalDiff >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                        {formatCLP(totalDiff)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums text-sm font-medium">
-                        {actual > 0 ? formatCLP(actual) : <span className="text-muted-foreground">$0</span>}
-                      </TableCell>
-                      <TableCell
-                        className={`text-right tabular-nums text-sm font-medium ${
-                          diff >= 0
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-red-600 dark:text-red-400"
-                        }`}
-                      >
-                        {budget > 0 || actual > 0 ? formatCLP(diff) : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {budget > 0 ? (
+                      <TableCell className="text-right pr-5">
+                        {totalBudget > 0 ? (
                           <Badge
                             className={`text-xs ${
-                              pct <= 100
+                              totalReferenceAmount / totalBudget <= 1
                                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                                 : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                             }`}
                           >
-                            {pct.toFixed(0)}%
+                            {((totalReferenceAmount / totalBudget) * 100).toFixed(0)}%
                           </Badge>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 gap-1.5"
-                            onClick={() => handleSave(group)}
-                            disabled={savingGroup === group}
-                            data-testid={`button-save-${group.replace(/\s+/g, "-").toLowerCase()}`}
-                          >
-                            <Save className="size-3.5" />
-                            {savingGroup === group ? "..." : "Guardar"}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                            onClick={() => handleRemoveBudgetCategory(group)}
-                            disabled={deleteBudgetMutation.isPending}
-                            data-testid={`button-remove-${group.replace(/\s+/g, "-").toLowerCase()}`}
-                          >
-                            <Trash2 className="size-4 text-muted-foreground" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </SortableBudgetRow>
-                  );
-                })}
-                  </SortableContext>
-                </DndContext>
-                <TableRow className="border-t-2 font-semibold">
-                  <TableCell className="pl-5 text-sm">{selectedWorkspace === "family" ? "Subtotal" : "Total"}</TableCell>
-                  <TableCell className="tabular-nums text-sm">{formatCLP(totalBudget)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalCommitted)}</TableCell>
-                  <TableCell />
-                  <TableCell />
-                  <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalActual)}</TableCell>
-                  <TableCell
-                    className={`text-right tabular-nums text-sm ${
-                      totalDiff >= 0
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-red-600 dark:text-red-400"
-                    }`}
-                  >
-                    {formatCLP(totalDiff)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {totalBudget > 0 ? (
-                      <Badge
-                        className={`text-xs ${
-                          totalReferenceAmount / totalBudget <= 1
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                            : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                        }`}
-                      >
-                        {((totalReferenceAmount / totalBudget) * 100).toFixed(0)}%
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell />
-                  <TableCell className="pr-5" />
-                </TableRow>
-                {selectedWorkspace === "family" && (
-                  <>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="recurring" className="mt-0 space-y-4">
+              <div className="px-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-muted-foreground">
+                  {orderedVisibleGroupNames.filter((group) => recurringValues[getBudgetStateKey(selectedMonthKey, selectedWorkspace, group)]).length} recurrentes activos
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() =>
+                    generateBudgetCommitmentsMutation.mutate(
+                      selectedMonthKey,
+                      {
+                        onSuccess: (result) => {
+                          toast({
+                            title: "Compromisos generados",
+                            description: result.instancesCreated > 0
+                              ? `${result.instancesCreated} compromiso(s) creados. Plantillas sincronizadas: ${result.templatesCreated + result.templatesUpdated}.`
+                              : `No había compromisos nuevos. Plantillas sincronizadas: ${result.templatesCreated + result.templatesUpdated}.`,
+                          });
+                        },
+                      },
+                    )
+                  }
+                  disabled={generateBudgetCommitmentsMutation.isPending}
+                  data-testid="button-generate-recurring-transactions"
+                >
+                  {generateBudgetCommitmentsMutation.isPending ? "Generando..." : "Generar compromisos del mes"}
+                </Button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <Table className="zebra-stripe">
+                  <TableHeader>
                     <TableRow>
-                      <TableCell className="pl-5 font-medium text-sm">Ingreso Javi</TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="1000"
-                          className="h-8 w-36 tabular-nums"
-                          value={String(familyIncomeJavi)}
-                          onChange={(e) => saveFamilyIncomeJavi(Number(e.target.value || 0))}
-                          data-testid="input-budget-family-income-javi"
-                        />
-                      </TableCell>
-                      <TableCell />
-                      <TableCell />
-                      <TableCell />
-                      <TableCell className="text-right tabular-nums text-sm">{formatCLP(familyIncomeJavi)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-sm text-blue-700 dark:text-blue-300">
-                        {formatCLP(familyIncomeJavi)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                          Ingreso
-                        </Badge>
-                      </TableCell>
-                      <TableCell />
-                      <TableCell className="pr-5" />
+                      <TableHead className="pl-5">Categoría</TableHead>
+                      <TableHead className="text-center">Recurrente</TableHead>
+                      <TableHead>Día de pago</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                      <TableHead className="text-right pr-5">Acción</TableHead>
                     </TableRow>
-                    <TableRow>
-                      <TableCell className="pl-5 font-medium text-sm">Ingreso Agencia</TableCell>
-                      <TableCell className="tabular-nums text-sm">{formatCLP(businessRemainder)}</TableCell>
-                      <TableCell />
-                      <TableCell />
-                      <TableCell />
-                      <TableCell className="text-right tabular-nums text-sm">{formatCLP(businessRemainder)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-sm text-blue-700 dark:text-blue-300">
-                        {formatCLP(businessRemainder)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                          Ingreso
-                        </Badge>
-                      </TableCell>
-                      <TableCell />
-                      <TableCell className="pr-5" />
-                    </TableRow>
-                    <TableRow className="font-semibold">
-                      <TableCell className="pl-5 text-sm">Total ingresos</TableCell>
-                      <TableCell className="tabular-nums text-sm">{formatCLP(familyIncomeTotal)}</TableCell>
-                      <TableCell />
-                      <TableCell />
-                      <TableCell />
-                      <TableCell className="text-right tabular-nums text-sm">{formatCLP(familyIncomeTotal)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-sm text-blue-700 dark:text-blue-300">
-                        {formatCLP(familyIncomeTotal)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                          Ingreso
-                        </Badge>
-                      </TableCell>
-                      <TableCell />
-                      <TableCell className="pr-5" />
-                    </TableRow>
-                    <TableRow className="font-semibold">
-                      <TableCell className="pl-5 text-sm">Saldo</TableCell>
-                      <TableCell className="tabular-nums text-sm">
-                        {formatCLP(familyBalanceAfterBudget)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalCommitted)}</TableCell>
-                      <TableCell />
-                      <TableCell />
-                      <TableCell className="text-right tabular-nums text-sm">{formatCLP(totalActual)}</TableCell>
-                      <TableCell className={`text-right tabular-nums text-sm ${familyBalanceAfterBudget >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                        {formatCLP(familyBalanceAfterBudget)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge className={`text-xs ${familyBalanceAfterBudget >= 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"}`}>
-                          {familyBalanceAfterBudget >= 0 ? "A favor" : "Negativo"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell />
-                      <TableCell className="pr-5" />
-                    </TableRow>
-                  </>
-                )}
-                {((actualByGroup["Sin Agrupadora"] ?? 0) > 0 || (committedByGroup["Sin Agrupadora"] ?? 0) > 0) && (
-                  <TableRow>
-                    <TableCell className="pl-5 font-medium text-sm text-muted-foreground italic">
-                      Sin Agrupadora
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">Asigna ámbito y categoría.</TableCell>
-                    <TableCell className="text-right tabular-nums text-sm font-medium">
-                      {formatCLP(committedByGroup["Sin Agrupadora"] ?? 0)}
-                    </TableCell>
-                    <TableCell />
-                    <TableCell className="text-right tabular-nums text-sm font-medium">
-                      {formatCLP(actualByGroup["Sin Agrupadora"])}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm font-medium text-red-600 dark:text-red-400">
-                      {formatCLP(
-                        -getExecutionReferenceAmount(
-                          actualByGroup["Sin Agrupadora"] ?? 0,
-                          committedByGroup["Sin Agrupadora"] ?? 0,
-                        ),
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span className="text-xs text-muted-foreground">—</span>
-                    </TableCell>
-                    <TableCell />
-                    <TableCell className="text-right pr-5">
-                      <span className="text-xs text-muted-foreground">—</span>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  </TableHeader>
+                  <TableBody>
+                    {orderedVisibleGroupNames.map((group) => {
+                      const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, group);
+                      const budget = getVisibleBudgetAmount(group);
+
+                      return (
+                        <TableRow key={group}>
+                          <TableCell className="pl-5">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm">{getBudgetEntryLabel(group)}</span>
+                                {isItemBudgetKey(group) ? (
+                                  <Badge variant="outline" className="text-[10px]">Subcategoría</Badge>
+                                ) : null}
+                              </div>
+                              {getBudgetEntryMeta(group) ? (
+                                <p className="text-[11px] text-muted-foreground">{getBudgetEntryMeta(group)}</p>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex justify-center">
+                              <Switch
+                                checked={recurringValues[stateKey] ?? false}
+                                onCheckedChange={(checked) =>
+                                  setRecurringValues((prev) => ({ ...prev, [stateKey]: checked }))
+                                }
+                                data-testid={`switch-recurring-${group.replace(/\s+/g, "-").toLowerCase()}`}
+                              />
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {(recurringValues[stateKey] ?? false) ? (
+                              <Input
+                                type="number"
+                                min="1"
+                                max="31"
+                                placeholder="Día"
+                                className="h-8 w-24"
+                                value={dayOfMonthValues[stateKey] ?? ""}
+                                onChange={(e) =>
+                                  setDayOfMonthValues((prev) => ({ ...prev, [stateKey]: e.target.value }))
+                                }
+                                data-testid={`input-day-of-month-${group.replace(/\s+/g, "-").toLowerCase()}`}
+                              />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-sm">{formatCLP(budget)}</TableCell>
+                          <TableCell className="text-right pr-5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-1.5"
+                              onClick={() => handleSave(group)}
+                              disabled={savingGroup === group}
+                              data-testid={`button-save-recurring-${group.replace(/\s+/g, "-").toLowerCase()}`}
+                            >
+                              <Save className="size-3.5" />
+                              {savingGroup === group ? "..." : "Guardar"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 

@@ -12,6 +12,7 @@ import {
   type WorkspaceFilter,
 } from "@/lib/finance";
 import { useMonthlyBalances, useOpeningBalance } from "@/lib/monthly-balances";
+import { getAvailableCashBalance } from "@/domain/accounts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -225,8 +226,8 @@ export default function CashFlowPage() {
   const selectedMonthPaidVat = clientPaymentsByMonth[selectedMonth]?.paidVat ?? 0;
   const selectedMonthVatDueDate = getVatProjectionDateForMonth(selectedMonth);
   const totalAccountsBalance = useMemo(
-    () => accounts.reduce((sum, account) => sum + (Number(account.currentBalance) || 0), 0),
-    [accounts],
+    () => getAvailableCashBalance(accounts, workspace),
+    [accounts, workspace],
   );
 
   const weeklyColumns = useMemo(
@@ -275,9 +276,11 @@ export default function CashFlowPage() {
       const pendingCreditCardItems = relevantTransactions
         .filter((transaction) => {
           const normalizedStatus = transaction.status ?? "pending";
+          const normalizedSubtype = transaction.subtype ?? "actual";
           return (
-            transaction.paymentMethod === "credit_card" &&
+            transaction.movementType === "credit_card_payment" &&
             normalizedStatus === "pending" &&
+            normalizedSubtype === "planned" &&
             isDateWithinRange(transaction.date, column.start, column.end)
           );
         })
@@ -302,7 +305,7 @@ export default function CashFlowPage() {
             label: "Saldo sumado de cuentas",
             date: column.start.toISOString().slice(0, 10),
             amount: openingBalanceValue,
-            meta: `${accounts.length} cuenta(s) consideradas`,
+            meta: "Cuentas corrientes y de ahorro; tarjetas excluidas",
           },
         ],
         clientIncome: clientIncomeItems,
@@ -332,7 +335,7 @@ export default function CashFlowPage() {
         details,
       };
     });
-  }, [accounts.length, clientPayments, selectedMonth, totalAccountsBalance, transactions, weeklyColumns, workspace]);
+  }, [clientPayments, selectedMonth, totalAccountsBalance, transactions, weeklyColumns, workspace]);
 
   const openWeeklyDetail = (
     rowKey: keyof WeeklyBreakdown["details"],

@@ -21,6 +21,7 @@ export interface Transaction {
   movementType?: string; // "income" | "expense" | "transfer" | "credit_card_payment"
   paymentMethod?: string; // "cash" | "bank_account" | "credit_card"
   destinationWorkspace?: string | null;
+  destinationAccountId?: string | null;
   creditCardName?: string | null;
   installmentCount?: number | null;
   accountId?: string | null;
@@ -44,6 +45,7 @@ export interface InsertTransaction {
   movementType?: string;
   paymentMethod?: string;
   destinationWorkspace?: string | null;
+  destinationAccountId?: string | null;
   creditCardName?: string | null;
   installmentCount?: number | null;
   accountId?: string | null;
@@ -206,6 +208,7 @@ export interface Budget {
   isRecurring?: boolean;
   dayOfMonth?: number;
   order?: number;
+  isArchived?: boolean;
 }
 
 export interface InsertBudget {
@@ -217,6 +220,7 @@ export interface InsertBudget {
   isRecurring?: boolean;
   dayOfMonth?: number;
   order?: number;
+  isArchived?: boolean;
 }
 
 // ── Opening Balances ────────────────────────────────────────────
@@ -225,6 +229,316 @@ export interface OpeningBalance {
   year: number;
   month: number;
   amount: number;
+}
+
+// ── Monthly Close / Cierre mensual ─────────────────────────────
+export type MonthlyCloseStatus = "closed" | "reopened";
+
+export interface MonthlyCloseChecklistItem {
+  id: string;
+  label: string;
+  detail: string;
+  status: "ready" | "warning" | "blocked";
+  count?: number;
+}
+
+export interface MonthlyCloseSummaryRow {
+  id: string;
+  label: string;
+  budget: number;
+  actual: number;
+  delta: number;
+  deltaPercent: number | null;
+}
+
+export interface MonthlyCloseSnapshot {
+  id: string;
+  monthKey: string;
+  year: number;
+  month: number;
+  status: MonthlyCloseStatus;
+  closedAt: string | null;
+  reopenedAt?: string | null;
+  notes: string | null;
+  summary: Record<string, number>;
+  checklist: MonthlyCloseChecklistItem[];
+  rows: MonthlyCloseSummaryRow[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InsertMonthlyCloseSnapshot {
+  monthKey: string;
+  year: number;
+  month: number;
+  status?: MonthlyCloseStatus;
+  closedAt?: string | null;
+  reopenedAt?: string | null;
+  notes?: string | null;
+  summary: Record<string, number>;
+  checklist: MonthlyCloseChecklistItem[];
+  rows: MonthlyCloseSummaryRow[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ── Monthly Commitments / Automatizacion mensual ───────────────
+export interface CommitmentTemplate {
+  id: string;
+  name: string;
+  category: string;
+  amount: number;
+  amountMode: string; // "fixed" | "variable"
+  workspace: string; // "business" | "family" | "dentist" | "shared"
+  movementType: string; // "expense" | "credit_card_payment" | "transfer"
+  paymentMethod: string; // "bank_account" | "credit_card" | "cash"
+  accountId: string | null;
+  destinationAccountId?: string | null;
+  creditCardName: string | null;
+  dayOfMonth: number;
+  frequency: string; // "monthly"
+  matchingKeywords: string[];
+  amountTolerance: number;
+  dateToleranceDays: number;
+  sourceBudgetKey?: string | null;
+  isActive: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InsertCommitmentTemplate {
+  name: string;
+  category: string;
+  amount: number;
+  amountMode?: string;
+  workspace?: string;
+  movementType?: string;
+  paymentMethod?: string;
+  accountId?: string | null;
+  destinationAccountId?: string | null;
+  creditCardName?: string | null;
+  dayOfMonth: number;
+  frequency?: string;
+  matchingKeywords?: string[];
+  amountTolerance?: number;
+  dateToleranceDays?: number;
+  sourceBudgetKey?: string | null;
+  isActive?: boolean;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CommitmentInstance {
+  id: string;
+  templateId: string;
+  monthKey: string; // YYYY-MM
+  name: string;
+  category: string;
+  expectedAmount: number;
+  amountMode: string; // "fixed" | "variable"
+  dueDate: string; // YYYY-MM-DD
+  workspace: string;
+  movementType: string;
+  paymentMethod: string;
+  accountId: string | null;
+  destinationAccountId?: string | null;
+  creditCardName: string | null;
+  status: string; // "pending" | "paid" | "skipped"
+  matchedTransactionId: string | null;
+  matchedAt: string | null;
+  paidAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InsertCommitmentInstance {
+  templateId: string;
+  monthKey: string;
+  name: string;
+  category: string;
+  expectedAmount: number;
+  amountMode?: string;
+  dueDate: string;
+  workspace?: string;
+  movementType?: string;
+  paymentMethod?: string;
+  accountId?: string | null;
+  destinationAccountId?: string | null;
+  creditCardName?: string | null;
+  status?: string;
+  matchedTransactionId?: string | null;
+  matchedAt?: string | null;
+  paidAt?: string | null;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ── Bank Import Pipeline / Movimientos crudos ──────────────────
+export interface ImportBatch {
+  id: string;
+  label: string;
+  source: string; // "demo" | "manual_file" | "api" | "browser_assistant" | "email"
+  sourceName: string;
+  sourceType: string; // "bank_account" | "credit_card"
+  bankName: string | null;
+  accountId: string | null;
+  creditCardName: string | null;
+  workspace: string; // "business" | "family" | "dentist" | "shared"
+  periodStart: string | null;
+  periodEnd: string | null;
+  rowCount: number;
+  totalIncome: number;
+  totalExpense: number;
+  duplicateCount: number;
+  status: string; // "reviewing" | "closed"
+  isDemo: boolean;
+  notes: string | null;
+  closedAt?: string | null;
+  discardedOnRollback?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InsertImportBatch {
+  label: string;
+  source?: string;
+  sourceName: string;
+  sourceType: string;
+  bankName?: string | null;
+  accountId?: string | null;
+  creditCardName?: string | null;
+  workspace?: string;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  rowCount?: number;
+  totalIncome?: number;
+  totalExpense?: number;
+  duplicateCount?: number;
+  status?: string;
+  isDemo?: boolean;
+  notes?: string | null;
+  closedAt?: string | null;
+  discardedOnRollback?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ImportedMovement {
+  id: string;
+  batchId: string;
+  externalId: string | null;
+  dedupeKey: string;
+  source: string;
+  sourceName: string;
+  sourceType: string; // "bank_account" | "credit_card"
+  bankName: string | null;
+  accountId: string | null;
+  creditCardName: string | null;
+  date: string;
+  description: string;
+  rawDescription: string;
+  amount: number;
+  direction: string; // "income" | "expense"
+  currency: string;
+  suggestedName: string;
+  suggestedCategory: string;
+  suggestedWorkspace: string;
+  suggestedMovementType: string; // "income" | "expense" | "transfer" | "credit_card_payment"
+  suggestedPaymentMethod: string; // "bank_account" | "credit_card" | "cash"
+  suggestedDestinationWorkspace: string | null;
+  suggestedDestinationAccountId: string | null;
+  installmentCount: number | null;
+  confidence: number;
+  matchedRuleId: string | null;
+  duplicateTransactionId: string | null;
+  duplicateMovementId: string | null;
+  status: string; // "pending" | "converted" | "discarded" | "duplicate"
+  matchedTransactionId: string | null;
+  notes: string | null;
+  discardReason?: string | null;
+  isDemo: boolean;
+  createdAt: string;
+  updatedAt: string;
+  convertedAt: string | null;
+  discardedAt: string | null;
+}
+
+export interface InsertImportedMovement {
+  batchId: string;
+  externalId?: string | null;
+  dedupeKey: string;
+  source?: string;
+  sourceName: string;
+  sourceType: string;
+  bankName?: string | null;
+  accountId?: string | null;
+  creditCardName?: string | null;
+  date: string;
+  description: string;
+  rawDescription?: string;
+  amount: number;
+  direction: string;
+  currency?: string;
+  suggestedName?: string;
+  suggestedCategory: string;
+  suggestedWorkspace?: string;
+  suggestedMovementType: string;
+  suggestedPaymentMethod?: string;
+  suggestedDestinationWorkspace?: string | null;
+  suggestedDestinationAccountId?: string | null;
+  installmentCount?: number | null;
+  confidence?: number;
+  matchedRuleId?: string | null;
+  duplicateTransactionId?: string | null;
+  duplicateMovementId?: string | null;
+  status?: string;
+  matchedTransactionId?: string | null;
+  notes?: string | null;
+  discardReason?: string | null;
+  isDemo?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  convertedAt?: string | null;
+  discardedAt?: string | null;
+}
+
+export interface MovementRule {
+  id: string;
+  name: string;
+  keywords: string[];
+  category: string;
+  workspace: string;
+  movementType: string;
+  paymentMethod: string;
+  accountId: string | null;
+  creditCardName: string | null;
+  amountDirection: string; // "any" | "income" | "expense"
+  priority: number;
+  isActive: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InsertMovementRule {
+  name: string;
+  keywords?: string[];
+  category: string;
+  workspace?: string;
+  movementType?: string;
+  paymentMethod?: string;
+  accountId?: string | null;
+  creditCardName?: string | null;
+  amountDirection?: string;
+  priority?: number;
+  isActive?: boolean;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ── Runtime schemas for legacy Express routes ──────────────────
@@ -242,6 +556,7 @@ export const insertTransactionSchema = z.object({
   movementType: z.string().optional(),
   paymentMethod: z.string().optional(),
   destinationWorkspace: z.string().nullable().optional(),
+  destinationAccountId: z.string().nullable().optional(),
   creditCardName: z.string().nullable().optional(),
   installmentCount: z.number().int().nullable().optional(),
   accountId: z.string().nullable().optional(),
@@ -325,4 +640,162 @@ export const insertCreditCardSettingSchema = z.object({
   defaultPaymentAccountId: z.string().nullable().optional(),
   workspace: z.enum(["business", "family", "shared"]).optional(),
   isActive: z.boolean().optional(),
+});
+
+export const monthlyCloseChecklistItemSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  detail: z.string(),
+  status: z.enum(["ready", "warning", "blocked"]),
+  count: z.number().optional(),
+});
+
+export const monthlyCloseSummaryRowSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  budget: z.number(),
+  actual: z.number(),
+  delta: z.number(),
+  deltaPercent: z.number().nullable(),
+});
+
+export const insertMonthlyCloseSnapshotSchema = z.object({
+  monthKey: z.string().min(7),
+  year: z.number().int(),
+  month: z.number().int().min(1).max(12),
+  status: z.enum(["closed", "reopened"]).optional(),
+  closedAt: z.string().nullable().optional(),
+  reopenedAt: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  summary: z.record(z.string(), z.number()),
+  checklist: z.array(monthlyCloseChecklistItemSchema),
+  rows: z.array(monthlyCloseSummaryRowSchema),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+});
+
+export const insertCommitmentTemplateSchema = z.object({
+  name: z.string().min(1),
+  category: z.string().min(1),
+  amount: z.number().min(0),
+  amountMode: z.enum(["fixed", "variable"]).optional(),
+  workspace: z.enum(["business", "family", "dentist", "shared"]).optional(),
+  movementType: z.enum(["expense", "credit_card_payment", "transfer"]).optional(),
+  paymentMethod: z.enum(["bank_account", "credit_card", "cash"]).optional(),
+  accountId: z.string().nullable().optional(),
+  destinationAccountId: z.string().nullable().optional(),
+  creditCardName: z.string().nullable().optional(),
+  dayOfMonth: z.number().int().min(1).max(31),
+  frequency: z.enum(["monthly"]).optional(),
+  matchingKeywords: z.array(z.string()).optional(),
+  amountTolerance: z.number().min(0).optional(),
+  dateToleranceDays: z.number().int().min(0).optional(),
+  sourceBudgetKey: z.string().nullable().optional(),
+  isActive: z.boolean().optional(),
+  notes: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+});
+
+export const insertCommitmentInstanceSchema = z.object({
+  templateId: z.string().min(1),
+  monthKey: z.string().min(7),
+  name: z.string().min(1),
+  category: z.string().min(1),
+  expectedAmount: z.number().min(0),
+  amountMode: z.enum(["fixed", "variable"]).optional(),
+  dueDate: z.string().min(1),
+  workspace: z.enum(["business", "family", "dentist", "shared"]).optional(),
+  movementType: z.enum(["expense", "credit_card_payment", "transfer"]).optional(),
+  paymentMethod: z.enum(["bank_account", "credit_card", "cash"]).optional(),
+  accountId: z.string().nullable().optional(),
+  destinationAccountId: z.string().nullable().optional(),
+  creditCardName: z.string().nullable().optional(),
+  status: z.enum(["pending", "paid", "skipped"]).optional(),
+  matchedTransactionId: z.string().nullable().optional(),
+  matchedAt: z.string().nullable().optional(),
+  paidAt: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+});
+
+export const insertImportBatchSchema = z.object({
+  label: z.string().min(1),
+  source: z.enum(["demo", "manual_file", "api", "browser_assistant", "email"]).optional(),
+  sourceName: z.string().min(1),
+  sourceType: z.enum(["bank_account", "credit_card"]),
+  bankName: z.string().nullable().optional(),
+  accountId: z.string().nullable().optional(),
+  creditCardName: z.string().nullable().optional(),
+  workspace: z.enum(["business", "family", "dentist", "shared"]).optional(),
+  periodStart: z.string().nullable().optional(),
+  periodEnd: z.string().nullable().optional(),
+  rowCount: z.number().int().min(0).optional(),
+  totalIncome: z.number().min(0).optional(),
+  totalExpense: z.number().min(0).optional(),
+  duplicateCount: z.number().int().min(0).optional(),
+  status: z.enum(["reviewing", "closed"]).optional(),
+  isDemo: z.boolean().optional(),
+  notes: z.string().nullable().optional(),
+  closedAt: z.string().nullable().optional(),
+  discardedOnRollback: z.number().int().min(0).optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+});
+
+export const insertImportedMovementSchema = z.object({
+  batchId: z.string().min(1),
+  externalId: z.string().nullable().optional(),
+  dedupeKey: z.string().min(1),
+  source: z.enum(["demo", "manual_file", "api", "browser_assistant", "email"]).optional(),
+  sourceName: z.string().min(1),
+  sourceType: z.enum(["bank_account", "credit_card"]),
+  bankName: z.string().nullable().optional(),
+  accountId: z.string().nullable().optional(),
+  creditCardName: z.string().nullable().optional(),
+  date: z.string().min(1),
+  description: z.string().min(1),
+  rawDescription: z.string().optional(),
+  amount: z.number().min(0),
+  direction: z.enum(["income", "expense"]),
+  currency: z.string().optional(),
+  suggestedName: z.string().optional(),
+  suggestedCategory: z.string().min(1),
+  suggestedWorkspace: z.enum(["business", "family", "dentist", "shared"]).optional(),
+  suggestedMovementType: z.enum(["income", "expense", "transfer", "credit_card_payment"]),
+  suggestedPaymentMethod: z.enum(["bank_account", "credit_card", "cash"]).optional(),
+  suggestedDestinationWorkspace: z.string().nullable().optional(),
+  suggestedDestinationAccountId: z.string().nullable().optional(),
+  installmentCount: z.number().int().positive().nullable().optional(),
+  confidence: z.number().min(0).max(100).optional(),
+  matchedRuleId: z.string().nullable().optional(),
+  duplicateTransactionId: z.string().nullable().optional(),
+  duplicateMovementId: z.string().nullable().optional(),
+  status: z.enum(["pending", "converted", "discarded", "duplicate"]).optional(),
+  matchedTransactionId: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  discardReason: z.enum(["manual", "batch_rollback"]).nullable().optional(),
+  isDemo: z.boolean().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  convertedAt: z.string().nullable().optional(),
+  discardedAt: z.string().nullable().optional(),
+});
+
+export const insertMovementRuleSchema = z.object({
+  name: z.string().min(1),
+  keywords: z.array(z.string()).optional(),
+  category: z.string().min(1),
+  workspace: z.enum(["business", "family", "dentist", "shared"]).optional(),
+  movementType: z.enum(["income", "expense", "transfer", "credit_card_payment"]).optional(),
+  paymentMethod: z.enum(["bank_account", "credit_card", "cash"]).optional(),
+  accountId: z.string().nullable().optional(),
+  creditCardName: z.string().nullable().optional(),
+  amountDirection: z.enum(["any", "income", "expense"]).optional(),
+  priority: z.number().int().optional(),
+  isActive: z.boolean().optional(),
+  notes: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
 });

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { CreditCard, Upload, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, CreditCard, Landmark, Pencil, Trash2, Upload } from "lucide-react";
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,9 +33,8 @@ import {
 } from "@/lib/hooks";
 import { buildCreditCardInstallmentProjectionTransactions, getMonthKeyFromDate, isExecutedTransaction, normalizeTransaction } from "@/lib/finance";
 import { getCreditCards } from "@/lib/credit-cards";
-import { formatCLP } from "@/lib/utils";
+import { cn, formatCLP } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { Transaction } from "@shared/schema";
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -47,6 +46,8 @@ type CardSummary = {
   debt: number;
   monthlyPurchases: number;
   monthlyPayments: number;
+  installmentsDueThisMonth: number;
+  installmentsDueThisMonthCount: number;
   futureInstallments: number;
   futureInstallmentsCount: number;
 };
@@ -68,10 +69,40 @@ function accountDisplayName(account: { name: string; bank: string }) {
   return `${account.name} — ${account.bank}`;
 }
 
+function getPeriodLabel(month: number, year: number) {
+  return `${MONTH_NAMES[month - 1]} ${year}`;
+}
+
+function getWorkspaceLabel(workspace: string | null | undefined) {
+  if (workspace === "business") return "Empresa";
+  if (workspace === "family") return "Familia";
+  if (workspace === "dentist") return "Consulta Dentista";
+  if (workspace === "shared") return "Compartido";
+  return "Empresa";
+}
+
+function areStringArraysEqual(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+function areStringRecordsEqual(left: Record<string, string>, right: Record<string, string>) {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => left[key] === right[key]);
+}
+
 export default function CreditCardsPanelPage() {
-  const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const currentPeriod = useMemo(() => {
+    const current = new Date();
+    return {
+      month: current.getMonth() + 1,
+      year: current.getFullYear(),
+    };
+  }, []);
+  const [selectedMonth, setSelectedMonth] = useState(currentPeriod.month);
+  const [selectedYear, setSelectedYear] = useState(currentPeriod.year);
   const [savedCards, setSavedCards] = useState<string[]>([]);
   const [selectedCard, setSelectedCard] = useState<string>("all");
   const [editingTransaction, setEditingTransaction] = useState<ReturnType<typeof normalizeTransaction> | null>(null);
@@ -98,7 +129,10 @@ export default function CreditCardsPanelPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const syncCards = () => setSavedCards(getCreditCards());
+    const syncCards = () => {
+      const nextCards = getCreditCards();
+      setSavedCards((current) => areStringArraysEqual(current, nextCards) ? current : nextCards);
+    };
     syncCards();
     window.addEventListener("octopus-credit-cards-updated", syncCards);
     return () => window.removeEventListener("octopus-credit-cards-updated", syncCards);
@@ -164,7 +198,7 @@ export default function CreditCardsPanelPage() {
         return [cardName, matchedSetting?.defaultPaymentAccountId ?? "none"];
       }),
     );
-    setPaymentAccountDrafts(nextDrafts);
+    setPaymentAccountDrafts((current) => areStringRecordsEqual(current, nextDrafts) ? current : nextDrafts);
   }, [cardNames, creditCardSettings]);
 
   useEffect(() => {
@@ -173,8 +207,12 @@ export default function CreditCardsPanelPage() {
     }
   }, [cardNames, selectedCard]);
 
+  useEffect(() => {
+    setSelectedFutureIds(new Set());
+  }, [selectedCard, selectedMonthKey]);
+
   const years = useMemo(() => {
-    const set = new Set<number>([now.getFullYear()]);
+    const set = new Set<number>([currentPeriod.year]);
 
     for (const transaction of creditCardTransactions) {
       set.add(parseInt(transaction.date.slice(0, 4), 10));
@@ -185,7 +223,7 @@ export default function CreditCardsPanelPage() {
     }
 
     return Array.from(set).sort((left, right) => right - left);
-  }, [creditCardTransactions, now, projectedInstallments]);
+  }, [creditCardTransactions, currentPeriod.year, projectedInstallments]);
 
   const filteredRealTransactions = useMemo(
     () =>
@@ -253,12 +291,21 @@ export default function CreditCardsPanelPage() {
       }, 0);
 
       const futureInstallmentsCount = cardInstallments.filter((transaction) => transaction.date >= `${selectedMonthKey}-01`).length;
+      const installmentsDueThisMonth = cardInstallments.reduce((sum, transaction) => {
+        if (getMonthKeyFromDate(transaction.date) === selectedMonthKey) {
+          return sum + transaction.amount;
+        }
+        return sum;
+      }, 0);
+      const installmentsDueThisMonthCount = cardInstallments.filter((transaction) => getMonthKeyFromDate(transaction.date) === selectedMonthKey).length;
 
       return {
         cardName,
         debt,
         monthlyPurchases,
         monthlyPayments,
+        installmentsDueThisMonth,
+        installmentsDueThisMonthCount,
         futureInstallments,
         futureInstallmentsCount,
       };
@@ -304,6 +351,16 @@ export default function CreditCardsPanelPage() {
   );
   const allFutureSelected = futureVisibleIds.length > 0 && futureVisibleIds.every((id) => selectedFutureIds.has(id));
   const someFutureSelected = futureVisibleIds.some((id) => selectedFutureIds.has(id));
+  const selectedFutureSourceIds = useMemo(
+    () =>
+      Array.from(new Set(
+        futureInstallmentRows
+          .filter((transaction) => selectedFutureIds.has(transaction.id))
+          .map((transaction) => transaction.sourceTransaction?.id)
+          .filter((id): id is string => Boolean(id)),
+      )),
+    [futureInstallmentRows, selectedFutureIds],
+  );
 
   const expenseCategories = useMemo(
     () => categories.filter((category) => category.type === "expense").map((category) => category.name).sort((left, right) => left.localeCompare(right, "es")),
@@ -338,6 +395,25 @@ export default function CreditCardsPanelPage() {
     return Array.from(grouped.values()).sort((left, right) => right.importedAt.localeCompare(left.importedAt));
   }, [normalizedTransactions, selectedCard]);
   const latestImportBatchId = importBatches[0]?.id ?? null;
+
+  const paymentAccountLabelByCard = useMemo(() => {
+    const labels = new Map<string, string>();
+
+    for (const cardName of cardNames) {
+      const matchedSetting = creditCardSettings.find((setting) => setting.cardName === cardName);
+      const linkedAccount = matchedSetting?.defaultPaymentAccountId
+        ? accountById.get(matchedSetting.defaultPaymentAccountId)
+        : null;
+      labels.set(cardName, linkedAccount ? accountDisplayName(linkedAccount) : "");
+    }
+
+    return labels;
+  }, [accountById, cardNames, creditCardSettings]);
+
+  const cardsWithoutPaymentAccount = useMemo(
+    () => cardNames.filter((cardName) => !paymentAccountLabelByCard.get(cardName)),
+    [cardNames, paymentAccountLabelByCard],
+  );
 
   useEffect(() => {
     if (!editingTransaction) return;
@@ -432,12 +508,7 @@ export default function CreditCardsPanelPage() {
   };
 
   const handleBulkDeleteFuture = () => {
-    const sourceIds = Array.from(new Set(
-      futureInstallmentRows
-        .filter((transaction) => selectedFutureIds.has(transaction.id))
-        .map((transaction) => transaction.sourceTransaction?.id)
-        .filter((id): id is string => Boolean(id)),
-    ));
+    const sourceIds = selectedFutureSourceIds;
 
     if (sourceIds.length === 0) {
       toast({
@@ -461,6 +532,8 @@ export default function CreditCardsPanelPage() {
       acc.debt += summary.debt;
       acc.monthlyPurchases += summary.monthlyPurchases;
       acc.monthlyPayments += summary.monthlyPayments;
+      acc.installmentsDueThisMonth += summary.installmentsDueThisMonth;
+      acc.installmentsDueThisMonthCount += summary.installmentsDueThisMonthCount;
       acc.futureInstallments += summary.futureInstallments;
       acc.futureInstallmentsCount += summary.futureInstallmentsCount;
       return acc;
@@ -469,10 +542,25 @@ export default function CreditCardsPanelPage() {
       debt: 0,
       monthlyPurchases: 0,
       monthlyPayments: 0,
+      installmentsDueThisMonth: 0,
+      installmentsDueThisMonthCount: 0,
       futureInstallments: 0,
       futureInstallmentsCount: 0,
     },
   );
+  const selectedPeriodLabel = getPeriodLabel(selectedMonth, selectedYear);
+  const selectedSummary = selectedCard === "all"
+    ? null
+    : summaries.find((summary) => summary.cardName === selectedCard) ?? null;
+  const selectedPaymentAccountLabel = selectedCard === "all" ? "" : paymentAccountLabelByCard.get(selectedCard) ?? "";
+  const hasPaymentAccountAlert = selectedCard === "all"
+    ? cardsWithoutPaymentAccount.length > 0
+    : !selectedPaymentAccountLabel;
+  const workspaceTitle = selectedCard === "all" ? "Todas las tarjetas" : selectedCard;
+  const monthlyNet = totals.monthlyPurchases - totals.monthlyPayments;
+  const visiblePurchasesTotal = monthPurchases.reduce((sum, transaction) => sum + transaction.amount, 0);
+  const visiblePaymentsTotal = monthPayments.reduce((sum, transaction) => sum + transaction.amount, 0);
+  const visibleFutureInstallmentsTotal = futureInstallmentRows.reduce((sum, transaction) => sum + transaction.amount, 0);
 
   const handleSavePaymentAccount = (cardName: string) => {
     const selectedAccountId = paymentAccountDrafts[cardName];
@@ -522,73 +610,231 @@ export default function CreditCardsPanelPage() {
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
-      <div className="flex items-center gap-3">
-        <CreditCard className="size-5 text-primary" />
-        <h2 className="text-xl font-semibold">Panel de Tarjetas</h2>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3">
+          <CreditCard className="size-5 text-primary" />
+          <div>
+            <h2 className="text-xl font-semibold">Tarjetas de crédito</h2>
+            <p className="text-sm text-muted-foreground">Compromisos, pagos y cuotas para {selectedPeriodLabel.toLowerCase()}.</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/movements">
+              <ArrowRight className="size-4 mr-2" />
+              Revisar movimientos
+            </Link>
+          </Button>
+          <Button asChild size="sm">
+            <Link href="/import">
+              <Upload className="size-4 mr-2" />
+              Importar cartola
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <Card>
+      <Card data-testid="credit-card-workspace-header">
         <CardContent className="pt-5 pb-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="space-y-1">
-                <span className="text-sm font-medium text-muted-foreground">Tarjeta</span>
-                <Select value={selectedCard} onValueChange={setSelectedCard}>
-                  <SelectTrigger className="w-56">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas las tarjetas</SelectItem>
-                    {cardNames.map((cardName) => (
-                      <SelectItem key={cardName} value={cardName}>
-                        {cardName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="space-y-2">
+                <Badge variant="secondary" className="w-fit">
+                  Workspace tarjetas
+                </Badge>
+                <div>
+                  <h3 className="text-lg font-semibold">{workspaceTitle}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedCard === "all"
+                      ? `${visibleSummaries.length} tarjetas activas en el filtro actual.`
+                      : selectedPaymentAccountLabel
+                        ? `Pago por defecto desde ${selectedPaymentAccountLabel}.`
+                        : "Esta tarjeta aún no tiene cuenta de pago por defecto."}
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <span className="text-sm font-medium text-muted-foreground">Mes</span>
-                <Select value={String(selectedMonth)} onValueChange={(value) => setSelectedMonth(parseInt(value, 10))}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MONTH_NAMES.map((name, index) => (
-                      <SelectItem key={name} value={String(index + 1)}>
-                        {name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <div className="flex flex-wrap items-end gap-3 xl:justify-end">
+                <div className="space-y-1">
+                  <span className="text-sm font-medium text-muted-foreground">Tarjeta</span>
+                  <Select value={selectedCard} onValueChange={setSelectedCard}>
+                    <SelectTrigger className="w-56">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas las tarjetas</SelectItem>
+                      {cardNames.map((cardName) => (
+                        <SelectItem key={cardName} value={cardName}>
+                          {cardName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-1">
-                <span className="text-sm font-medium text-muted-foreground">Año</span>
-                <Select value={String(selectedYear)} onValueChange={(value) => setSelectedYear(parseInt(value, 10))}>
-                  <SelectTrigger className="w-28">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {years.map((year) => (
-                      <SelectItem key={year} value={String(year)}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-1">
+                  <span className="text-sm font-medium text-muted-foreground">Mes</span>
+                  <Select value={String(selectedMonth)} onValueChange={(value) => setSelectedMonth(parseInt(value, 10))}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTH_NAMES.map((name, index) => (
+                        <SelectItem key={name} value={String(index + 1)}>
+                          {name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-sm font-medium text-muted-foreground">Año</span>
+                  <Select value={String(selectedYear)} onValueChange={(value) => setSelectedYear(parseInt(value, 10))}>
+                    <SelectTrigger className="w-28">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {years.map((year) => (
+                        <SelectItem key={year} value={String(year)}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 text-sm text-muted-foreground lg:items-end">
-              <span>Esta vista usa compras reales, pagos reales y cuotas proyectadas.</span>
-              <Button asChild variant="outline" size="sm" className="w-fit">
-                <Link href="/import">
-                  <Upload className="size-4 mr-2" />
-                  Completar con cartolas
-                </Link>
-              </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="rounded-lg border bg-background p-4">
+                <p className="text-sm text-muted-foreground">Saldo TC calculado</p>
+                <p className={cn("text-2xl font-semibold tabular-nums mt-1", totals.debt >= 0 ? "text-amber-700 dark:text-amber-300" : "text-emerald-600 dark:text-emerald-400")}>
+                  {formatCLP(totals.debt)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Histórico registrado menos pagos cargados.</p>
+              </div>
+              <div className="rounded-lg border bg-background p-4">
+                <p className="text-sm text-muted-foreground">Compromiso del mes</p>
+                <p className="text-2xl font-semibold tabular-nums mt-1">{formatCLP(totals.installmentsDueThisMonth)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{totals.installmentsDueThisMonthCount} cuotas en {MONTH_NAMES[selectedMonth - 1].toLowerCase()}.</p>
+              </div>
+              <div className="rounded-lg border bg-background p-4">
+                <p className="text-sm text-muted-foreground">Pagos cargados</p>
+                <p className="text-2xl font-semibold tabular-nums mt-1">{formatCLP(totals.monthlyPayments)}</p>
+                <p className="text-xs text-muted-foreground mt-1">Abonos reales importados o registrados.</p>
+              </div>
+              <div className="rounded-lg border bg-background p-4">
+                <p className="text-sm text-muted-foreground">Balance del mes</p>
+                <p className={cn("text-2xl font-semibold tabular-nums mt-1", monthlyNet > 0 ? "text-amber-700 dark:text-amber-300" : "text-emerald-600 dark:text-emerald-400")}>
+                  {formatCLP(monthlyNet)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Compras menos pagos del periodo.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold">Tarjetas activas</h4>
+                  {selectedCard !== "all" ? (
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedCard("all")}>
+                      Ver todas
+                    </Button>
+                  ) : null}
+                </div>
+                {summaries.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
+                    No hay tarjetas registradas. Importa una cartola o configura una tarjeta para activar este workspace.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {summaries.map((summary) => {
+                      const isActive = selectedCard === summary.cardName;
+                      const paymentLabel = paymentAccountLabelByCard.get(summary.cardName);
+                      return (
+                        <button
+                          key={summary.cardName}
+                          type="button"
+                          onClick={() => setSelectedCard(summary.cardName)}
+                          className={cn(
+                            "rounded-lg border bg-background p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            isActive ? "border-primary bg-primary/5" : "border-border",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-medium leading-tight">{summary.cardName}</span>
+                            {paymentLabel ? (
+                              <Badge variant="secondary" className="shrink-0">
+                                Cuenta OK
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="shrink-0 border-amber-300 text-amber-700 dark:text-amber-300">
+                                Sin cuenta
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                            <span>Saldo</span>
+                            <span className="text-right tabular-nums text-foreground">{formatCLP(summary.debt)}</span>
+                            <span>Cuotas mes</span>
+                            <span className="text-right tabular-nums text-foreground">{formatCLP(summary.installmentsDueThisMonth)}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-lg border bg-background p-4">
+                <div className="flex items-center gap-2">
+                  {hasPaymentAccountAlert ? (
+                    <AlertTriangle className="size-4 text-amber-600" />
+                  ) : (
+                    <CheckCircle2 className="size-4 text-emerald-600" />
+                  )}
+                  <h4 className="text-sm font-semibold">Estado operativo</h4>
+                </div>
+                <div className="mt-3 space-y-3 text-sm">
+                  {selectedCard === "all" ? (
+                    <div className="flex gap-2">
+                      <Landmark className="size-4 mt-0.5 text-muted-foreground" />
+                      <p className="text-muted-foreground">
+                        {cardsWithoutPaymentAccount.length === 0
+                          ? "Todas las tarjetas tienen cuenta de pago por defecto."
+                          : `${cardsWithoutPaymentAccount.length} tarjetas aún necesitan cuenta de pago por defecto.`}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Landmark className="size-4 mt-0.5 text-muted-foreground" />
+                      <p className="text-muted-foreground">
+                        {selectedPaymentAccountLabel
+                          ? selectedPaymentAccountLabel
+                          : "Define una cuenta origen para que los pagos TC importados se vinculen solos."}
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <CalendarClock className="size-4 mt-0.5 text-muted-foreground" />
+                    <p className="text-muted-foreground">
+                      {selectedSummary
+                        ? `${selectedSummary.installmentsDueThisMonthCount} cuotas de ${selectedSummary.cardName} vencen en ${MONTH_NAMES[selectedMonth - 1].toLowerCase()}.`
+                        : `${totals.installmentsDueThisMonthCount} cuotas vencen en ${MONTH_NAMES[selectedMonth - 1].toLowerCase()} entre todas las tarjetas.`}
+                    </p>
+                  </div>
+                  {totals.debt > 0 ? (
+                    <div className="rounded-md bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                      Hay saldo de tarjeta abierto. Revisa pagos cargados antes de cerrar el mes.
+                    </div>
+                  ) : (
+                    <div className="rounded-md bg-emerald-50 p-3 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                      No hay saldo abierto en el filtro actual.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -657,40 +903,10 @@ export default function CreditCardsPanelPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Deuda actual</p>
-            <p className={`text-xl font-semibold tabular-nums mt-1 ${totals.debt >= 0 ? "text-amber-700 dark:text-amber-300" : "text-emerald-600 dark:text-emerald-400"}`}>
-              {formatCLP(totals.debt)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Compras del mes</p>
-            <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(totals.monthlyPurchases)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Pagos realizados</p>
-            <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(totals.monthlyPayments)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Cuotas futuras</p>
-            <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(totals.futureInstallments)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{totals.futureInstallmentsCount} cuotas desde {MONTH_NAMES[selectedMonth - 1].toLowerCase()}</p>
-          </CardContent>
-        </Card>
-      </div>
-
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">Resumen por tarjeta</CardTitle>
-          <CardDescription>Deuda, compras del período, pagos y cuotas futuras por cada tarjeta.</CardDescription>
+          <CardDescription>Deuda, compromiso del mes, pagos y cuotas futuras por cada tarjeta.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -698,15 +914,17 @@ export default function CreditCardsPanelPage() {
               <TableRow>
                 <TableHead>Tarjeta</TableHead>
                 <TableHead className="text-right">Deuda actual</TableHead>
+                <TableHead className="text-right">Compromiso mes</TableHead>
                 <TableHead className="text-right">Compras del mes</TableHead>
                 <TableHead className="text-right">Pagos del mes</TableHead>
                 <TableHead className="text-right">Cuotas futuras</TableHead>
+                <TableHead className="text-right">Acción</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleSummaries.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                     No hay tarjetas con movimientos para este filtro.
                   </TableCell>
                 </TableRow>
@@ -721,12 +939,37 @@ export default function CreditCardsPanelPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{formatCLP(summary.debt)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCLP(summary.installmentsDueThisMonth)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatCLP(summary.monthlyPurchases)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatCLP(summary.monthlyPayments)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatCLP(summary.futureInstallments)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      onClick={() => setSelectedCard(summary.cardName)}
+                      aria-label={`Abrir ${summary.cardName}`}
+                    >
+                      <ArrowRight className="size-4 text-muted-foreground" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
+            {visibleSummaries.length > 0 ? (
+              <TableFooter>
+                <TableRow>
+                  <TableCell>Total visible</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCLP(totals.debt)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCLP(totals.installmentsDueThisMonth)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCLP(totals.monthlyPurchases)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCLP(totals.monthlyPayments)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCLP(totals.futureInstallments)}</TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableFooter>
+            ) : null}
           </Table>
         </CardContent>
       </Card>
@@ -765,25 +1008,14 @@ export default function CreditCardsPanelPage() {
                   <TableCell className="text-right tabular-nums">{batch.rows}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatCLP(batch.totalAmount)}</TableCell>
                   <TableCell className="text-right">
-                    {batch.id === latestImportBatchId ? (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeleteImportBatch(batch.id)}
-                        disabled={bulkDeleteMutation.isPending}
-                      >
-                        {bulkDeleteMutation.isPending ? "Eliminando..." : "Deshacer"}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setBatchToDelete(batch)}
-                        disabled={bulkDeleteMutation.isPending}
-                      >
-                        Eliminar con alerta
-                      </Button>
-                    )}
+                    <Button
+                      variant={batch.id === latestImportBatchId ? "destructive" : "outline"}
+                      size="sm"
+                      onClick={() => setBatchToDelete(batch)}
+                      disabled={bulkDeleteMutation.isPending}
+                    >
+                      {batch.id === latestImportBatchId ? "Deshacer" : "Eliminar con alerta"}
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -835,6 +1067,14 @@ export default function CreditCardsPanelPage() {
                     </TableRow>
                   ))}
               </TableBody>
+              {monthPurchases.length > 0 ? (
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={4}>Total compras visibles</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCLP(visiblePurchasesTotal)}</TableCell>
+                  </TableRow>
+                </TableFooter>
+              ) : null}
             </Table>
           </CardContent>
         </Card>
@@ -872,13 +1112,7 @@ export default function CreditCardsPanelPage() {
                         <TableCell>{transaction.date}</TableCell>
                         <TableCell>{transaction.creditCardName}</TableCell>
                         <TableCell>{transaction.name}</TableCell>
-                        <TableCell>
-                          {transaction.workspace === "business"
-                            ? "Empresa"
-                            : transaction.workspace === "family"
-                              ? "Familia"
-                              : "Consulta Dentista"}
-                        </TableCell>
+                        <TableCell>{getWorkspaceLabel(transaction.workspace)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {sourceAccount ? accountDisplayName(sourceAccount) : "Sin cuenta vinculada"}
                         </TableCell>
@@ -887,6 +1121,14 @@ export default function CreditCardsPanelPage() {
                     );
                   })}
               </TableBody>
+              {monthPayments.length > 0 ? (
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={5}>Total pagos visibles</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCLP(visiblePaymentsTotal)}</TableCell>
+                  </TableRow>
+                </TableFooter>
+              ) : null}
             </Table>
           </CardContent>
         </Card>
@@ -904,9 +1146,11 @@ export default function CreditCardsPanelPage() {
                 variant="destructive"
                 size="sm"
                 onClick={handleBulkDeleteFuture}
-                disabled={bulkDeleteMutation.isPending}
+                disabled={bulkDeleteMutation.isPending || selectedFutureSourceIds.length === 0}
               >
-                {bulkDeleteMutation.isPending ? "Eliminando..." : `Eliminar ${selectedFutureIds.size}`}
+                {bulkDeleteMutation.isPending
+                  ? "Eliminando..."
+                  : `Eliminar ${selectedFutureSourceIds.length} ${selectedFutureSourceIds.length === 1 ? "compra base" : "compras base"}`}
               </Button>
             ) : null}
           </div>
@@ -927,15 +1171,15 @@ export default function CreditCardsPanelPage() {
                 <TableHead>Detalle cuota</TableHead>
                 <TableHead>Descripción compra</TableHead>
                 <TableHead>Origen</TableHead>
-                  <TableHead>Ámbito</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+                <TableHead>Ámbito</TableHead>
+                <TableHead className="text-right">Monto</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {futureInstallmentRows.length === 0 ? (
                 <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
                     No hay cuotas futuras para este filtro.
                   </TableCell>
                 </TableRow>
@@ -953,13 +1197,7 @@ export default function CreditCardsPanelPage() {
                   <TableCell>{transaction.name}</TableCell>
                   <TableCell>{transaction.sourceTransaction?.name ?? "-"}</TableCell>
                   <TableCell>{transaction.sourceTransaction?.category ?? transaction.notes?.replace("Proyección automática de cuotas para ", "") ?? "-"}</TableCell>
-                  <TableCell>
-                    {transaction.workspace === "business"
-                      ? "Empresa"
-                      : transaction.workspace === "family"
-                        ? "Familia"
-                        : "Consulta Dentista"}
-                  </TableCell>
+                  <TableCell>{getWorkspaceLabel(transaction.workspace)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatCLP(transaction.amount)}</TableCell>
                   <TableCell className="text-right">
                     {transaction.sourceTransaction ? (
@@ -969,6 +1207,7 @@ export default function CreditCardsPanelPage() {
                           size="icon"
                           className="size-8"
                           onClick={() => openEditDialog(transaction.sourceTransaction!)}
+                          aria-label={`Editar ${transaction.sourceTransaction.name}`}
                         >
                           <Pencil className="size-4 text-muted-foreground" />
                         </Button>
@@ -977,6 +1216,7 @@ export default function CreditCardsPanelPage() {
                           size="icon"
                           className="size-8"
                           onClick={() => setDeleteTransaction(transaction.sourceTransaction!)}
+                          aria-label={`Eliminar ${transaction.sourceTransaction.name}`}
                         >
                           <Trash2 className="size-4 text-muted-foreground" />
                         </Button>
@@ -986,6 +1226,15 @@ export default function CreditCardsPanelPage() {
                 </TableRow>
               ))}
             </TableBody>
+            {futureInstallmentRows.length > 0 ? (
+              <TableFooter>
+                <TableRow>
+                  <TableCell colSpan={7}>Total cuotas visibles</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCLP(visibleFutureInstallmentsTotal)}</TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableFooter>
+            ) : null}
           </Table>
         </CardContent>
       </Card>
@@ -1064,9 +1313,13 @@ export default function CreditCardsPanelPage() {
       <AlertDialog open={!!batchToDelete} onOpenChange={(open) => { if (!open) setBatchToDelete(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar una importación anterior</AlertDialogTitle>
+            <AlertDialogTitle>
+              {batchToDelete?.id === latestImportBatchId ? "Deshacer última importación" : "Eliminar una importación anterior"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta no es la última carga. Si la eliminas, también desaparecerán sus transacciones en Resumen y en las demás vistas. Confirma solo si realmente quieres revertir ese lote antiguo.
+              {batchToDelete
+                ? `${batchToDelete.label} contiene ${batchToDelete.rows} movimientos por ${formatCLP(batchToDelete.totalAmount)}. Al eliminarla también desaparecerán sus transacciones en Resumen y en las demás vistas.`
+                : "Al eliminar esta importación también desaparecerán sus transacciones en Resumen y en las demás vistas."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1078,7 +1331,7 @@ export default function CreditCardsPanelPage() {
                 setBatchToDelete(null);
               }}
             >
-              Eliminar lote
+              {batchToDelete?.id === latestImportBatchId ? "Deshacer lote" : "Eliminar lote"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

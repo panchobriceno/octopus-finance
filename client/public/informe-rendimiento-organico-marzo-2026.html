@@ -1,0 +1,1319 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Informe de Rendimiento Orgánico - Marzo 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --om-orange: #ca6b2d;
+      --om-green: #a3e369;
+      --om-cyan: #11c1ef;
+      --om-teal: #28625e;
+      --om-purple: #24122a;
+      --om-navy: #153751;
+      --om-black: #0a0a0a;
+      --om-white: #ffffff;
+      --om-border: rgba(255, 255, 255, 0.09);
+      --om-soft: rgba(255, 255, 255, 0.72);
+      --om-muted: rgba(255, 255, 255, 0.58);
+      --om-panel: rgba(9, 12, 18, 0.72);
+      --om-panel-strong: rgba(12, 16, 24, 0.9);
+      --om-grad-brand: linear-gradient(90deg, var(--om-cyan) 0%, var(--om-green) 100%);
+      --om-grad-bg: radial-gradient(120% 90% at 10% 10%, var(--om-navy) 0%, var(--om-purple) 45%, #090710 100%);
+      --shadow-lg: 0 24px 80px rgba(0, 0, 0, 0.35);
+      --shadow-md: 0 18px 40px rgba(0, 0, 0, 0.24);
+      --radius-xl: 32px;
+      --radius-lg: 24px;
+      --radius-md: 18px;
+      --radius-sm: 12px;
+      --content-width: min(1180px, calc(100vw - 48px));
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--om-black);
+      color: var(--om-white);
+      font-family: "Raleway", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 10% 12%, rgba(17, 193, 239, 0.14), transparent 28%),
+        radial-gradient(circle at 88% 24%, rgba(163, 227, 105, 0.12), transparent 26%),
+        radial-gradient(circle at 65% 72%, rgba(202, 107, 45, 0.14), transparent 22%),
+        #08070d;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: auto;
+      width: 34rem;
+      height: 34rem;
+      border-radius: 999px;
+      filter: blur(70px);
+      pointer-events: none;
+      opacity: 0.16;
+      z-index: 0;
+    }
+
+    body::before {
+      top: -10rem;
+      right: -12rem;
+      background: rgba(17, 193, 239, 0.65);
+    }
+
+    body::after {
+      bottom: -12rem;
+      left: -10rem;
+      background: rgba(163, 227, 105, 0.4);
+    }
+
+    .page {
+      position: relative;
+      z-index: 1;
+      width: var(--content-width);
+      margin: 0 auto;
+      padding: 40px 0 72px;
+    }
+
+    .panel {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(16, 19, 28, 0.9), rgba(9, 10, 16, 0.78));
+      border: 1px solid var(--om-border);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-lg);
+      backdrop-filter: blur(14px);
+    }
+
+    .panel::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at top right, rgba(17, 193, 239, 0.1), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(163, 227, 105, 0.08), transparent 30%);
+      pointer-events: none;
+    }
+
+    .hero {
+      padding: 40px 40px 36px;
+      background: var(--om-grad-bg);
+      isolation: isolate;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      top: -14%;
+      right: -12%;
+      width: 32rem;
+      height: 32rem;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      background:
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.08), transparent 44%),
+        repeating-radial-gradient(circle at center, rgba(255, 255, 255, 0.045) 0 2px, transparent 2px 26px);
+      opacity: 0.24;
+      transform: rotate(-12deg);
+      pointer-events: none;
+    }
+
+    .hero-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 34px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand-lockup {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .brand-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: var(--om-grad-brand);
+      box-shadow: 0 0 22px rgba(17, 193, 239, 0.35);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    .pill--accent {
+      background: rgba(202, 107, 45, 0.16);
+      border-color: rgba(202, 107, 45, 0.32);
+      color: #ffd9bf;
+    }
+
+    .hero-grid {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.8fr);
+      gap: 28px;
+      align-items: start;
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--om-cyan);
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 12ch;
+      font-size: clamp(3rem, 7vw, 5.2rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .title-light {
+      display: block;
+      color: rgba(255, 255, 255, 0.76);
+      font-weight: 300;
+    }
+
+    .title-strong {
+      display: block;
+      font-weight: 800;
+      background: var(--om-grad-brand);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero-copy {
+      max-width: 64ch;
+      margin: 22px 0 0;
+      color: var(--om-soft);
+      font-size: 1.08rem;
+      line-height: 1.68;
+    }
+
+    .quick-take {
+      margin-top: 26px;
+      padding: 22px 22px 20px;
+      border-radius: var(--radius-lg);
+      background: rgba(3, 8, 14, 0.4);
+      border: 1px solid rgba(17, 193, 239, 0.16);
+      max-width: 44rem;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .quick-take h2,
+    .section-title {
+      margin: 0;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+
+    .quick-take h2 .light,
+    .section-title .light {
+      color: rgba(255, 255, 255, 0.76);
+      font-weight: 300;
+    }
+
+    .quick-take h2 .accent,
+    .section-title .accent {
+      color: var(--om-green);
+      font-weight: 800;
+    }
+
+    .bullet-list {
+      list-style: none;
+      margin: 16px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 12px;
+    }
+
+    .bullet-list li {
+      position: relative;
+      padding-left: 18px;
+      color: var(--om-soft);
+      line-height: 1.55;
+    }
+
+    .bullet-list li::before {
+      content: "";
+      position: absolute;
+      top: 0.72em;
+      left: 0;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--om-grad-brand);
+      transform: translateY(-50%);
+    }
+
+    .hero-side {
+      display: grid;
+      gap: 16px;
+    }
+
+    .summary-card {
+      padding: 20px 20px 18px;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: var(--shadow-md);
+    }
+
+    .summary-card--highlight {
+      background:
+        linear-gradient(180deg, rgba(17, 193, 239, 0.18), rgba(17, 193, 239, 0.08)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
+      border-color: rgba(17, 193, 239, 0.2);
+    }
+
+    .summary-label {
+      margin: 0 0 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.58);
+    }
+
+    .summary-value {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 2.8rem);
+      line-height: 0.95;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .summary-note {
+      margin: 10px 0 0;
+      color: rgba(255, 255, 255, 0.74);
+      line-height: 1.45;
+      font-size: 0.96rem;
+    }
+
+    .summary-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .section {
+      margin-top: 26px;
+      padding: 34px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 22px;
+      margin-bottom: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .section-kicker {
+      margin: 0 0 12px;
+      color: var(--om-cyan);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .section-copy {
+      max-width: 38rem;
+      margin: 0;
+      color: var(--om-muted);
+      font-size: 1rem;
+      line-height: 1.65;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .metric {
+      padding: 20px;
+      border-radius: var(--radius-lg);
+      background: var(--om-panel);
+      border: 1px solid var(--om-border);
+      box-shadow: var(--shadow-md);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric::before {
+      content: "";
+      position: absolute;
+      inset: auto -40px -48px auto;
+      width: 120px;
+      height: 120px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(17, 193, 239, 0.2), transparent 68%);
+      pointer-events: none;
+    }
+
+    .metric-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .metric-icon {
+      width: 42px;
+      height: 42px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      color: var(--om-cyan);
+    }
+
+    .metric-icon svg,
+    .card-icon svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .metric-title {
+      margin: 0;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.56);
+    }
+
+    .metric-value {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 2.8rem);
+      line-height: 1;
+      letter-spacing: -0.04em;
+      font-weight: 800;
+    }
+
+    .metric-sub {
+      margin: 10px 0 0;
+      color: var(--om-muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .benchmark {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+      gap: 18px;
+      margin-top: 16px;
+    }
+
+    .benchmark-card,
+    .narrative-card,
+    .format-card,
+    .ranking-card,
+    .insight-card,
+    .action-card {
+      padding: 22px;
+      border-radius: var(--radius-lg);
+      background: var(--om-panel);
+      border: 1px solid var(--om-border);
+      box-shadow: var(--shadow-md);
+    }
+
+    .benchmark-card {
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+
+    .bar {
+      height: 14px;
+      width: 100%;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .bar > span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--om-grad-brand);
+      box-shadow: 0 0 22px rgba(17, 193, 239, 0.24);
+    }
+
+    .benchmark-scale {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--om-muted);
+      font-size: 0.82rem;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .card-title,
+    .format-head h3,
+    .ranking-title,
+    .insight-title,
+    .action-title {
+      margin: 0;
+      font-size: 1.28rem;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+
+    .card-copy,
+    .narrative-card p,
+    .format-copy,
+    .ranking-copy,
+    .insight-copy,
+    .action-copy {
+      margin: 0;
+      color: var(--om-soft);
+      line-height: 1.62;
+      font-size: 0.98rem;
+    }
+
+    .narrative-card {
+      display: grid;
+      gap: 12px;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .chip--brand {
+      background: rgba(17, 193, 239, 0.14);
+      border-color: rgba(17, 193, 239, 0.2);
+      color: #d4f7ff;
+    }
+
+    .chip--success {
+      background: rgba(163, 227, 105, 0.14);
+      border-color: rgba(163, 227, 105, 0.22);
+      color: #eaffd4;
+    }
+
+    .chip--warn {
+      background: rgba(202, 107, 45, 0.14);
+      border-color: rgba(202, 107, 45, 0.22);
+      color: #ffddc8;
+    }
+
+    .formats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 14px;
+    }
+
+    .format-card {
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+
+    .format-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .format-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .format-stat {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 2rem;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      font-weight: 800;
+    }
+
+    .format-target {
+      margin: 6px 0 0;
+      color: var(--om-muted);
+      font-size: 0.92rem;
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--om-muted);
+      font-size: 0.82rem;
+    }
+
+    .ranking-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .ranking-card {
+      display: grid;
+      gap: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ranking-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: 100%;
+      height: 4px;
+      background: var(--om-grad-brand);
+    }
+
+    .ranking-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .rank-badge {
+      width: 44px;
+      height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--om-green);
+      font-size: 1.25rem;
+      font-weight: 800;
+    }
+
+    .ranking-kpis {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .mini-stat {
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .mini-stat-label {
+      margin: 0 0 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.48);
+    }
+
+    .mini-stat-value {
+      margin: 0;
+      font-size: 1.3rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .insights-grid,
+    .actions-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .insight-card,
+    .action-card {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .card-icon {
+      width: 48px;
+      height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--om-cyan);
+    }
+
+    .action-card .card-icon {
+      color: var(--om-orange);
+      background: rgba(202, 107, 45, 0.1);
+      border-color: rgba(202, 107, 45, 0.16);
+    }
+
+    .section-divider {
+      margin: 30px 0 0;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(17, 193, 239, 0.28), rgba(255, 255, 255, 0.06), transparent);
+      border: 0;
+    }
+
+    .footer-note {
+      margin-top: 24px;
+      padding: 18px 20px 0;
+      color: rgba(255, 255, 255, 0.46);
+      font-size: 0.85rem;
+      line-height: 1.6;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .fade-in {
+      opacity: 0;
+      transform: translateY(20px);
+      animation: rise-fade 700ms ease forwards;
+    }
+
+    .delay-1 { animation-delay: 80ms; }
+    .delay-2 { animation-delay: 150ms; }
+    .delay-3 { animation-delay: 220ms; }
+    .delay-4 { animation-delay: 290ms; }
+
+    @keyframes rise-fade {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 1120px) {
+      .hero-grid,
+      .benchmark,
+      .two-col,
+      .grid-4,
+      .formats-grid,
+      .ranking-grid,
+      .insights-grid,
+      .actions-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .summary-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      :root {
+        --content-width: min(100vw - 24px, 100%);
+      }
+
+      .page {
+        padding-top: 12px;
+        padding-bottom: 32px;
+      }
+
+      .hero,
+      .section {
+        padding: 24px 20px;
+      }
+
+      .hero-top,
+      .section-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .hero-grid,
+      .benchmark,
+      .two-col,
+      .grid-4,
+      .formats-grid,
+      .ranking-grid,
+      .insights-grid,
+      .actions-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .ranking-kpis {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .quick-take {
+        padding: 18px;
+      }
+
+      .summary-card,
+      .metric,
+      .benchmark-card,
+      .narrative-card,
+      .format-card,
+      .ranking-card,
+      .insight-card,
+      .action-card {
+        padding: 18px;
+      }
+    }
+
+    @media print {
+      @page {
+        size: A4;
+        margin: 12mm;
+      }
+
+      html,
+      body {
+        background: #08070d;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+
+      body::before,
+      body::after {
+        display: none;
+      }
+
+      .page {
+        width: 100%;
+        padding: 0;
+      }
+
+      .panel {
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="panel hero fade-in">
+      <div class="hero-top">
+        <div class="brand-lockup">
+          <span class="brand-dot"></span>
+          <span>Octopus Media Report Design</span>
+        </div>
+        <div class="pill pill--accent">Instagram orgánico · Marzo 2026</div>
+      </div>
+
+      <div class="hero-grid">
+        <div>
+          <p class="eyebrow">Instituto Cardiovascular</p>
+          <h1>
+            <span class="title-light">Informe de</span>
+            <span class="title-strong">rendimiento orgánico</span>
+          </h1>
+          <p class="hero-copy">
+            Marzo cerró con una señal positiva: el contenido sí conectó con la audiencia, especialmente cuando
+            explicó temas médicos de forma simple y útil. El reto no estuvo en el interés del público, sino en la
+            ejecución parcial del plan, que redujo variedad y consistencia durante el mes.
+          </p>
+
+          <div class="quick-take">
+            <h2>
+              <span class="light">Lectura en</span>
+              <span class="accent">30 segundos</span>
+            </h2>
+            <ul class="bullet-list">
+              <li>El mes alcanzó <strong>7.133 usuarios</strong> y generó <strong>449 interacciones</strong> con un <strong>ER de 6.3%</strong>, por sobre la media orgánica esperada en salud.</li>
+              <li>Los <strong>reels educativos</strong> fueron el motor del desempeño: las 3 piezas con mejor resultado fueron reels y 2 superaron el 7% de engagement.</li>
+              <li>El plan mensual quedó ejecutado al <strong>50%</strong>; se cumplieron los reels, pero faltaron posts y carruseles, lo que limitó alcance temático y aprendizaje.</li>
+            </ul>
+          </div>
+        </div>
+
+        <aside class="hero-side">
+          <article class="summary-card summary-card--highlight">
+            <p class="summary-label">Hallazgo principal</p>
+            <p class="summary-value">Educación + video corto</p>
+            <p class="summary-note">
+              Cuando el contenido aborda preocupaciones médicas reales en formato reel, la audiencia responde mejor.
+            </p>
+          </article>
+
+          <div class="summary-row">
+            <article class="summary-card">
+              <p class="summary-label">Cumplimiento del plan</p>
+              <p class="summary-value">50%</p>
+              <p class="summary-note">9 piezas publicadas sobre 18 comprometidas.</p>
+            </article>
+
+            <article class="summary-card">
+              <p class="summary-label">Señal del mes</p>
+              <p class="summary-value">+1.3 pts</p>
+              <p class="summary-note">Sobre el techo del benchmark orgánico esperado en salud.</p>
+            </article>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="panel section fade-in delay-1">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">01 · Panorama del mes</p>
+          <h2 class="section-title">
+            <span class="light">Métricas de</span>
+            <span class="accent">alto nivel</span>
+          </h2>
+        </div>
+        <p class="section-copy">
+          Esta vista resume el rendimiento que un cliente necesita entender primero: alcance, exposición, interacción
+          y calidad relativa del engagement.
+        </p>
+      </div>
+
+      <div class="grid-4">
+        <article class="metric">
+          <div class="metric-head">
+            <div class="metric-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </div>
+            <p class="metric-title">Alcance único</p>
+          </div>
+          <p class="metric-value">7.133</p>
+          <p class="metric-sub">Usuarios alcanzados durante marzo.</p>
+        </article>
+
+        <article class="metric">
+          <div class="metric-head">
+            <div class="metric-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>
+            </div>
+            <p class="metric-title">Impresiones</p>
+          </div>
+          <p class="metric-value">55.672</p>
+          <p class="metric-sub">Exposición robusta y repetida del contenido publicado.</p>
+        </article>
+
+        <article class="metric">
+          <div class="metric-head">
+            <div class="metric-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="m12 21-1.7-1.6C5 14.5 2 11.7 2 8.3 2 5.6 4.1 3.5 6.8 3.5c1.6 0 3.1.8 4.2 2.1 1.1-1.3 2.6-2.1 4.2-2.1 2.7 0 4.8 2.1 4.8 4.8 0 3.4-3 6.2-8.3 11.1L12 21Z"></path></svg>
+            </div>
+            <p class="metric-title">Interacciones</p>
+          </div>
+          <p class="metric-value">449</p>
+          <p class="metric-sub">Actividad total generada por la audiencia.</p>
+        </article>
+
+        <article class="metric">
+          <div class="metric-head">
+            <div class="metric-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 14h4l2-5 4 10 2-5h4"></path></svg>
+            </div>
+            <p class="metric-title">Engagement rate</p>
+          </div>
+          <p class="metric-value">6.3%</p>
+          <p class="metric-sub">Resultado moderado-positivo y superior al promedio esperado del rubro.</p>
+        </article>
+      </div>
+
+      <div class="benchmark">
+        <article class="benchmark-card">
+          <div>
+            <p class="section-kicker" style="margin-bottom: 8px;">Lectura de calidad</p>
+            <h3 class="card-title">Engagement por sobre benchmark</h3>
+          </div>
+          <p class="card-copy">
+            En cuentas orgánicas del sector salud, un rango de <strong>3% a 5%</strong> suele considerarse sano. Este
+            informe cerró en <strong>6.3%</strong>, lo que sugiere que el contenido resonó con la audiencia incluso con
+            una ejecución incompleta.
+          </p>
+          <div class="bar" aria-hidden="true">
+            <span style="width: 78%;"></span>
+          </div>
+          <div class="benchmark-scale">
+            <span>0%</span>
+            <span>Benchmark salud: 3%–5%</span>
+            <span>6.3%</span>
+          </div>
+          <div class="chip-row">
+            <span class="chip chip--success">Sobre la media del sector</span>
+            <span class="chip chip--brand">Señal de afinidad con la audiencia</span>
+          </div>
+        </article>
+
+        <article class="benchmark-card">
+          <div>
+            <p class="section-kicker" style="margin-bottom: 8px;">Distribución</p>
+            <h3 class="card-title">7.8 impresiones por usuario alcanzado</h3>
+          </div>
+          <p class="card-copy">
+            La relación entre impresiones y alcance indica que el contenido fue mostrado múltiples veces, favoreciendo
+            recordación y exposición sin necesidad de ampliar el volumen de piezas.
+          </p>
+          <div class="chip-row">
+            <span class="chip chip--brand">55.672 impresiones</span>
+            <span class="chip">7.133 usuarios</span>
+            <span class="chip chip--success">Ratio 7.8x</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel section fade-in delay-2">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">02 · Ejecución del plan</p>
+          <h2 class="section-title">
+            <span class="light">Qué se</span>
+            <span class="accent">publicó</span>
+          </h2>
+        </div>
+        <p class="section-copy">
+          El rendimiento estuvo impulsado por el mejor formato, pero la mezcla quedó corta. Para un cliente, esto se
+          traduce en una lectura simple: hubo buenos resultados, aunque con menos variedad de la prevista.
+        </p>
+      </div>
+
+      <div class="two-col">
+        <article class="narrative-card">
+          <h3 class="card-title">Resumen ejecutivo del volumen</h3>
+          <p class="card-copy">
+            Se publicaron <strong>9 piezas</strong> frente a un plan de <strong>18</strong>. La ejecución favoreció el
+            video corto, precisamente el formato con mejor engagement, pero dejó subutilizados los formatos que podrían
+            ampliar temas, profundizar mensajes y sostener frecuencia.
+          </p>
+          <div class="chip-row">
+            <span class="chip chip--warn">Plan ejecutado al 50%</span>
+            <span class="chip chip--success">Reels cumplidos al 100%</span>
+            <span class="chip">Posts y carruseles al 25%</span>
+          </div>
+        </article>
+
+        <article class="narrative-card">
+          <h3 class="card-title">Lo que esto significa</h3>
+          <ul class="bullet-list">
+            <li>Se confirmó una señal fuerte de producto editorial: <strong>educación + reels</strong> sí mueve interacción.</li>
+            <li>La baja ejecución en otros formatos reduce la capacidad de <strong>testear narrativas</strong> y sostener aprendizaje.</li>
+            <li>Con más consistencia editorial, el mismo interés de la audiencia podría capitalizarse mejor el mes siguiente.</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="formats-grid">
+        <article class="format-card">
+          <div class="format-head">
+            <h3>Reels</h3>
+            <div class="chip chip--success">100%</div>
+          </div>
+          <div class="format-meta">
+            <p class="format-stat">4 / 4</p>
+          </div>
+          <p class="format-target">Cumplimiento total del formato con mejor respuesta del mes.</p>
+          <div class="bar" aria-hidden="true"><span style="width: 100%;"></span></div>
+          <div class="progress-meta"><span>Publicado</span><span>4 comprometidos</span></div>
+        </article>
+
+        <article class="format-card">
+          <div class="format-head">
+            <h3>Posts</h3>
+            <div class="chip chip--warn">25%</div>
+          </div>
+          <div class="format-meta">
+            <p class="format-stat">1 / 4</p>
+          </div>
+          <p class="format-target">Quedó pendiente la mayor parte del contenido estático previsto.</p>
+          <div class="bar" aria-hidden="true"><span style="width: 25%;"></span></div>
+          <div class="progress-meta"><span>Publicado</span><span>4 comprometidos</span></div>
+        </article>
+
+        <article class="format-card">
+          <div class="format-head">
+            <h3>Carruseles</h3>
+            <div class="chip chip--warn">25%</div>
+          </div>
+          <div class="format-meta">
+            <p class="format-stat">1 / 4</p>
+          </div>
+          <p class="format-target">Se perdió una oportunidad importante de profundizar temas clínicos.</p>
+          <div class="bar" aria-hidden="true"><span style="width: 25%;"></span></div>
+          <div class="progress-meta"><span>Publicado</span><span>4 comprometidos</span></div>
+        </article>
+
+        <article class="format-card">
+          <div class="format-head">
+            <h3>Stories</h3>
+            <div class="chip">50%</div>
+          </div>
+          <div class="format-meta">
+            <p class="format-stat">3 / 6</p>
+          </div>
+          <p class="format-target">Hubo presencia, pero sin la continuidad suficiente para reforzar frecuencia.</p>
+          <div class="bar" aria-hidden="true"><span style="width: 50%;"></span></div>
+          <div class="progress-meta"><span>Publicado</span><span>6 comprometidas</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel section fade-in delay-3">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">03 · Top contenidos</p>
+          <h2 class="section-title">
+            <span class="light">Las piezas que</span>
+            <span class="accent">movieron el mes</span>
+          </h2>
+        </div>
+        <p class="section-copy">
+          Las tres publicaciones más fuertes fueron reels. Eso simplifica la lectura estratégica: el público responde
+          mejor cuando el instituto explica salud cardiovascular con cercanía y utilidad concreta.
+        </p>
+      </div>
+
+      <div class="ranking-grid">
+        <article class="ranking-card">
+          <div class="ranking-head">
+            <div>
+              <div class="chip-row" style="margin-bottom: 10px;">
+                <span class="chip chip--brand">Reel educativo</span>
+              </div>
+              <h3 class="ranking-title">“¿Te dijeron que tienes problemas en alguna válvula?”</h3>
+            </div>
+            <div class="rank-badge">1</div>
+          </div>
+          <div class="ranking-kpis">
+            <div class="mini-stat">
+              <p class="mini-stat-label">Engagement</p>
+              <p class="mini-stat-value">10%</p>
+            </div>
+            <div class="mini-stat">
+              <p class="mini-stat-label">Interacciones</p>
+              <p class="mini-stat-value">143</p>
+            </div>
+          </div>
+          <p class="ranking-copy">
+            El mejor resultado del mes. Tocó una preocupación médica concreta, fácil de reconocer por la audiencia y
+            con alto valor percibido.
+          </p>
+        </article>
+
+        <article class="ranking-card">
+          <div class="ranking-head">
+            <div>
+              <div class="chip-row" style="margin-bottom: 10px;">
+                <span class="chip chip--brand">Reel educativo</span>
+              </div>
+              <h3 class="ranking-title">“Tu salud cardiovascular también se cuida con buenos…”</h3>
+            </div>
+            <div class="rank-badge">2</div>
+          </div>
+          <div class="ranking-kpis">
+            <div class="mini-stat">
+              <p class="mini-stat-label">Engagement</p>
+              <p class="mini-stat-value">7.8%</p>
+            </div>
+            <div class="mini-stat">
+              <p class="mini-stat-label">Interacciones</p>
+              <p class="mini-stat-value">116</p>
+            </div>
+          </div>
+          <p class="ranking-copy">
+            Funcionó bien porque aterriza hábitos y prevención en un lenguaje accesible. Refuerza que la audiencia
+            valora contenido que la ayuda a cuidarse mejor.
+          </p>
+        </article>
+
+        <article class="ranking-card">
+          <div class="ranking-head">
+            <div>
+              <div class="chip-row" style="margin-bottom: 10px;">
+                <span class="chip chip--warn">Reel institucional</span>
+              </div>
+              <h3 class="ranking-title">“Estamos muy felices de contarles esta gran noticia”</h3>
+            </div>
+            <div class="rank-badge">3</div>
+          </div>
+          <div class="ranking-kpis">
+            <div class="mini-stat">
+              <p class="mini-stat-label">Engagement</p>
+              <p class="mini-stat-value">5.1%</p>
+            </div>
+            <div class="mini-stat">
+              <p class="mini-stat-label">Interacciones</p>
+              <p class="mini-stat-value">110</p>
+            </div>
+          </div>
+          <p class="ranking-copy">
+            También performó, pero por debajo de los reels educativos. La señal es clara: lo institucional interesa,
+            aunque no tanto como lo que entrega valor práctico.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel section fade-in delay-4">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">04 · Hallazgos y acciones</p>
+          <h2 class="section-title">
+            <span class="light">Qué aprendimos</span>
+            <span class="accent">y qué sigue</span>
+          </h2>
+        </div>
+        <p class="section-copy">
+          Esta es la capa estratégica del informe: convertir métricas en dirección concreta para el próximo ciclo de
+          contenido.
+        </p>
+      </div>
+
+      <div class="insights-grid">
+        <article class="insight-card">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M8 6h13"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M3 6h.01"></path><path d="M3 12h.01"></path><path d="M3 18h.01"></path></svg>
+          </div>
+          <h3 class="insight-title">1. Los reels educativos dominaron el engagement</h3>
+          <p class="insight-copy">
+            Las 3 publicaciones con mejor desempeño fueron reels y 2 superaron el 7% de ER. El formato permite
+            explicar conceptos médicos de manera visual, simple y rápida de consumir.
+          </p>
+        </article>
+
+        <article class="insight-card">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"></path><path d="M9 12h6"></path><path d="M12 9v6"></path></svg>
+          </div>
+          <h3 class="insight-title">2. El valor clínico supera a lo institucional</h3>
+          <p class="insight-copy">
+            La audiencia busca contenido que le ayude a entender su salud. Las piezas educativas y preventivas
+            generaron más afinidad que las centradas solo en noticias o logros del instituto.
+          </p>
+        </article>
+
+        <article class="insight-card">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18"></path></svg>
+          </div>
+          <h3 class="insight-title">3. La subejecución frenó variedad y aprendizaje</h3>
+          <p class="insight-copy">
+            Ejecutar solo 9 de 18 piezas dejó menos espacio para cubrir temas, probar narrativas y sostener
+            consistencia. El interés estaba; faltó convertirlo en una presencia editorial más completa.
+          </p>
+        </article>
+      </div>
+
+      <hr class="section-divider">
+
+      <div class="actions-grid">
+        <article class="action-card">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"></path></svg>
+          </div>
+          <h3 class="action-title">Prioridad 1 · Escalar los reels educativos</h3>
+          <ul class="bullet-list">
+            <li>Convertir preocupaciones médicas frecuentes en una línea editorial fija.</li>
+            <li>Repetir la lógica de títulos claros, cotidianos y centrados en síntomas o prevención.</li>
+          </ul>
+        </article>
+
+        <article class="action-card">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 0 4 24V4.5A2.5 2.5 0 0 1 6.5 2Z" transform="translate(0 -2)"></path></svg>
+          </div>
+          <h3 class="action-title">Prioridad 2 · Recuperar profundidad con carruseles y posts</h3>
+          <ul class="bullet-list">
+            <li>Usar carruseles para explicar procesos, síntomas, hábitos y preguntas frecuentes.</li>
+            <li>Usar posts como refuerzo visual de mensajes cortos y recordables.</li>
+          </ul>
+        </article>
+
+        <article class="action-card">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 6v6l4 2"></path><circle cx="12" cy="12" r="9"></circle></svg>
+          </div>
+          <h3 class="action-title">Prioridad 3 · Blindar la ejecución del calendario</h3>
+          <ul class="bullet-list">
+            <li>Separar producción y aprobación con más anticipación para no depender del cierre del mes.</li>
+            <li>Asegurar una mezcla mínima por formato para sostener aprendizaje y presencia constante.</li>
+          </ul>
+        </article>
+      </div>
+
+      <p class="footer-note">
+        Rediseño editorial basado en la información visible del informe original entregado por capturas, reinterpretada
+        para mejorar legibilidad, jerarquía visual y claridad para cliente.
+      </p>
+    </section>
+  </main>
+</body>
+</html>

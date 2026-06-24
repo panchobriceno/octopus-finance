@@ -1,0 +1,2643 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portal Cliente · Presentación de producto</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --om-cyan: #11c1ef;
+      --om-green: #a3e369;
+      --om-orange: #ca6b2d;
+      --om-purple: #24122a;
+      --om-navy: #153751;
+      --om-teal: #28625e;
+      --om-black: #07080d;
+      --om-panel: rgba(10, 12, 18, 0.82);
+      --om-panel-soft: rgba(15, 17, 26, 0.72);
+      --om-border: rgba(255, 255, 255, 0.08);
+      --om-border-strong: rgba(255, 255, 255, 0.14);
+      --om-text: rgba(255, 255, 255, 0.96);
+      --om-soft: rgba(255, 255, 255, 0.72);
+      --om-muted: rgba(255, 255, 255, 0.52);
+      --grad-brand: linear-gradient(90deg, var(--om-cyan) 0%, var(--om-green) 100%);
+      --grad-bg: radial-gradient(120% 90% at 10% 10%, var(--om-navy) 0%, var(--om-purple) 48%, #08070d 100%);
+      --grad-bg-alt: linear-gradient(135deg, rgba(10, 24, 38, 0.95) 0%, rgba(36, 18, 42, 0.95) 55%, rgba(10, 8, 18, 0.96) 100%);
+      --shadow-main: 0 34px 90px rgba(0, 0, 0, 0.42);
+      --shadow-card: 0 18px 50px rgba(0, 0, 0, 0.28);
+      --radius-xl: 36px;
+      --radius-lg: 28px;
+      --radius-md: 20px;
+      --radius-sm: 14px;
+      --slide-width: min(1680px, calc(100vw - 48px));
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background:
+        radial-gradient(circle at top left, rgba(17, 193, 239, 0.16), transparent 28%),
+        radial-gradient(circle at 80% 10%, rgba(163, 227, 105, 0.08), transparent 26%),
+        radial-gradient(circle at 70% 90%, rgba(202, 107, 45, 0.12), transparent 18%),
+        #05060b;
+      color: var(--om-text);
+      font-family: "Raleway", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      scroll-behavior: smooth;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      border-radius: 999px;
+      filter: blur(80px);
+      pointer-events: none;
+      opacity: 0.14;
+      z-index: 0;
+    }
+
+    body::before {
+      top: -11rem;
+      right: -12rem;
+      width: 34rem;
+      height: 34rem;
+      background: rgba(17, 193, 239, 0.72);
+    }
+
+    body::after {
+      left: -12rem;
+      bottom: -14rem;
+      width: 36rem;
+      height: 36rem;
+      background: rgba(163, 227, 105, 0.42);
+    }
+
+    img {
+      display: block;
+      max-width: 100%;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    .deck {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      padding: 28px 0 60px;
+    }
+
+    .slide {
+      position: relative;
+      width: var(--slide-width);
+      aspect-ratio: 16 / 9;
+      margin: 0 auto 34px;
+      padding: clamp(28px, 3.2vw, 54px);
+      overflow: hidden;
+      border-radius: var(--radius-xl);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: linear-gradient(180deg, rgba(13, 16, 24, 0.96), rgba(8, 9, 15, 0.94));
+      box-shadow: var(--shadow-main);
+      isolation: isolate;
+    }
+
+    .slide::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(17, 193, 239, 0.12), transparent 26%),
+        radial-gradient(circle at 100% 0%, rgba(163, 227, 105, 0.07), transparent 24%),
+        radial-gradient(circle at 70% 100%, rgba(202, 107, 45, 0.08), transparent 24%);
+      pointer-events: none;
+      z-index: -2;
+    }
+
+    .slide::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      background-size: 90px 90px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.22), transparent 100%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .slide--hero {
+      background: var(--grad-bg);
+    }
+
+    .slide--teal {
+      background: linear-gradient(135deg, rgba(11, 28, 43, 0.98) 0%, rgba(36, 18, 42, 0.96) 58%, rgba(10, 8, 18, 0.96) 100%);
+    }
+
+    .slide--quiet {
+      background: linear-gradient(180deg, rgba(12, 13, 20, 0.98), rgba(8, 9, 14, 0.96));
+    }
+
+    .slide-number {
+      position: absolute;
+      top: 28px;
+      right: 32px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.34);
+    }
+
+    .brand-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .brand-mark {
+      height: 24px;
+      width: auto;
+      opacity: 0.94;
+    }
+
+    .brand-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .brand-tag::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--grad-brand);
+      box-shadow: 0 0 16px rgba(17, 193, 239, 0.38);
+    }
+
+    .kicker {
+      margin: 0 0 14px;
+      color: var(--om-cyan);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+    }
+
+    .headline {
+      margin: 0;
+      font-size: clamp(52px, 5vw, 96px);
+      line-height: 0.94;
+      letter-spacing: -0.05em;
+      max-width: 11ch;
+    }
+
+    .headline .light {
+      display: block;
+      font-weight: 300;
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    .headline .strong {
+      display: block;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.98);
+    }
+
+    .headline .accent {
+      display: block;
+      font-weight: 900;
+      background: var(--grad-brand);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .lede,
+    .intro-copy,
+    .section-copy {
+      margin: 0;
+      color: var(--om-soft);
+      line-height: 1.7;
+      font-size: clamp(16px, 1.2vw, 22px);
+      max-width: 62ch;
+    }
+
+    .hero-grid,
+    .two-col,
+    .support-grid,
+    .compare-grid,
+    .doc-grid,
+    .mobile-grid {
+      display: grid;
+      gap: 26px;
+    }
+
+    .hero-grid {
+      grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+      align-items: center;
+      height: calc(100% - 46px);
+    }
+
+    .hero-copy {
+      display: grid;
+      gap: 22px;
+      align-content: center;
+      padding-right: 12px;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.84);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .chip--brand {
+      border-color: rgba(17, 193, 239, 0.22);
+      background: rgba(17, 193, 239, 0.11);
+      color: #d8f7ff;
+    }
+
+    .chip--success {
+      border-color: rgba(163, 227, 105, 0.22);
+      background: rgba(163, 227, 105, 0.11);
+      color: #eaffd4;
+    }
+
+    .chip--warn {
+      border-color: rgba(202, 107, 45, 0.26);
+      background: rgba(202, 107, 45, 0.11);
+      color: #ffd9c4;
+    }
+
+    .quote-panel,
+    .glass-card,
+    .benefit-card,
+    .journey-step,
+    .compare-panel,
+    .callout-card,
+    .surround-card,
+    .trust-card,
+    .support-card,
+    .statement-card,
+    .mobile-caption {
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--om-border);
+      background: var(--om-panel-soft);
+      box-shadow: var(--shadow-card);
+      backdrop-filter: blur(12px);
+    }
+
+    .quote-panel,
+    .statement-card {
+      padding: 20px 22px;
+    }
+
+    .quote-panel--hero {
+      padding: 24px 24px 22px;
+      border-color: rgba(17, 193, 239, 0.18);
+      background:
+        linear-gradient(135deg, rgba(17, 193, 239, 0.12), rgba(15, 17, 26, 0.88) 46%, rgba(15, 17, 26, 0.72) 100%);
+    }
+
+    .quote-panel::before,
+    .statement-card::before,
+    .callout-card::before,
+    .surround-card::before,
+    .benefit-card::before,
+    .trust-card::before,
+    .support-card::before,
+    .journey-step::before,
+    .compare-panel::before {
+      content: "";
+      position: absolute;
+      inset: auto -82px -92px auto;
+      width: 228px;
+      height: 228px;
+      border-radius: 999px;
+      background: radial-gradient(circle,
+        rgba(17, 193, 239, 0.11) 0%,
+        rgba(17, 193, 239, 0.08) 24%,
+        rgba(17, 193, 239, 0.045) 44%,
+        rgba(17, 193, 239, 0.02) 58%,
+        transparent 82%);
+      filter: blur(12px);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.46);
+    }
+
+    .quote-panel p,
+    .statement-card p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.82);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    .quote-panel--hero .eyebrow {
+      margin-bottom: 10px;
+      color: var(--om-cyan);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.24em;
+    }
+
+    .quote-panel--hero .quote-main {
+      font-size: clamp(20px, 1.55vw, 28px);
+      font-weight: 800;
+      line-height: 1.18;
+      letter-spacing: -0.03em;
+      color: rgba(255, 255, 255, 0.96);
+    }
+
+    .quote-panel--hero .quote-main .accent-word {
+      background: var(--grad-brand);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .quote-panel--hero .quote-sub {
+      margin-top: 8px;
+      font-size: clamp(16px, 1.05vw, 19px);
+      line-height: 1.55;
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    .quote-panel--hero .quote-sub strong {
+      color: rgba(255, 255, 255, 0.96);
+      font-weight: 800;
+    }
+
+    .quote-panel--hero .quote-sub .accent-soft {
+      color: var(--om-green);
+      font-weight: 800;
+    }
+
+    .hero-visual {
+      position: relative;
+      height: 100%;
+      display: grid;
+      align-content: center;
+      justify-items: end;
+      gap: 18px;
+    }
+
+    .device-browser {
+      position: relative;
+      width: 100%;
+      border-radius: 30px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(7, 9, 14, 0.9);
+      box-shadow: 0 36px 80px rgba(0, 0, 0, 0.38);
+    }
+
+    .device-browser::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+      pointer-events: none;
+    }
+
+    .browser-chrome {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.06);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .chrome-dots {
+      display: inline-flex;
+      gap: 8px;
+    }
+
+    .chrome-dots span {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.25);
+    }
+
+    .chrome-dots .red {
+      background: #ff5f57;
+    }
+
+    .chrome-dots .yellow {
+      background: #ffbd2e;
+    }
+
+    .chrome-dots .green {
+      background: #28c840;
+    }
+
+    .browser-url {
+      flex: 1;
+      min-width: 0;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.28);
+      color: rgba(255, 255, 255, 0.54);
+      font-size: 13px;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .browser-screen {
+      position: relative;
+      aspect-ratio: 16 / 9.1;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .browser-screen img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .browser-screen--contain {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6, 8, 14, 0.88);
+    }
+
+    .browser-screen--contain img {
+      object-fit: contain;
+    }
+
+    .browser-screen--overview-fit {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6, 8, 14, 0.9);
+    }
+
+    .browser-screen--overview-fit img {
+      object-fit: contain;
+      object-position: center center;
+    }
+
+    .browser-screen--detail-fit {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(7, 9, 15, 0.92);
+    }
+
+    .browser-screen--detail-fit img {
+      object-fit: contain;
+      object-position: center center;
+    }
+
+    .browser-screen--closing-fit {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6, 8, 14, 0.92);
+    }
+
+    .browser-screen--closing-fit img {
+      object-fit: contain;
+      object-position: center center;
+    }
+
+    .hero-browser {
+      transform: perspective(1800px) rotateY(-8deg) rotateX(3deg);
+      max-width: 860px;
+      margin-left: auto;
+    }
+
+    .hero-browser .browser-screen {
+      aspect-ratio: 1655 / 844;
+    }
+
+    .hero-floating {
+      position: static;
+      width: min(340px, 88%);
+      margin-right: 22px;
+      padding: 18px 18px 16px;
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(17, 193, 239, 0.18), rgba(17, 193, 239, 0.08));
+      border: 1px solid rgba(17, 193, 239, 0.18);
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero-floating h3,
+    .benefit-card h3,
+    .compare-panel h3,
+    .journey-step h3,
+    .trust-card h3,
+    .support-card h3,
+    .callout-card h4,
+    .section-title,
+    .mobile-caption h3 {
+      margin: 0;
+      letter-spacing: -0.03em;
+    }
+
+    .hero-floating h3,
+    .benefit-card h3,
+    .compare-panel h3,
+    .journey-step h3,
+    .trust-card h3,
+    .support-card h3,
+    .mobile-caption h3 {
+      font-size: 22px;
+      line-height: 1.05;
+    }
+
+    .hero-floating p,
+    .benefit-card p,
+    .compare-panel p,
+    .journey-step p,
+    .trust-card p,
+    .support-card p,
+    .mobile-caption p {
+      margin: 10px 0 0;
+      color: var(--om-soft);
+      font-size: 15px;
+      line-height: 1.56;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    .section-head .section-copy {
+      max-width: 30rem;
+      text-align: right;
+    }
+
+    .section-title {
+      font-size: clamp(38px, 3.5vw, 62px);
+      line-height: 0.98;
+      max-width: 13ch;
+    }
+
+    .section-title .light {
+      display: block;
+      font-weight: 300;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .section-title .accent {
+      display: block;
+      font-weight: 900;
+      color: var(--om-green);
+    }
+
+    .benefit-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .slide--benefits {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      row-gap: 22px;
+    }
+
+    .slide--benefits .section-head {
+      margin-bottom: 0;
+      align-items: start;
+    }
+
+    .slide--benefits .benefit-grid {
+      height: 100%;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-auto-rows: 1fr;
+      gap: 20px;
+    }
+
+    .slide--benefits .benefit-card {
+      min-height: 0;
+      padding: 26px 24px 24px;
+    }
+
+    .slide--benefits .benefit-card::before,
+    .slide--benefits .statement-card::before {
+      inset: auto -96px -104px auto;
+      width: 270px;
+      height: 270px;
+      background: radial-gradient(circle,
+        rgba(17, 193, 239, 0.13) 0%,
+        rgba(17, 193, 239, 0.09) 24%,
+        rgba(17, 193, 239, 0.05) 46%,
+        rgba(17, 193, 239, 0.02) 62%,
+        transparent 84%);
+      filter: blur(8px);
+    }
+
+    .slide--benefits .benefit-foot {
+      margin-top: 0;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .slide--benefits .statement-card {
+      min-height: 118px;
+      padding: 24px 22px 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .benefit-card,
+    .trust-card,
+    .support-card,
+    .compare-panel,
+    .journey-step,
+    .mobile-caption {
+      padding: 24px;
+    }
+
+    .benefit-icon,
+    .compare-icon,
+    .journey-icon,
+    .trust-icon,
+    .support-icon {
+      width: 54px;
+      height: 54px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--om-cyan);
+      margin-bottom: 20px;
+    }
+
+    .support-icon {
+      color: var(--om-orange);
+      background: rgba(202, 107, 45, 0.1);
+      border-color: rgba(202, 107, 45, 0.16);
+    }
+
+    .benefit-icon svg,
+    .compare-icon svg,
+    .journey-icon svg,
+    .trust-icon svg,
+    .support-icon svg {
+      width: 24px;
+      height: 24px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .benefit-foot {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+      gap: 18px;
+      margin-top: 18px;
+      align-items: stretch;
+    }
+
+    .statement-card strong {
+      color: var(--om-green);
+    }
+
+    .slide--compare {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      row-gap: 22px;
+    }
+
+    .slide--compare .section-head {
+      margin-bottom: 0;
+      align-items: start;
+    }
+
+    .slide--compare .section-copy {
+      max-width: 33rem;
+      text-align: left;
+      padding: 18px 22px;
+      border-radius: 24px;
+      border: 1px solid rgba(17, 193, 239, 0.14);
+      background:
+        linear-gradient(135deg, rgba(17, 193, 239, 0.09), rgba(15, 17, 26, 0.76) 40%, rgba(163, 227, 105, 0.05) 100%);
+      box-shadow: var(--shadow-card);
+      font-size: clamp(20px, 1.42vw, 28px);
+      line-height: 1.38;
+      letter-spacing: -0.02em;
+      color: rgba(255, 255, 255, 0.86);
+    }
+
+    .slide--compare .section-copy .copy-lead {
+      display: block;
+      margin-bottom: 4px;
+      color: rgba(255, 255, 255, 0.98);
+      font-weight: 800;
+    }
+
+    .slide--compare .section-copy .copy-accent {
+      color: var(--om-green);
+      font-weight: 800;
+    }
+
+    .compare-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+      align-items: stretch;
+      height: calc(100% - 120px);
+    }
+
+    .slide--compare .compare-grid {
+      grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr);
+      gap: 22px;
+      height: 100%;
+    }
+
+    .compare-panel {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    .slide--compare .compare-panel {
+      padding: 24px;
+    }
+
+    .compare-panel--before {
+      background:
+        linear-gradient(180deg, rgba(202, 107, 45, 0.1), rgba(10, 12, 18, 0.84)),
+        var(--om-panel-soft);
+      border-color: rgba(202, 107, 45, 0.16);
+    }
+
+    .compare-panel--after {
+      background:
+        linear-gradient(180deg, rgba(17, 193, 239, 0.12), rgba(10, 12, 18, 0.84)),
+        var(--om-panel-soft);
+      border-color: rgba(17, 193, 239, 0.18);
+    }
+
+    .slide--compare .compare-panel--before {
+      background:
+        radial-gradient(circle at 12% 12%, rgba(202, 107, 45, 0.09), transparent 28%),
+        linear-gradient(180deg, rgba(202, 107, 45, 0.08), rgba(10, 12, 18, 0.9)),
+        var(--om-panel-soft);
+      border-color: rgba(202, 107, 45, 0.18);
+    }
+
+    .slide--compare .compare-panel--after {
+      background:
+        radial-gradient(circle at 14% 16%, rgba(17, 193, 239, 0.18), transparent 26%),
+        radial-gradient(circle at 72% 52%, rgba(163, 227, 105, 0.12), transparent 32%),
+        radial-gradient(circle at 88% 88%, rgba(202, 107, 45, 0.10), transparent 24%),
+        linear-gradient(180deg, rgba(16, 52, 72, 0.72), rgba(10, 12, 18, 0.88) 76%),
+        var(--om-panel-soft);
+      border-color: rgba(17, 193, 239, 0.28);
+      box-shadow:
+        0 20px 58px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .slide--compare .compare-panel--after::before {
+      inset: auto -72px -86px auto;
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle,
+        rgba(163, 227, 105, 0.18) 0%,
+        rgba(17, 193, 239, 0.12) 26%,
+        rgba(202, 107, 45, 0.06) 46%,
+        transparent 76%);
+      filter: blur(8px);
+    }
+
+    .messy-cloud,
+    .clean-stack {
+      position: relative;
+      min-height: 0;
+      height: 100%;
+    }
+
+    .slide--compare .messy-cloud {
+      width: 82%;
+      margin: 0 auto;
+    }
+
+    .messy-cloud span,
+    .clean-stack .stack-card {
+      position: absolute;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: var(--shadow-card);
+    }
+
+    .messy-cloud span {
+      padding: 12px 16px;
+      font-size: 16px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.84);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .slide--compare .messy-cloud .mess-1 { top: 8%; left: 4%; transform: rotate(-8deg); }
+    .slide--compare .messy-cloud .mess-2 { top: 24%; right: 10%; transform: rotate(6deg); }
+    .slide--compare .messy-cloud .mess-3 { top: 42%; left: 8%; transform: rotate(-3deg); }
+    .slide--compare .messy-cloud .mess-4 { top: 58%; right: 6%; transform: rotate(7deg); }
+    .slide--compare .messy-cloud .mess-5 { bottom: 12%; left: 22%; transform: rotate(-4deg); }
+    .slide--compare .messy-cloud .mess-6 { top: 18%; left: 28%; transform: rotate(3deg); }
+
+    .clean-stack .stack-card {
+      background: rgba(10, 14, 22, 0.88);
+      backdrop-filter: blur(10px);
+      padding: 18px 20px;
+      width: 72%;
+    }
+
+    .slide--compare .clean-stack::before {
+      content: "";
+      position: absolute;
+      inset: 8% 5% 10%;
+      border-radius: 30px;
+      background:
+        linear-gradient(135deg, rgba(17, 193, 239, 0.08), rgba(163, 227, 105, 0.05) 52%, rgba(202, 107, 45, 0.04));
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      pointer-events: none;
+    }
+
+    .slide--compare .clean-stack .stack-card {
+      width: 70%;
+      padding: 20px 22px;
+      background: rgba(9, 13, 20, 0.86);
+      backdrop-filter: blur(12px);
+    }
+
+    .clean-stack .stack-card h4 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+    }
+
+    .clean-stack .stack-card p {
+      margin: 8px 0 0;
+      color: var(--om-soft);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .slide--compare .clean-stack .stack-1 {
+      top: 10%;
+      left: 5%;
+      border-color: rgba(17, 193, 239, 0.26);
+      background: linear-gradient(135deg, rgba(17, 193, 239, 0.16), rgba(9, 13, 20, 0.9) 62%);
+      box-shadow: 0 24px 50px rgba(17, 193, 239, 0.10);
+    }
+
+    .slide--compare .clean-stack .stack-2 {
+      top: 37%;
+      right: 6%;
+      border-color: rgba(163, 227, 105, 0.24);
+      background: linear-gradient(135deg, rgba(163, 227, 105, 0.15), rgba(9, 13, 20, 0.9) 62%);
+      box-shadow: 0 24px 50px rgba(163, 227, 105, 0.08);
+    }
+
+    .slide--compare .clean-stack .stack-3 {
+      bottom: 12%;
+      left: 14%;
+      border-color: rgba(202, 107, 45, 0.24);
+      background: linear-gradient(135deg, rgba(202, 107, 45, 0.14), rgba(9, 13, 20, 0.9) 62%);
+      box-shadow: 0 24px 50px rgba(202, 107, 45, 0.08);
+    }
+
+    .compare-divider {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.05);
+      width: fit-content;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .compare-divider::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--grad-brand);
+    }
+
+    .journey-layout {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 20px;
+      height: calc(100% - 110px);
+    }
+
+    .journey-track {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+      padding-top: 44px;
+    }
+
+    .journey-track::before {
+      content: "";
+      position: absolute;
+      left: 9%;
+      right: 9%;
+      top: 44px;
+      height: 4px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(17, 193, 239, 0.18), rgba(163, 227, 105, 0.36), rgba(202, 107, 45, 0.22));
+    }
+
+    .journey-step {
+      position: relative;
+      min-height: 290px;
+      display: grid;
+      align-content: start;
+      overflow: visible;
+      padding: 42px 22px 24px;
+    }
+
+    .journey-number {
+      position: absolute;
+      top: -22px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 42px;
+      height: 42px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: var(--grad-brand);
+      color: #041a2a;
+      font-size: 16px;
+      font-weight: 900;
+      box-shadow: 0 14px 32px rgba(17, 193, 239, 0.25);
+      z-index: 3;
+    }
+
+    .journey-footer {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .summary-pillars {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .summary-pillars .chip {
+      padding-inline: 16px;
+    }
+
+    .showcase-slide {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 18px;
+    }
+
+    .showcase-header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .showcase-header .section-copy {
+      max-width: 32rem;
+      text-align: right;
+    }
+
+    .annotated-stage {
+      position: relative;
+      min-height: 0;
+      height: 100%;
+      border-radius: 30px;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .annotated-stage .device-browser {
+      position: absolute;
+      left: 10%;
+      top: 7%;
+      width: 80%;
+      z-index: 1;
+    }
+
+    .annotated-stage--wide .device-browser {
+      left: 8%;
+      width: 84%;
+    }
+
+    .surround-stage {
+      position: relative;
+      min-height: 0;
+      height: 100%;
+      border-radius: 30px;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .surround-stage .device-browser {
+      position: absolute;
+      left: 14%;
+      top: 11%;
+      width: 72%;
+      z-index: 1;
+    }
+
+    .surround-stage--wide .device-browser {
+      left: 13%;
+      width: 74%;
+    }
+
+    .surround-card {
+      position: absolute;
+      z-index: 2;
+      width: 260px;
+      padding: 20px 22px 18px;
+      background:
+        linear-gradient(180deg, rgba(13, 18, 30, 0.92), rgba(10, 12, 21, 0.96));
+      backdrop-filter: blur(16px);
+    }
+
+    .surround-card--brand {
+      border-color: rgba(17, 193, 239, 0.18);
+    }
+
+    .surround-card--brand::before {
+      background: radial-gradient(circle,
+        rgba(17, 193, 239, 0.14) 0%,
+        rgba(17, 193, 239, 0.09) 26%,
+        rgba(17, 193, 239, 0.04) 48%,
+        transparent 82%);
+    }
+
+    .surround-card--success {
+      border-color: rgba(163, 227, 105, 0.18);
+    }
+
+    .surround-card--success::before {
+      background: radial-gradient(circle,
+        rgba(163, 227, 105, 0.14) 0%,
+        rgba(163, 227, 105, 0.09) 26%,
+        rgba(163, 227, 105, 0.04) 48%,
+        transparent 82%);
+    }
+
+    .surround-card--warn {
+      border-color: rgba(202, 107, 45, 0.18);
+    }
+
+    .surround-card--warn::before {
+      background: radial-gradient(circle,
+        rgba(202, 107, 45, 0.14) 0%,
+        rgba(202, 107, 45, 0.09) 26%,
+        rgba(202, 107, 45, 0.04) 48%,
+        transparent 82%);
+    }
+
+    .hotspot,
+    .hotspot-ring {
+      position: absolute;
+      border-radius: 999px;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .hotspot {
+      width: 18px;
+      height: 18px;
+      background: var(--om-orange);
+      box-shadow: 0 0 0 6px rgba(202, 107, 45, 0.12), 0 0 0 12px rgba(202, 107, 45, 0.08);
+    }
+
+    .hotspot-ring {
+      width: 82px;
+      height: 82px;
+      border: 2px solid rgba(17, 193, 239, 0.74);
+      box-shadow: 0 0 0 14px rgba(17, 193, 239, 0.08);
+    }
+
+    .connector {
+      position: absolute;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(17, 193, 239, 0.92), rgba(163, 227, 105, 0.5));
+      transform-origin: left center;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .connector::after {
+      content: "";
+      position: absolute;
+      right: -8px;
+      top: -5px;
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+      border-left: 10px solid rgba(163, 227, 105, 0.72);
+    }
+
+    .callout-card {
+      position: absolute;
+      z-index: 4;
+      width: 240px;
+      padding: 18px;
+    }
+
+    .callout-card .callout-index,
+    .surround-card .callout-index {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      margin-bottom: 12px;
+      border-radius: 999px;
+      background: var(--grad-brand);
+      color: #041a2a;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+    }
+
+    .callout-card h4,
+    .surround-card h4 {
+      font-size: 22px;
+      line-height: 1.05;
+    }
+
+    .callout-card p,
+    .surround-card p {
+      margin: 10px 0 0;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .two-pane-visual {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+      gap: 20px;
+      align-items: start;
+      height: 100%;
+    }
+
+    .detail-stack {
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+
+    .device-phone {
+      position: relative;
+      width: 100%;
+      max-width: 320px;
+      margin-inline: auto;
+      padding: 14px;
+      border-radius: 44px;
+      background: linear-gradient(180deg, #17181f, #07080d);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.36);
+    }
+
+    .device-phone::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 10px;
+      transform: translateX(-50%);
+      width: 118px;
+      height: 24px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      z-index: 2;
+    }
+
+    .phone-screen {
+      overflow: hidden;
+      border-radius: 34px;
+      background: #0d0f15;
+      aspect-ratio: 482 / 1044;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .phone-screen img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .phone-screen--fullshot {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      aspect-ratio: 482 / 860;
+      background: #0b0d14;
+    }
+
+    .phone-screen--fullshot img {
+      object-fit: contain;
+      object-position: center top;
+    }
+
+    .results-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.02fr) minmax(340px, 0.98fr);
+      gap: 18px;
+      height: 100%;
+    }
+
+    .results-panel {
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+
+    .mini-browser {
+      position: relative;
+      overflow: hidden;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(10, 11, 18, 0.88);
+      box-shadow: var(--shadow-card);
+    }
+
+    .mini-browser .browser-screen {
+      aspect-ratio: 1.15 / 1;
+    }
+
+    .info-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .feature-list {
+      display: grid;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .feature-list li {
+      position: relative;
+      padding-left: 18px;
+      color: var(--om-soft);
+      font-size: 15px;
+      line-height: 1.52;
+    }
+
+    .feature-list li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.72em;
+      width: 8px;
+      height: 8px;
+      transform: translateY(-50%);
+      border-radius: 999px;
+      background: var(--grad-brand);
+    }
+
+    .doc-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+      height: 100%;
+    }
+
+    .doc-panel {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .doc-caption {
+      padding: 18px 20px;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .doc-caption h3 {
+      margin: 0;
+      font-size: 26px;
+      letter-spacing: -0.03em;
+    }
+
+    .doc-caption p {
+      margin: 10px 0 0;
+      color: var(--om-soft);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .mobile-grid {
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 22px;
+      height: calc(100% - 116px);
+      align-items: center;
+    }
+
+    .mobile-stage {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      align-items: end;
+    }
+
+    .mobile-caption {
+      display: grid;
+      gap: 18px;
+      align-content: center;
+      padding: 30px;
+    }
+
+    .trust-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr);
+      gap: 24px;
+      align-items: center;
+      height: calc(100% - 122px);
+      padding: 8px 10px 12px 8px;
+    }
+
+    .trust-featured {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-content: start;
+      align-self: center;
+      gap: 14px;
+      padding: 26px 30px 20px;
+      border-radius: 30px;
+      border: 1px solid rgba(17, 193, 239, 0.15);
+      background:
+        linear-gradient(180deg, rgba(17, 193, 239, 0.12), rgba(17, 193, 239, 0.05)),
+        rgba(9, 12, 18, 0.78);
+      overflow: hidden;
+      box-shadow: var(--shadow-card);
+    }
+
+    .trust-featured::before {
+      content: "";
+      position: absolute;
+      right: -50px;
+      top: -40px;
+      width: 280px;
+      height: 280px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      opacity: 0.7;
+    }
+
+    .trust-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      width: fit-content;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    .trust-badge::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--om-green);
+      box-shadow: 0 0 16px rgba(163, 227, 105, 0.3);
+    }
+
+    .trust-featured h3 {
+      margin: 0;
+      font-size: clamp(32px, 2.6vw, 50px);
+      letter-spacing: -0.05em;
+      line-height: 0.98;
+      max-width: 10ch;
+    }
+
+    .trust-featured p {
+      margin: 10px 0 0;
+      max-width: 28rem;
+      color: rgba(255, 255, 255, 0.84);
+      line-height: 1.58;
+      font-size: 16px;
+    }
+
+    .trust-featured .chip-row {
+      margin-top: 2px;
+    }
+
+    .shield-icon {
+      width: 76px;
+      height: 76px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--om-cyan);
+    }
+
+    .shield-icon svg {
+      width: 38px;
+      height: 38px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .trust-grid,
+    .support-cards {
+      display: grid;
+      gap: 16px;
+    }
+
+    .trust-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-content: start;
+    }
+
+    .support-grid {
+      grid-template-columns: minmax(0, 0.86fr) minmax(320px, 0.8fr);
+      gap: 24px;
+      height: calc(100% - 110px);
+      align-items: center;
+    }
+
+    .support-cards {
+      align-content: start;
+    }
+
+    .support-qr {
+      position: relative;
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      gap: 18px;
+      padding: 30px;
+      min-height: 100%;
+      border-radius: 30px;
+      border: 1px solid rgba(163, 227, 105, 0.18);
+      background:
+        linear-gradient(180deg, rgba(163, 227, 105, 0.08), rgba(163, 227, 105, 0.03)),
+        rgba(8, 10, 16, 0.9);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+
+    .support-qr::before {
+      content: "";
+      position: absolute;
+      inset: auto auto -90px -90px;
+      width: 240px;
+      height: 240px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(17, 193, 239, 0.16), transparent 68%);
+    }
+
+    .qr-frame {
+      position: relative;
+      padding: 18px;
+      border-radius: 28px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.06));
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .qr-frame img {
+      width: min(320px, 24vw);
+      aspect-ratio: 1 / 1;
+      border-radius: 16px;
+      background: #fff;
+    }
+
+    .support-qr h3 {
+      margin: 0;
+      font-size: clamp(32px, 2.5vw, 46px);
+      line-height: 0.98;
+      letter-spacing: -0.04em;
+      text-align: center;
+    }
+
+    .support-qr p {
+      margin: 0;
+      max-width: 28rem;
+      text-align: center;
+      color: var(--om-soft);
+      line-height: 1.65;
+      font-size: 16px;
+    }
+
+    .url-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 18px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+
+    .closing-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 24px;
+      align-items: center;
+      height: calc(100% - 42px);
+    }
+
+    .closing-copy {
+      display: grid;
+      gap: 22px;
+      align-content: center;
+    }
+
+    .closing-brow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      width: fit-content;
+      padding: 9px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.76);
+    }
+
+    .closing-brow::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--grad-brand);
+    }
+
+    .closing-visual {
+      position: relative;
+      display: grid;
+      align-items: center;
+      justify-items: center;
+      height: 100%;
+    }
+
+    .closing-visual .device-browser {
+      transform: perspective(1800px) rotateY(-8deg) rotateX(3deg);
+      width: 92%;
+    }
+
+    .slide--opening .brand-bar,
+    .slide--closing .brand-bar {
+      gap: 24px;
+      margin-bottom: 10px;
+    }
+
+    .slide--opening .brand-mark,
+    .slide--closing .brand-mark {
+      height: 72px;
+      opacity: 0.98;
+    }
+
+    .slide--opening .headline,
+    .slide--closing .headline {
+      line-height: 1.01;
+    }
+
+    .slide--opening .headline {
+      font-size: clamp(48px, 4.55vw, 88px);
+      max-width: 12.4ch;
+    }
+
+    .slide--closing .closing-copy {
+      gap: 18px;
+    }
+
+    .slide--closing .headline {
+      max-width: 11.8ch;
+    }
+
+    .slide--closing .closing-visual .device-browser {
+      width: 94%;
+    }
+
+    .slide--opening .headline .accent,
+    .slide--closing .headline .accent {
+      padding-bottom: 0.03em;
+    }
+
+    .watermark-wordmark {
+      position: absolute;
+      right: 4%;
+      bottom: 6%;
+      width: min(420px, 28vw);
+      opacity: 0.16;
+      filter: saturate(0) brightness(1.2);
+      pointer-events: none;
+    }
+
+    @media (max-width: 1180px) {
+      :root {
+        --slide-width: min(100vw - 24px, 100%);
+      }
+
+      .slide {
+        aspect-ratio: auto;
+        min-height: 90vh;
+      }
+
+      .hero-grid,
+      .benefit-grid,
+      .compare-grid,
+      .journey-track,
+      .journey-footer,
+      .results-layout,
+      .doc-grid,
+      .mobile-grid,
+      .trust-layout,
+      .support-grid,
+      .closing-layout,
+      .benefit-foot,
+      .trust-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-browser,
+      .closing-visual .device-browser {
+        transform: none;
+      }
+
+      .hero-floating {
+        margin-right: 0;
+      }
+
+      .showcase-header,
+      .section-head {
+        flex-direction: column;
+        align-items: start;
+      }
+
+      .showcase-header .section-copy,
+      .section-head .section-copy {
+        text-align: left;
+      }
+
+      .annotated-stage {
+        min-height: 860px;
+      }
+
+      .surround-stage {
+        min-height: 860px;
+      }
+
+      .annotated-stage .device-browser {
+        left: 4%;
+        width: 92%;
+      }
+
+      .surround-stage .device-browser {
+        left: 10%;
+        width: 80%;
+      }
+
+      .callout-card {
+        width: 220px;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .deck {
+        padding-top: 12px;
+        padding-bottom: 28px;
+      }
+
+      .slide {
+        padding: 22px;
+        min-height: auto;
+      }
+
+      .headline {
+        font-size: 46px;
+      }
+
+      .section-title {
+        font-size: 38px;
+      }
+
+      .annotated-stage {
+        min-height: 700px;
+      }
+
+      .surround-stage {
+        min-height: auto;
+        display: grid;
+        gap: 18px;
+        padding: 20px;
+      }
+
+      .annotated-stage .device-browser {
+        position: relative;
+        left: auto;
+        top: auto;
+        width: 100%;
+      }
+
+      .surround-stage .device-browser {
+        position: relative;
+        left: auto !important;
+        right: auto !important;
+        top: auto !important;
+        width: 100%;
+      }
+
+      .connector,
+      .hotspot,
+      .hotspot-ring,
+      .callout-card {
+        display: none;
+      }
+
+      .surround-card {
+        position: relative;
+        left: auto !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: auto !important;
+        width: auto !important;
+      }
+
+      .mobile-stage {
+        grid-template-columns: 1fr;
+      }
+
+      .device-phone {
+        max-width: 280px;
+      }
+
+      .browser-url {
+        font-size: 12px;
+      }
+
+      .slide-number {
+        top: 16px;
+        right: 18px;
+      }
+
+      .watermark-wordmark {
+        width: 54vw;
+      }
+    }
+
+    @media print {
+      @page {
+        size: 16in 9in;
+        margin: 0;
+      }
+
+      html,
+      body {
+        background: #05060b;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+
+      body::before,
+      body::after {
+        display: none;
+      }
+
+      .deck {
+        padding: 0;
+      }
+
+      .slide {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        margin: 0;
+        border-radius: 0;
+        border: 0;
+        box-shadow: none;
+        break-after: page;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck">
+    <section class="slide slide--hero slide--opening">
+      <div class="slide-number">01 / 13</div>
+      <div class="brand-bar">
+        <img class="brand-mark" src="./portal-cliente-presentacion-assets/logo-octopus-media-blanco.png" alt="Octopus Media">
+        <span class="brand-tag">Te presentamos Octopus Ops</span>
+      </div>
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <div>
+            <p class="kicker">Portal Cliente · Octopus Media</p>
+            <h1 class="headline">
+              <span class="accent">Octopus Ops</span>
+              <span class="light">tu nuevo espacio digital</span>
+              <span class="strong">para trabajar con tu agencia</span>
+            </h1>
+          </div>
+          <p class="lede">
+            Una experiencia premium para revisar avances, aprobar contenido, entender resultados y mantener tu cuenta
+            organizada sin depender de correos, PDFs sueltos o mensajes cruzados.
+          </p>
+          <div class="chip-row">
+            <span class="chip chip--brand">Aprobaciones en un clic</span>
+            <span class="chip chip--success">Resultados con contexto</span>
+            <span class="chip">Documentos y soporte</span>
+            <span class="chip chip--warn">Diseño editorial premium</span>
+          </div>
+          <div class="quote-panel quote-panel--hero">
+            <p class="eyebrow">Idea central</p>
+            <p class="quote-main"><span class="accent-word">Innovar</span> no es solo producir contenido.</p>
+            <p class="quote-sub">También es diseñar una <strong>relación cliente-agencia</strong> que se sienta <span class="accent-soft">clara, cuidada y contemporánea</span>.</p>
+          </div>
+        </div>
+
+        <div class="hero-visual">
+          <figure class="device-browser hero-browser">
+            <div class="browser-chrome">
+              <div class="chrome-dots" aria-hidden="true">
+                <span class="red"></span>
+                <span class="yellow"></span>
+                <span class="green"></span>
+              </div>
+              <div class="browser-url">app.octopusmedia.cl/portal/inicio</div>
+            </div>
+            <div class="browser-screen browser-screen--contain">
+              <img src="./portal-cliente-presentacion-assets/inicio-desktop.png" alt="Vista general del portal cliente">
+            </div>
+          </figure>
+          <div class="hero-floating">
+            <p class="eyebrow">En una sola experiencia</p>
+            <h3>Inicio, aprobaciones, resultados, informes y soporte</h3>
+            <p>Una plataforma que transforma el seguimiento mensual en una experiencia visual, ordenada y confiable.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--teal slide--benefits">
+      <div class="slide-number">02 / 13</div>
+      <div class="section-head">
+        <div>
+          <p class="kicker">Qué cambia para ti</p>
+          <h2 class="section-title">
+            <span class="light">Menos fricción.</span>
+            <span class="accent">Más claridad.</span>
+          </h2>
+        </div>
+        <p class="section-copy">Pensado para que el cliente entienda rápido, actúe sin esfuerzo y perciba el valor del trabajo de la agencia desde el primer ingreso.</p>
+      </div>
+
+      <div class="benefit-grid">
+        <article class="benefit-card">
+          <div class="benefit-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 6v6l4 2"></path><circle cx="12" cy="12" r="9"></circle></svg>
+          </div>
+          <h3>Aprueba contenido en minutos</h3>
+          <p>Revisas piezas, das feedback o apruebas todo de una vez sin abrir archivos ni perseguir mensajes.</p>
+        </article>
+
+        <article class="benefit-card">
+          <div class="benefit-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M6 16V9"></path><path d="M12 16V5"></path><path d="M18 16v-3"></path></svg>
+          </div>
+          <h3>Ves el avance sin preguntar</h3>
+          <p>El estado del mes, el pipeline y el próximo calendario se entienden desde la portada en segundos.</p>
+        </article>
+
+        <article class="benefit-card">
+          <div class="benefit-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 12h18"></path><path d="M6 7h12"></path><path d="M8 17h8"></path></svg>
+          </div>
+          <h3>Resultados claros, sin jerga</h3>
+          <p>Los dashboards y los informes convierten datos dispersos en lectura ejecutiva y recomendaciones accionables.</p>
+        </article>
+
+        <article class="benefit-card">
+          <div class="benefit-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M8 10h8"></path><path d="M8 14h5"></path><rect x="3" y="4" width="18" height="16" rx="2"></rect></svg>
+          </div>
+          <h3>Todo queda en un solo lugar</h3>
+          <p>Documentos, tickets, soporte y tutorial conviven dentro de una misma experiencia de producto.</p>
+        </article>
+      </div>
+
+      <div class="benefit-foot">
+        <div class="statement-card">
+          <p class="eyebrow">Percepción de valor</p>
+          <p>Cuando el cliente siente orden, velocidad y diseño en cada punto de contacto, la agencia se percibe más estratégica, más innovadora y más confiable.</p>
+        </div>
+        <div class="statement-card">
+          <p class="eyebrow">También incluye</p>
+          <div class="chip-row">
+            <span class="chip chip--brand">Tutorial integrado</span>
+            <span class="chip chip--success">Responsive real</span>
+            <span class="chip">Notificaciones</span>
+            <span class="chip chip--warn">Soporte humano</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--quiet slide--compare">
+      <div class="slide-number">03 / 13</div>
+      <div class="section-head">
+        <div>
+          <p class="kicker">Antes vs Ahora</p>
+          <h2 class="section-title">
+            <span class="light">De la fricción</span>
+            <span class="accent">al control</span>
+          </h2>
+        </div>
+        <p class="section-copy"><span class="copy-lead">La diferencia no es solo visual.</span> Cambia la experiencia completa de <span class="copy-accent">seguimiento, aprobación y lectura de resultados</span>.</p>
+      </div>
+
+      <div class="compare-grid">
+        <article class="compare-panel compare-panel--before">
+          <div class="compare-divider">Antes</div>
+          <div>
+            <h3>Trabajo disperso y poca visibilidad</h3>
+            <p>La relación agencia-cliente se fragmenta entre distintos canales y cada revisión consume más tiempo del necesario.</p>
+          </div>
+          <div class="messy-cloud" aria-hidden="true">
+            <span class="mess-1">WhatsApp</span>
+            <span class="mess-2">“¿En qué va esto?”</span>
+            <span class="mess-3">PDF suelto</span>
+            <span class="mess-4">Correo perdido</span>
+            <span class="mess-5">Aprobación manual</span>
+            <span class="mess-6">Resultados difíciles</span>
+          </div>
+        </article>
+
+        <article class="compare-panel compare-panel--after">
+          <div class="compare-divider">Ahora</div>
+          <div>
+            <h3>Todo en un mismo recorrido</h3>
+            <p>El cliente entra a un lugar diseñado para ver, decidir y entender, con una interfaz consistente y una narrativa clara.</p>
+          </div>
+          <div class="clean-stack">
+            <div class="stack-card stack-1">
+              <h4>Calendario listo para revisar</h4>
+              <p>Una sola entrada al proceso de aprobación mensual, con estado visible y CTA directo.</p>
+            </div>
+            <div class="stack-card stack-2">
+              <h4>Resultados con contexto</h4>
+              <p>KPIs, análisis cualitativo y rendimiento por pieza dentro del mismo sistema.</p>
+            </div>
+            <div class="stack-card stack-3">
+              <h4>Tickets y documentos ordenados</h4>
+              <p>Soporte, requerimientos y materiales estratégicos sin salir del portal.</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide slide--teal">
+      <div class="slide-number">04 / 13</div>
+      <div class="journey-layout">
+        <div class="section-head" style="margin-bottom:0;">
+          <div>
+            <p class="kicker">El recorrido</p>
+            <h2 class="section-title">
+              <span class="light">Una experiencia</span>
+              <span class="accent">de principio a fin</span>
+            </h2>
+          </div>
+          <p class="section-copy">No es un repositorio de pantallas. Es un journey pensado para llevar al cliente desde la visibilidad hasta la acción, sin fricción.</p>
+        </div>
+
+        <div class="journey-track">
+          <article class="journey-step">
+            <span class="journey-number">1</span>
+            <div class="journey-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 12h18"></path><path d="M12 3v18"></path></svg>
+            </div>
+            <h3>Entra y entiende qué está pasando</h3>
+            <p>La portada resume el estado del mes y muestra qué necesita tu atención ahora mismo.</p>
+          </article>
+
+          <article class="journey-step">
+            <span class="journey-number">2</span>
+            <div class="journey-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18"></path></svg>
+            </div>
+            <h3>Revisa el calendario</h3>
+            <p>Cuando hay contenido listo, el sistema lo destaca y te conduce directo al flujo de revisión.</p>
+          </article>
+
+          <article class="journey-step">
+            <span class="journey-number">3</span>
+            <div class="journey-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"></path></svg>
+            </div>
+            <h3>Aprueba o pide cambios</h3>
+            <p>Copy, feedback y aprobación están en la misma interfaz para que el proceso sea rápido y trazable.</p>
+          </article>
+
+          <article class="journey-step">
+            <span class="journey-number">4</span>
+            <div class="journey-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M7 15V8"></path><path d="M12 15V5"></path><path d="M17 15v-3"></path></svg>
+            </div>
+            <h3>Mira resultados e informes</h3>
+            <p>El portal convierte la data de redes en lectura clara, visual y orientada al cliente.</p>
+          </article>
+
+          <article class="journey-step">
+            <span class="journey-number">5</span>
+            <div class="journey-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"></path></svg>
+            </div>
+            <h3>Pide apoyo cuando lo necesites</h3>
+            <p>Documentos, tickets, notificaciones y soporte mantienen el vínculo siempre disponible.</p>
+          </article>
+        </div>
+
+        <div class="journey-footer">
+          <div class="statement-card">
+            <p class="eyebrow">Promesa del producto</p>
+            <p>Menos tiempo entendiendo el proceso. Más tiempo tomando decisiones con claridad.</p>
+          </div>
+          <div class="summary-pillars">
+            <span class="chip chip--brand">Visibilidad</span>
+            <span class="chip chip--success">Velocidad</span>
+            <span class="chip">Orden</span>
+            <span class="chip chip--warn">Confianza</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--quiet showcase-slide">
+      <div class="slide-number">05 / 13</div>
+      <div class="showcase-header">
+        <div>
+          <p class="kicker">Inicio</p>
+          <h2 class="section-title">
+            <span class="light">Una portada que</span>
+            <span class="accent">realmente orienta</span>
+          </h2>
+        </div>
+        <p class="section-copy">Desde la primera vista, el cliente entiende el estado del mes, ve qué tiene pendiente y encuentra el siguiente paso con un CTA claro.</p>
+      </div>
+
+      <div class="surround-stage surround-stage--wide">
+        <figure class="device-browser">
+          <div class="browser-chrome">
+            <div class="chrome-dots" aria-hidden="true">
+              <span class="red"></span>
+              <span class="yellow"></span>
+              <span class="green"></span>
+            </div>
+            <div class="browser-url">app.octopusmedia.cl/portal/inicio</div>
+          </div>
+          <div class="browser-screen">
+            <img src="./portal-cliente-presentacion-assets/inicio-desktop.png" alt="Pantalla de inicio del portal cliente">
+          </div>
+        </figure>
+
+        <article class="surround-card surround-card--brand" style="left:50%; top:4.5%; width:288px; transform:translateX(-50%);">
+          <span class="callout-index">01</span>
+          <h4>Panorama del mes al frente</h4>
+          <p>El resumen mensual concentra piezas, pipeline y progreso sin obligar al cliente a navegar primero.</p>
+        </article>
+
+        <article class="surround-card surround-card--success" style="right:4.5%; top:45%; width:246px;">
+          <span class="callout-index">02</span>
+          <h4>CTA directo al calendario</h4>
+          <p>Cuando hay algo que revisar, el portal lo vuelve visible y accionable con un solo clic.</p>
+        </article>
+
+        <article class="surround-card surround-card--warn" style="left:5.5%; bottom:7%; width:270px;">
+          <span class="callout-index">03</span>
+          <h4>Información lista para confirmar</h4>
+          <p>La agencia puede dejar pre-completados ciertos pasos para acelerar la revisión sin perder control.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide slide--teal showcase-slide">
+      <div class="slide-number">06 / 13</div>
+      <div class="showcase-header">
+        <div>
+          <p class="kicker">Aprueba tu calendario</p>
+          <h2 class="section-title">
+            <span class="light">Revisión clara,</span>
+            <span class="accent">sin ida y vuelta innecesaria</span>
+          </h2>
+        </div>
+        <p class="section-copy">El flujo de aprobación convierte un proceso que suele ser lento y fragmentado en una experiencia simple, visible y masiva si hace falta.</p>
+      </div>
+
+      <div class="surround-stage">
+        <figure class="device-browser">
+          <div class="browser-chrome">
+            <div class="chrome-dots" aria-hidden="true">
+              <span class="red"></span>
+              <span class="yellow"></span>
+              <span class="green"></span>
+            </div>
+            <div class="browser-url">app.octopusmedia.cl/portal/aprobaciones</div>
+          </div>
+          <div class="browser-screen">
+            <img src="./portal-cliente-presentacion-assets/aprobar-desktop-grid.png" alt="Vista de aprobaciones del portal">
+          </div>
+        </figure>
+
+        <article class="surround-card surround-card--brand" style="left:50%; top:5%; width:258px; transform:translateX(-50%);">
+          <span class="callout-index">01</span>
+          <h4>Avance en tiempo real</h4>
+          <p>La barra de progreso muestra cuántas piezas están revisadas del total y da contexto inmediato al estado del ciclo.</p>
+        </article>
+
+        <article class="surround-card surround-card--success" style="right:4.5%; bottom:8.5%; width:236px;">
+          <span class="callout-index">02</span>
+          <h4>Aprueba todo de una vez</h4>
+          <p>Cuando el cliente confía en el equipo, puede resolver el mes completo sin entrar pieza por pieza.</p>
+        </article>
+
+        <article class="surround-card surround-card--warn" style="left:4.5%; bottom:8.5%; width:250px;">
+          <span class="callout-index">03</span>
+          <h4>Filtros por formato</h4>
+          <p>La revisión también puede hacerse por carrusel, story, reel o post según lo que el cliente quiera resolver primero.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide slide--quiet showcase-slide">
+      <div class="slide-number">07 / 13</div>
+      <div class="showcase-header">
+        <div>
+          <p class="kicker">Revisa cada pieza</p>
+          <h2 class="section-title">
+            <span class="light">Todo lo importante,</span>
+            <span class="accent">sin clics extra</span>
+          </h2>
+        </div>
+        <p class="section-copy">El cliente ve el copy, aprueba y escribe cambios dentro del mismo punto de trabajo. La interfaz reduce fricción y evita perder contexto.</p>
+      </div>
+
+      <div class="two-pane-visual">
+        <figure class="device-browser">
+          <div class="browser-chrome">
+            <div class="chrome-dots" aria-hidden="true">
+              <span class="red"></span>
+              <span class="yellow"></span>
+              <span class="green"></span>
+            </div>
+            <div class="browser-url">app.octopusmedia.cl/portal/aprobaciones/detalle</div>
+          </div>
+          <div class="browser-screen">
+            <img src="./portal-cliente-presentacion-assets/aprobar-desktop-detail.png" alt="Detalle de contenido para aprobar">
+          </div>
+        </figure>
+
+        <div class="detail-stack">
+          <div class="mobile-caption">
+            <p class="kicker" style="margin:0;">Qué se gana aquí</p>
+            <h3>Copy visible, aprobación inmediata y feedback en el mismo lugar</h3>
+            <ul class="feature-list">
+              <li>No hace falta abrir un PDF para leer el contenido.</li>
+              <li>El botón de aprobación está siempre presente y se entiende al instante.</li>
+              <li>El campo de comentarios permite pedir cambios sin romper el flujo.</li>
+            </ul>
+          </div>
+
+          <figure class="device-phone">
+            <div class="phone-screen">
+              <img src="./portal-cliente-presentacion-assets/aprobar-mobile-detail.png" alt="Aprobación móvil de una pieza">
+            </div>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--teal showcase-slide">
+      <div class="slide-number">08 / 13</div>
+      <div class="showcase-header">
+        <div>
+          <p class="kicker">Resultados</p>
+          <h2 class="section-title">
+            <span class="light">Métricas que se</span>
+            <span class="accent">entienden de verdad</span>
+          </h2>
+        </div>
+        <p class="section-copy">La capa de resultados está diseñada para ejecutivos, no para especialistas en analítica. Resume, contextualiza y permite profundizar.</p>
+      </div>
+
+      <div class="results-layout">
+        <figure class="device-browser">
+          <div class="browser-chrome">
+            <div class="chrome-dots" aria-hidden="true">
+              <span class="red"></span>
+              <span class="yellow"></span>
+              <span class="green"></span>
+            </div>
+            <div class="browser-url">app.octopusmedia.cl/portal/resultados</div>
+          </div>
+          <div class="browser-screen browser-screen--overview-fit">
+            <img src="./portal-cliente-presentacion-assets/resultados-desktop-overview.png" alt="Dashboard de resultados">
+          </div>
+        </figure>
+
+        <div class="results-panel">
+          <div class="mobile-caption">
+            <p class="kicker" style="margin:0;">Lectura ejecutiva</p>
+            <h3>Un dashboard premium para mirar rápido y profundizar cuando hace falta</h3>
+            <ul class="feature-list">
+              <li>KPI cards con comparativos visibles y lectura inmediata.</li>
+              <li>Análisis cualitativo y distribución de formatos para entender mejor el desempeño.</li>
+              <li>Meta Ads y datos complementarios cargan en background sin frenar la experiencia.</li>
+            </ul>
+          </div>
+
+          <div class="mini-browser">
+            <div class="browser-chrome">
+              <div class="chrome-dots" aria-hidden="true">
+                <span class="red"></span>
+                <span class="yellow"></span>
+                <span class="green"></span>
+              </div>
+              <div class="browser-url">app.octopusmedia.cl/portal/resultados/detalle</div>
+            </div>
+            <div class="browser-screen browser-screen--detail-fit">
+              <img src="./portal-cliente-presentacion-assets/resultados-desktop-detail.png" alt="Detalle de rendimiento por publicación">
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--quiet showcase-slide">
+      <div class="slide-number">09 / 13</div>
+      <div class="showcase-header">
+        <div>
+          <p class="kicker">Informes profesionales</p>
+          <h2 class="section-title">
+            <span class="light">Reportes que</span>
+            <span class="accent">sí transmiten valor</span>
+          </h2>
+        </div>
+        <p class="section-copy">No son pantallazos ni texto plano. Son informes visuales, estratégicos y presentables, pensados para que el cliente sienta el estándar de la agencia.</p>
+      </div>
+
+      <div class="results-layout">
+        <figure class="device-browser">
+          <div class="browser-chrome">
+            <div class="chrome-dots" aria-hidden="true">
+              <span class="red"></span>
+              <span class="yellow"></span>
+              <span class="green"></span>
+            </div>
+            <div class="browser-url">app.octopusmedia.cl/portal/informes</div>
+          </div>
+          <div class="browser-screen">
+            <img src="./portal-cliente-presentacion-assets/informes-desktop.png" alt="Informe profesional dentro del portal">
+          </div>
+        </figure>
+
+        <div class="info-stack">
+          <div class="mobile-caption">
+            <p class="kicker" style="margin:0;">Diseño + lectura estratégica</p>
+            <h3>Un informe que se ve tan premium como el trabajo que representa</h3>
+            <div class="chip-row">
+              <span class="chip chip--brand">Resumen ejecutivo</span>
+              <span class="chip chip--success">Hallazgos</span>
+              <span class="chip">Top contenidos</span>
+              <span class="chip chip--warn">Acciones</span>
+            </div>
+            <ul class="feature-list" style="margin-top:6px;">
+              <li>Presenta orgánico y pauta con una estructura clara y amigable para cliente.</li>
+              <li>Combina IA con revisión editorial para mantener tono institucional y criterio.</li>
+              <li>Está listo para verse en línea y también para exportarse formalmente cuando corresponda.</li>
+            </ul>
+          </div>
+
+          <div class="statement-card">
+            <p class="eyebrow">Percepción inmediata</p>
+            <p>El cliente no solo entiende resultados. Siente que está frente a una agencia que piensa el detalle, cuida la presentación y convierte data en valor percibido.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--teal showcase-slide">
+      <div class="slide-number">10 / 13</div>
+      <div class="showcase-header">
+        <div>
+          <p class="kicker">Documentos y solicitudes</p>
+          <h2 class="section-title">
+            <span class="light">Orden también en</span>
+            <span class="accent">lo operativo</span>
+          </h2>
+        </div>
+        <p class="section-copy">Más allá del contenido y los resultados, el portal resuelve algo igual de importante: tener los materiales clave y el canal de soporte dentro del mismo ecosistema.</p>
+      </div>
+
+      <div class="doc-grid">
+        <article class="doc-panel">
+          <div class="doc-caption">
+            <p class="kicker" style="margin:0 0 8px;">Documentos</p>
+            <h3>Todo lo importante, siempre a mano</h3>
+            <p>Brand Bible, planes y materiales estratégicos disponibles en una vista limpia, accesible y presentable.</p>
+          </div>
+          <figure class="device-browser">
+            <div class="browser-chrome">
+              <div class="chrome-dots" aria-hidden="true">
+                <span class="red"></span>
+                <span class="yellow"></span>
+                <span class="green"></span>
+              </div>
+              <div class="browser-url">app.octopusmedia.cl/portal/documentos</div>
+            </div>
+            <div class="browser-screen browser-screen--contain">
+              <img src="./portal-cliente-presentacion-assets/documentos-desktop.png" alt="Repositorio de documentos del portal">
+            </div>
+          </figure>
+        </article>
+
+        <article class="doc-panel">
+          <div class="doc-caption">
+            <p class="kicker" style="margin:0 0 8px;">Solicitudes</p>
+            <h3>Un canal directo, trazable y ordenado</h3>
+            <p>El cliente puede abrir requerimientos sin perder contexto, con un flujo más formal que un mensaje aislado.</p>
+          </div>
+          <figure class="device-browser">
+            <div class="browser-chrome">
+              <div class="chrome-dots" aria-hidden="true">
+                <span class="red"></span>
+                <span class="yellow"></span>
+                <span class="green"></span>
+              </div>
+              <div class="browser-url">app.octopusmedia.cl/portal/requerimientos</div>
+            </div>
+            <div class="browser-screen browser-screen--contain">
+              <img src="./portal-cliente-presentacion-assets/requerimientos-desktop.png" alt="Sistema de requerimientos del portal">
+            </div>
+          </figure>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide slide--quiet">
+      <div class="slide-number">11 / 13</div>
+      <div class="section-head">
+        <div>
+          <p class="kicker">Desde tu celular</p>
+          <h2 class="section-title">
+            <span class="light">La experiencia</span>
+            <span class="accent">también vive en mobile</span>
+          </h2>
+        </div>
+        <p class="section-copy">No es una adaptación mínima. El portal conserva claridad, navegación y acciones clave para que el cliente pueda resolver desde cualquier lugar.</p>
+      </div>
+
+      <div class="mobile-grid">
+        <div class="mobile-stage">
+          <figure class="device-phone">
+            <div class="phone-screen phone-screen--fullshot">
+              <img src="./portal-cliente-presentacion-assets/aprobar-mobile-list.png" alt="Vista móvil del listado de aprobaciones">
+            </div>
+          </figure>
+
+          <figure class="device-phone">
+            <div class="phone-screen phone-screen--fullshot">
+              <img src="./portal-cliente-presentacion-assets/aprobar-mobile-detail.png" alt="Vista móvil del detalle de aprobación">
+            </div>
+          </figure>
+        </div>
+
+        <article class="mobile-caption">
+          <p class="kicker" style="margin:0;">Mobile first, cuando importa</p>
+          <h3>Aprueba contenido en cinco minutos mientras vas entre reuniones</h3>
+          <ul class="feature-list">
+            <li>Navegación inferior clara para moverse por las áreas principales.</li>
+            <li>Botón de aprobación visible incluso en pantallas pequeñas.</li>
+            <li>Feedback y contexto disponibles sin perder legibilidad.</li>
+            <li>Una interfaz que mantiene la sensación premium también fuera del escritorio.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide slide--teal">
+      <div class="slide-number">12 / 13</div>
+      <div class="section-head">
+        <div>
+          <p class="kicker">Tu información está protegida</p>
+          <h2 class="section-title">
+            <span class="light">Confianza visible</span>
+            <span class="accent">desde el diseño</span>
+          </h2>
+        </div>
+        <p class="section-copy">Cuando el entorno se siente cuidado, privado y consistente, el cliente entiende que está dentro de una plataforma seria, no en un parche improvisado.</p>
+      </div>
+
+      <div class="trust-layout">
+        <article class="trust-featured">
+          <div class="shield-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3.4 8.4-7 9-3.6-.6-7-4-7-9V6l7-3Z"></path><path d="m9.5 12 1.8 1.8L15 10"></path></svg>
+          </div>
+          <div>
+            <div class="trust-badge">Plataforma sólo para clientes</div>
+            <h3>Una experiencia exclusiva de inicio a fin</h3>
+            <p>Acceso con Google, y personalizado según diferentes roles del usuario.</p>
+          </div>
+          <div class="chip-row">
+            <span class="chip chip--brand">Acceso con Google</span>
+            <span class="chip chip--success">Roles por usuario</span>
+            <span class="chip">Octopus Media</span>
+          </div>
+        </article>
+
+        <div class="trust-grid">
+          <article class="trust-card">
+            <div class="trust-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M7 11V7a5 5 0 0 1 10 0v4"></path><rect x="5" y="11" width="14" height="10" rx="2"></rect></svg>
+            </div>
+            <h3>Acceso simple con Google</h3>
+            <p>El ingreso se resuelve de forma segura y familiar, sin fricción innecesaria para empezar a usar la plataforma.</p>
+          </article>
+
+          <article class="trust-card">
+            <div class="trust-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            </div>
+            <h3>Datos visibles solo para la cuenta</h3>
+            <p>Resultados, documentos y aprobaciones se consultan dentro de una estructura dedicada a la marca.</p>
+          </article>
+
+          <article class="trust-card">
+            <div class="trust-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3z"></path><path d="M14 3h7v7h-7z"></path><path d="M14 14h7v7h-7z"></path><path d="M3 14h7v7H3z"></path></svg>
+            </div>
+            <h3>Plataforma exclusiva de Octopus Media</h3>
+            <p>El producto refuerza marca, estándar de servicio y una sensación de innovación coherente con la agencia.</p>
+          </article>
+
+          <article class="trust-card">
+            <div class="trust-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18"></path></svg>
+            </div>
+            <h3>Tutorial y guía desde el primer ingreso</h3>
+            <p>La experiencia no deja al cliente solo. Explica, orienta y acompaña desde el inicio.</p>
+          </article>
+
+          <article class="trust-card">
+            <div class="trust-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            </div>
+            <h3>Notificaciones cuando importa</h3>
+            <p>El cliente recibe señales claras de aprobaciones pendientes y acciones nuevas sin revisar todo el portal.</p>
+          </article>
+
+          <article class="trust-card">
+            <div class="trust-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"></path></svg>
+            </div>
+            <h3>Soporte disponible dentro del ecosistema</h3>
+            <p>La ayuda no vive fuera del producto: está integrada, visible y alineada con el trabajo del mes.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--hero slide--closing">
+      <div class="slide-number">13 / 13</div>
+      <div class="brand-bar">
+        <img class="brand-mark" src="./portal-cliente-presentacion-assets/logo-octopus-media-blanco.png" alt="Octopus Media">
+        <span class="brand-tag">Portal Cliente</span>
+      </div>
+
+      <div class="closing-layout">
+        <div class="closing-copy">
+          <span class="closing-brow">Cierre</span>
+          <h2 class="headline">
+            <span class="light">El Marketing de tu empresa,</span>
+            <span class="accent">al alcance de tu mano.</span>
+          </h2>
+          <p class="lede">Una plataforma pensada para una experiencia premium del cliente. App en constante evolución y mejora.</p>
+          <div class="chip-row">
+            <span class="chip chip--brand">Claridad</span>
+            <span class="chip chip--success">Confianza</span>
+            <span class="chip">Experiencia premium</span>
+          </div>
+        </div>
+
+        <div class="closing-visual">
+          <figure class="device-browser">
+            <div class="browser-chrome">
+              <div class="chrome-dots" aria-hidden="true">
+                <span class="red"></span>
+                <span class="yellow"></span>
+                <span class="green"></span>
+              </div>
+              <div class="browser-url">app.octopusmedia.cl/portal/inicio</div>
+            </div>
+            <div class="browser-screen browser-screen--closing-fit">
+              <img src="./portal-cliente-presentacion-assets/inicio-desktop.png" alt="Vista final del portal cliente">
+            </div>
+          </figure>
+          <img class="watermark-wordmark" src="./portal-cliente-presentacion-assets/logo-octopus-media-blanco.png" alt="">
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

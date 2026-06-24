@@ -10,6 +10,7 @@ export interface NormalizedTransaction extends Transaction {
   movementType: "income" | "expense" | "transfer" | "credit_card_payment";
   paymentMethod: "cash" | "bank_account" | "credit_card";
   destinationWorkspace: Workspace | null;
+  destinationAccountId: string | null;
   creditCardName: string | null;
 }
 
@@ -152,6 +153,7 @@ export function normalizeTransaction(tx: Transaction): NormalizedTransaction {
     movementType,
     paymentMethod,
     destinationWorkspace: (tx.destinationWorkspace ?? null) as Workspace | null,
+    destinationAccountId: tx.destinationAccountId ?? null,
     creditCardName: tx.creditCardName ?? null,
     subtype: tx.subtype ?? "actual",
     status: tx.status ?? "paid",
@@ -326,11 +328,12 @@ export function buildCreditCardInstallmentProjectionTransactions(transactions: T
       movementType: "credit_card_payment",
       paymentMethod: "bank_account",
       destinationWorkspace: null,
-    creditCardName: normalized.creditCardName ?? null,
-    installmentCount: null,
-    accountId: null,
-    sourceClientPaymentId: null,
-  } satisfies Transaction));
+      destinationAccountId: null,
+      creditCardName: normalized.creditCardName ?? null,
+      installmentCount: null,
+      accountId: null,
+      sourceClientPaymentId: null,
+    } satisfies Transaction));
   });
 }
 
@@ -358,6 +361,7 @@ export function clientPaymentToIncomeTransaction(payment: ClientPayment): Transa
     movementType: "income",
     paymentMethod: "bank_account",
     destinationWorkspace: null,
+    destinationAccountId: null,
     creditCardName: null,
     accountId: null,
     sourceClientPaymentId: null,
@@ -391,6 +395,7 @@ export function buildVatProjectionTransactions(clientPayments: ClientPayment[]):
     movementType: "expense",
     paymentMethod: "bank_account",
     destinationWorkspace: null,
+    destinationAccountId: null,
     creditCardName: null,
     accountId: null,
     sourceClientPaymentId: null,

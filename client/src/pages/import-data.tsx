@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAccounts, useCategories, useBulkCreateTransactions, useBulkDeleteTransactions, useCreateCategory, useCreditCardSettings, useTransactions, useUpdateTransaction } from "@/lib/hooks";
-import type { Account, Transaction } from "@shared/schema";
+import { useLocation } from "wouter";
+import { useAccounts, useCategories, useBulkDeleteTransactions, useCreateCategory, useCreateImportedMovementBatch, useCreditCardSettings, useImportBatches, useTransactions, useUpdateTransaction } from "@/lib/hooks";
+import type { Account, ImportBatch, Transaction } from "@shared/schema";
 import { getCreditCards } from "@/lib/credit-cards";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,53 +23,44 @@ import { Upload, FileText, CheckCircle2, AlertCircle, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCLP } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import type {
+  AccountType,
+  BankParser,
+  ClaudePdfExtraction,
+  ColumnMapping,
+  CcMovementType,
+  ImportWorkspace,
+  ParsedPreviewRow,
+} from "@/lib/parsers/types";
+import {
+  IMPORT_CONFIDENCE_DUPLICATE,
+  IMPORT_CONFIDENCE_PENDING,
+} from "@/lib/parsers/types";
+import {
+  PDF_COLUMN_HEADERS,
+  detectHeaderRowIndex,
+  extractDueDate,
+  inferMapping,
+  normalizeText,
+  parseAmountValue,
+  parseDateValue,
+  parseInstallmentsValue,
+  splitCsvLine,
+} from "@/lib/parsers/csv-core";
+import {
+  categoryMatchesType,
+  getDefaultExpenseCategoryOptions,
+  suggestRowCategory,
+  suggestRowType,
+  suggestWorkspace,
+} from "@/lib/parsers/suggestions";
+import {
+  detectMovementType,
+  getCreditPreviewType,
+  isSimilarCreditCardPayment,
+} from "@/lib/parsers/credit-cards";
+import { resolveParser } from "@/lib/parsers";
 
-type AccountType = "bank" | "credit";
-
-type CcMovementType = "purchase" | "tc_payment" | "reversal";
-
-const TC_PAYMENT_KEYWORDS = [
-  "pago pesos tef",
-  "pago pap",
-  "pago cuenta corriente",
-  "pago pesos",
-  "pago pac",
-];
-
-const SUGGESTED_FAMILY_EXPENSE_CATEGORIES = [
-  "Comida",
-  "Seguros",
-  "Otros",
-  "Intereses bancarios",
-  "Comisiones bancarias",
-  "Viajes",
-  "Transporte",
-  "Pago tarjeta",
-];
-
-interface ParsedPreviewRow {
-  id: string;
-  date: string;
-  name: string;
-  amount: number;
-  type: "income" | "expense" | "credit_card_payment";
-  category: string;
-  workspace: "business" | "family" | "dentist";
-  installmentsLabel: string;
-  installmentCount: number | null;
-  duplicate: boolean;
-  ccMovementType?: CcMovementType;
-  error?: string;
-}
-
-interface ColumnMapping {
-  date: string;
-  description: string;
-  amount: string;
-  installments: string;
-}
-
-type ImportWorkspace = ParsedPreviewRow["workspace"];
 
 type ImportBatchSummary = {
   id: string;
@@ -77,497 +69,9 @@ type ImportBatchSummary = {
   cardName: string | null;
   rows: number;
   totalAmount: number;
+  status?: string;
+  kind: "review" | "legacy";
 };
-
-type ClaudePdfMovement = {
-  date: string;
-  description: string;
-  amount: number;
-  installments: string;
-};
-
-type ClaudePdfExtraction = {
-  payUntil: string;
-  movements: ClaudePdfMovement[];
-};
-
-const PDF_COLUMN_HEADERS = {
-  date: "Fecha",
-  description: "Descripción",
-  amount: "Monto ($)",
-  installments: "Cuotas",
-} as const;
-
-function normalizeText(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function scoreHeaderCell(value: string) {
-  const normalized = normalizeText(value);
-
-  if (!normalized) return 0;
-  if (normalized.includes("fecha")) return 3;
-  if (normalized.includes("descripcion") || normalized.includes("descripción")) return 3;
-  if (normalized.includes("monto")) return 3;
-  if (normalized.includes("cuota")) return 2;
-  if (normalized.includes("categoria")) return 1;
-  return 0;
-}
-
-function findCategoryName(categories: { name: string; type: string; workspace?: string | null }[], name: string, workspace: "family" | "business" = "family") {
-  return categories.find((category) =>
-    category.type === "expense" &&
-    category.name.toLowerCase() === name.toLowerCase() &&
-    (category.workspace ?? "business") === workspace,
-  )?.name;
-}
-
-function suggestExpenseCategory(
-  description: string,
-  categories: { name: string; type: string; workspace?: string | null }[],
-) {
-  const normalized = normalizeText(description);
-
-  if (normalized.includes("uber eats") || normalized.includes("uber trip")) {
-    return findCategoryName(categories, "Comida") ?? "Comida";
-  }
-
-  if (
-    normalized.includes("seguros") ||
-    normalized.includes("seguro") ||
-    normalized.includes("kushkiseguros") ||
-    normalized.includes("banchile seguros")
-  ) {
-    return findCategoryName(categories, "Seguros") ?? "Seguros";
-  }
-
-  if (normalized.includes("intereses")) {
-    return findCategoryName(categories, "Intereses bancarios") ?? "Intereses bancarios";
-  }
-
-  if (
-    normalized.includes("comision") ||
-    normalized.includes("mantencion") ||
-    normalized.includes("impuesto decreto ley 3475")
-  ) {
-    return findCategoryName(categories, "Comisiones bancarias") ?? "Comisiones bancarias";
-  }
-
-  if (
-    normalized.includes("american airlines") ||
-    normalized.includes("airlines") ||
-    normalized.includes("sky") ||
-    normalized.includes("latam") ||
-    normalized.includes("travel")
-  ) {
-    return findCategoryName(categories, "Viajes") ?? findCategoryName(categories, "Otros") ?? "Otros";
-  }
-
-  if (
-    normalized.includes("mercadopago") ||
-    normalized.includes("mercado") ||
-    normalized.includes("aliexpress") ||
-    normalized.includes("apple.com") ||
-    normalized.includes("paris")
-  ) {
-    return findCategoryName(categories, "Otros") ?? "Otros";
-  }
-
-  if (
-    normalized.includes("pago pesos") ||
-    normalized.includes("pago pap") ||
-    normalized.includes("tef")
-  ) {
-    return findCategoryName(categories, "Pago tarjeta") ?? "Pago tarjeta";
-  }
-
-  return findCategoryName(categories, "Otros") ?? "Otros";
-}
-
-function suggestRowCategory(
-  name: string,
-  type: "income" | "expense" | "credit_card_payment",
-  categories: { name: string; type: string; workspace?: string | null }[],
-) {
-  if (type === "credit_card_payment") {
-    return findCategoryName(categories, "Pago tarjeta") ?? "Pago tarjeta";
-  }
-
-  if (type === "income") {
-    return categories.find((category) => category.type === "income")?.name ?? "Sin categoría";
-  }
-
-  return suggestExpenseCategory(name, categories);
-}
-
-function suggestRowType(name: string, fallbackType: "income" | "expense") {
-  const normalized = normalizeText(name);
-
-  if (
-    normalized.includes("pago pesos") ||
-    normalized.includes("pago pap") ||
-    normalized.includes("tef") ||
-    normalized.includes("traspaso deuda")
-  ) {
-    return "credit_card_payment" as const;
-  }
-
-  return fallbackType;
-}
-
-function getDefaultExpenseCategoryOptions() {
-  return SUGGESTED_FAMILY_EXPENSE_CATEGORIES;
-}
-
-function suggestWorkspace(
-  description: string,
-  category: string,
-  type: "income" | "expense" | "credit_card_payment",
-  accountType: AccountType,
-  defaultWorkspace: ImportWorkspace,
-): ImportWorkspace {
-  const normalizedCategory = normalizeText(category);
-  const normalizedDescription = normalizeText(description);
-
-  if (type === "income") {
-    return "business" as const;
-  }
-
-  if (
-    accountType === "credit" &&
-    (
-      normalizedDescription.includes("uber eats") ||
-      normalizedDescription.includes("uber trip")
-    )
-  ) {
-    return "family" as const;
-  }
-
-  if (normalizedCategory === "empresa") {
-    return "business" as const;
-  }
-
-  if (accountType === "credit") {
-    return defaultWorkspace;
-  }
-
-  return "business" as const;
-}
-
-function categoryMatchesType(
-  categoryName: string,
-  type: "income" | "expense" | "credit_card_payment",
-  categories: { name: string; type: string }[],
-) {
-  if (!categoryName || categoryName === "Sin categoría") return false;
-
-  if (type === "credit_card_payment") {
-    return true;
-  }
-
-  const matched = categories.find((category) => category.name === categoryName);
-  if (!matched) {
-    return type !== "income";
-  }
-
-  return matched.type === type;
-}
-
-function splitCsvLine(line: string, delimiter: string) {
-  const values: string[] = [];
-  let current = "";
-  let quoted = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-
-    if (char === '"') {
-      if (quoted && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        quoted = !quoted;
-      }
-      continue;
-    }
-
-    if (char === delimiter && !quoted) {
-      values.push(current.trim());
-      current = "";
-      continue;
-    }
-
-    current += char;
-  }
-
-  values.push(current.trim());
-  return values.map((value) => value.replace(/^["']|["']$/g, ""));
-}
-
-function parseDateValue(value: string) {
-  const raw = value.trim();
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-
-  const slashMatch = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (slashMatch) return `${slashMatch[3]}-${slashMatch[2]}-${slashMatch[1]}`;
-
-  const dashMatch = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
-  if (dashMatch) return `${dashMatch[3]}-${dashMatch[2]}-${dashMatch[1]}`;
-
-  return "";
-}
-
-function parseAmountValue(value: string) {
-  const raw = value.trim();
-
-  // Avoid treating installment ratios like "01/12" or "1 / 0" as monetary amounts.
-  if (/^\d+\s*\/\s*\d+$/.test(raw)) {
-    return NaN;
-  }
-
-  const normalized = value
-    .replace(/\s/g, "")
-    .replace(/\$/g, "")
-    .replace(/\.(?=\d{3}(?:\D|$))/g, "")
-    .replace(/,/g, ".");
-
-  const amount = Number.parseFloat(normalized);
-  return Number.isFinite(amount) ? amount : NaN;
-}
-
-function parseInstallmentsValue(value: string) {
-  const raw = value.trim();
-
-  if (!raw) {
-    return { label: "-", count: null as number | null };
-  }
-
-  const match = raw.match(/^(\d{1,2})\/(\d{1,2})$/);
-  if (!match) {
-    return { label: raw, count: null as number | null };
-  }
-
-  return {
-    label: `${match[1].padStart(2, "0")}/${match[2].padStart(2, "0")}`,
-    count: Number.parseInt(match[2], 10),
-  };
-}
-
-function detectMovementType(
-  name: string,
-  rawAmount: number,
-  date: string,
-  allRawRows: Array<{ name: string; rawAmount: number; date: string }>,
-): CcMovementType {
-  const normalized = normalizeText(name);
-  if (TC_PAYMENT_KEYWORDS.some((kw) => normalized.includes(normalizeText(kw)))) {
-    return "tc_payment";
-  }
-  if (rawAmount > 0) {
-    const rowDate = new Date(date);
-    if (!Number.isNaN(rowDate.getTime())) {
-      const hasMatchingNegative = allRawRows.some((other) => {
-        if (Math.abs(other.rawAmount + rawAmount) > 0.01) return false;
-        const otherDate = new Date(other.date);
-        if (Number.isNaN(otherDate.getTime())) return false;
-        const daysDiff = Math.abs((rowDate.getTime() - otherDate.getTime()) / (1000 * 60 * 60 * 24));
-        return daysDiff <= 7;
-      });
-      if (hasMatchingNegative) return "reversal";
-    }
-  }
-  return "purchase";
-}
-
-function getCreditPreviewType(ccMovementType?: CcMovementType): "expense" | "credit_card_payment" {
-  return ccMovementType === "tc_payment" ? "credit_card_payment" : "expense";
-}
-
-function getDateDistanceInDays(left: string, right: string) {
-  const leftDate = new Date(left);
-  const rightDate = new Date(right);
-
-  if (Number.isNaN(leftDate.getTime()) || Number.isNaN(rightDate.getTime())) {
-    return Number.POSITIVE_INFINITY;
-  }
-
-  return Math.abs((leftDate.getTime() - rightDate.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function isSimilarCreditCardPayment(
-  tx: Pick<Transaction, "type" | "movementType" | "status" | "creditCardName" | "amount" | "date">,
-  cardName: string,
-  amount: number,
-  date: string,
-) {
-  if ((tx.status ?? "paid") === "cancelled") return false;
-
-  const movementType = tx.movementType ?? (tx.type === "income" ? "income" : "expense");
-  if (movementType !== "credit_card_payment") return false;
-
-  if (normalizeText(tx.creditCardName ?? "") !== normalizeText(cardName)) return false;
-  if (Math.abs((tx.amount ?? 0) - amount) > 0.01) return false;
-
-  return getDateDistanceInDays(tx.date, date) <= 3;
-}
-
-function findSimilarCreditCardPayment(
-  transactions: Transaction[],
-  cardName: string,
-  amount: number,
-  date: string,
-) {
-  const matches = transactions
-    .filter((tx) => isSimilarCreditCardPayment(tx, cardName, amount, date))
-    .sort((left, right) => {
-      const leftNeedsAccount = left.accountId ? 1 : 0;
-      const rightNeedsAccount = right.accountId ? 1 : 0;
-      if (leftNeedsAccount !== rightNeedsAccount) return leftNeedsAccount - rightNeedsAccount;
-
-      const leftDistance = getDateDistanceInDays(left.date, date);
-      const rightDistance = getDateDistanceInDays(right.date, date);
-      return leftDistance - rightDistance;
-    });
-
-  return matches[0] ?? null;
-}
-
-function extractDueDate(lines: string[], delimiter: string): string | null {
-  for (const line of lines) {
-    const cells = splitCsvLine(line, delimiter);
-    for (let i = 0; i < cells.length - 1; i++) {
-      if (normalizeText(cells[i]).includes("pagar hasta")) {
-        const dateStr = parseDateValue(cells[i + 1].trim());
-        if (dateStr) return dateStr;
-      }
-    }
-  }
-  return null;
-}
-
-function isLikelyCreditCardImport(headers: string[], lines: string[]) {
-  const normalizedHeaders = headers.map((header) => normalizeText(header));
-  const normalizedText = normalizeText(lines.slice(0, 20).join(" "));
-
-  return (
-    normalizedHeaders.some((header) => header.includes("cuota")) ||
-    normalizedHeaders.some((header) => header.includes("tipo de tarjeta")) ||
-    normalizedText.includes("pagar hasta") ||
-    normalizedText.includes("movimientos facturados") ||
-    normalizedText.includes("movimientos no facturados") ||
-    normalizedText.includes("tipo de tarjeta")
-  );
-}
-
-function scoreAmountColumn(header: string, rows: Record<string, string>[]) {
-  const normalizedHeader = normalizeText(header);
-  let score = 0;
-
-  if (
-    normalizedHeader.includes("monto") ||
-    normalizedHeader.includes("amount") ||
-    normalizedHeader.includes("importe") ||
-    normalizedHeader.includes("valor")
-  ) {
-    score += 8;
-  }
-
-  if (
-    normalizedHeader.includes("cuota") ||
-    normalizedHeader.includes("installment")
-  ) {
-    score -= 8;
-  }
-
-  const sampleRows = rows.slice(0, 30);
-  for (const row of sampleRows) {
-    const value = (row[header] ?? "").trim();
-    if (!value) continue;
-
-    if (/^\d+\s*\/\s*\d+$/.test(value)) {
-      score -= 4;
-      continue;
-    }
-
-    const parsed = parseAmountValue(value);
-    if (!Number.isNaN(parsed)) {
-      score += 3;
-      if (Math.abs(parsed) >= 1000) score += 2;
-      if (/[-$.,]/.test(value)) score += 1;
-    }
-  }
-
-  return score;
-}
-
-function scoreInstallmentsColumn(header: string, rows: Record<string, string>[]) {
-  const normalizedHeader = normalizeText(header);
-  let score = 0;
-
-  if (
-    normalizedHeader.includes("cuota") ||
-    normalizedHeader.includes("installment")
-  ) {
-    score += 8;
-  }
-
-  const sampleRows = rows.slice(0, 30);
-  for (const row of sampleRows) {
-    const value = (row[header] ?? "").trim();
-    if (!value) continue;
-
-    if (/^\d+\s*\/\s*\d+$/.test(value)) {
-      score += 4;
-      continue;
-    }
-
-    if (!Number.isNaN(parseAmountValue(value))) {
-      score -= 1;
-    }
-  }
-
-  return score;
-}
-
-function inferMapping(headers: string[], rows: Record<string, string>[]): ColumnMapping {
-  const match = (patterns: string[]) =>
-    headers.find((header) => patterns.some((pattern) => normalizeText(header).includes(pattern))) ?? headers[0] ?? "";
-
-  const amountHeader = headers
-    .map((header) => ({ header, score: scoreAmountColumn(header, rows) }))
-    .sort((left, right) => right.score - left.score)[0]?.header ?? "";
-
-  const installmentsHeader = headers
-    .map((header) => ({ header, score: scoreInstallmentsColumn(header, rows) }))
-    .sort((left, right) => right.score - left.score)[0]?.header ?? "";
-
-  return {
-    date: match(["fecha", "date"]),
-    description: match(["descripcion", "descripción", "detalle", "glosa", "nombre", "description"]),
-    amount: amountHeader,
-    installments: installmentsHeader,
-  };
-}
-
-function detectHeaderRowIndex(lines: string[], delimiter: string) {
-  let bestIndex = 0;
-  let bestScore = -1;
-
-  lines.forEach((line, index) => {
-    const score = splitCsvLine(line, delimiter).reduce((sum, cell) => sum + scoreHeaderCell(cell), 0);
-    if (score > bestScore) {
-      bestScore = score;
-      bestIndex = index;
-    }
-  });
-
-  return bestIndex;
-}
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
@@ -587,6 +91,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
 }
 
 export default function ImportDataPage() {
+  const [, navigate] = useLocation();
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
   const [previewRows, setPreviewRows] = useState<ParsedPreviewRow[]>([]);
@@ -598,6 +103,7 @@ export default function ImportDataPage() {
   const [savedCards, setSavedCards] = useState<string[]>([]);
   const [selectedCard, setSelectedCard] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [detectedParser, setDetectedParser] = useState<BankParser | null>(null);
   const [defaultImportWorkspace, setDefaultImportWorkspace] = useState<ImportWorkspace>("family");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryWorkspace, setNewCategoryWorkspace] = useState<"business" | "family" | "dentist">("family");
@@ -611,7 +117,8 @@ export default function ImportDataPage() {
   const { data: transactions = [] } = useTransactions();
   const { data: accounts = [] } = useAccounts();
   const { data: creditCardSettings = [] } = useCreditCardSettings();
-  const importMutation = useBulkCreateTransactions();
+  const { data: reviewImportBatches = [] } = useImportBatches();
+  const importMutation = useCreateImportedMovementBatch();
   const createCategoryMutation = useCreateCategory();
   const deleteImportMutation = useBulkDeleteTransactions();
   const updateTransactionMutation = useUpdateTransaction();
@@ -812,32 +319,14 @@ export default function ImportDataPage() {
   }, [csvRows, mapping, accountType, existingKeys, existingCreditCardPayments, ignoredRowIds, categories, defaultImportWorkspace, selectedCard]);
 
   const handleImport = async () => {
-    const importableRows = previewRows.filter(
-      (row) => !row.error && !row.duplicate && row.ccMovementType !== "reversal",
+    const queueableRows = previewRows.filter(
+      (row) => !row.error && row.ccMovementType !== "reversal",
     );
-    const enrichableTcPayments = previewRows
-      .filter((row) =>
-        !row.error &&
-        row.duplicate &&
-        row.ccMovementType === "tc_payment" &&
-        Boolean(selectedCard.trim()) &&
-        Boolean(selectedCreditCardDefaultAccount?.id),
-      )
-      .map((row) => ({
-        row,
-        matchedTransaction: findSimilarCreditCardPayment(
-          existingCreditCardPayments,
-          selectedCard.trim(),
-          row.amount,
-          row.date,
-        ),
-      }))
-      .filter((entry) => entry.matchedTransaction && !entry.matchedTransaction.accountId);
 
-    if (importableRows.length === 0 && enrichableTcPayments.length === 0) {
+    if (queueableRows.length === 0) {
       toast({
-        title: "No hay cambios para importar",
-        description: "Corrige las filas inválidas o elimina duplicados.",
+        title: "No hay movimientos para enviar",
+        description: "Corrige las filas inválidas o elimina reversas antes de continuar.",
         variant: "destructive",
       });
       return;
@@ -852,38 +341,31 @@ export default function ImportDataPage() {
       return;
     }
 
-    const batchId = `import-${Date.now()}`;
-    const importedAt = new Date().toISOString();
+    const selectedAccount = selectedAccountId
+      ? bankAccounts.find((account) => account.id === selectedAccountId) ?? null
+      : null;
+    const detectedBankName = accountType === "bank" ? detectedParser?.bankName ?? null : null;
+    const importBankName = selectedAccount?.bank ?? detectedBankName;
     const batchLabel = accountType === "credit"
-      ? `${fileName || "Cartola"} · ${selectedCard.trim()}`
-      : `${fileName || "Importación CSV"} · Cuenta bancaria`;
+      ? `${fileName || detectedParser?.sourceName || "Cartola"} · ${selectedCard.trim()}`
+      : `${fileName || detectedParser?.sourceName || "Importación CSV"} · ${importBankName ?? "Cuenta bancaria"}`;
 
-    const mapped = importableRows.map((row) => {
+    const mapped = queueableRows.map((row) => {
       const isTcPayment = accountType === "credit" && row.ccMovementType === "tc_payment";
-      const isPurchase = accountType === "credit" && row.ccMovementType === "purchase";
-      const effectiveType: "income" | "expense" | "credit_card_payment" =
-        accountType === "credit"
-          ? "expense"
-          : row.type;
       const effectiveMovementType =
         isTcPayment
           ? "credit_card_payment" as const
-          : effectiveType === "income"
+          : row.type === "income"
             ? "income" as const
-            : effectiveType === "credit_card_payment"
+            : row.type === "credit_card_payment"
               ? "credit_card_payment" as const
               : "expense" as const;
-      const effectiveStatus =
-        isTcPayment
-          ? "paid" as const
-          : isPurchase
-            ? "pending" as const
-            : accountType === "credit" && effectiveType === "expense"
-              ? "pending" as const
-              : "paid" as const;
 
       return {
-        name: row.name,
+        date: row.date,
+        description: row.name,
+        amount: row.amount,
+        direction: effectiveMovementType === "income" ? "income" as const : "expense" as const,
         category:
           row.category ||
           suggestRowCategory(
@@ -891,78 +373,67 @@ export default function ImportDataPage() {
             accountType === "credit" ? getCreditPreviewType(row.ccMovementType) : row.type,
             categories,
           ),
-        amount: row.amount,
-        type: effectiveType,
-        date: row.date,
         notes: importDueDate ? `Vence: ${importDueDate}` : null,
-        subtype: "actual" as const,
-        status: effectiveStatus,
-        itemId: null,
         workspace: row.workspace,
         movementType: effectiveMovementType,
+        installmentCount: row.installmentCount,
         paymentMethod:
-          accountType === "credit" && effectiveType === "expense"
+          accountType === "credit" && effectiveMovementType === "expense"
             ? "credit_card" as const
             : "bank_account" as const,
-        destinationWorkspace: null,
-        creditCardName: accountType === "credit" ? selectedCard.trim() : null,
-        installmentCount: accountType === "credit" && row.ccMovementType === "purchase" ? row.installmentCount : null,
+        source: "manual_file",
+        sourceName: batchLabel,
+        sourceType: accountType === "credit" ? "credit_card" as const : "bank_account" as const,
+        bankName: accountType === "bank" ? importBankName ?? null : null,
         accountId:
           accountType === "bank"
             ? selectedAccountId || null
             : isTcPayment
               ? selectedCreditCardDefaultAccount?.id ?? null
               : null,
-        importBatchId: batchId,
-        importBatchLabel: batchLabel,
-        importedAt,
+        creditCardName: accountType === "credit" ? selectedCard.trim() : null,
+        confidence: row.duplicate ? IMPORT_CONFIDENCE_DUPLICATE : IMPORT_CONFIDENCE_PENDING,
+        status: row.duplicate ? "duplicate" as const : "pending" as const,
       };
     });
 
     try {
-      if (enrichableTcPayments.length > 0 && selectedCreditCardDefaultAccount?.id) {
-        await Promise.all(
-          enrichableTcPayments.map(({ matchedTransaction }) =>
-            updateTransactionMutation.mutateAsync({
-              id: matchedTransaction!.id,
-              data: {
-                accountId: selectedCreditCardDefaultAccount.id,
-              },
-            }),
-          ),
-        );
-      }
-
-      let imported = 0;
-      if (mapped.length > 0) {
-        const result = await importMutation.mutateAsync(mapped);
-        imported = result.imported;
-      }
+      const result = await importMutation.mutateAsync({
+        label: batchLabel,
+        source: "manual_file",
+        sourceName: batchLabel,
+        sourceType: accountType === "credit" ? "credit_card" : "bank_account",
+        bankName: accountType === "bank" ? importBankName ?? null : null,
+        accountId: accountType === "bank" ? selectedAccountId || null : null,
+        creditCardName: accountType === "credit" ? selectedCard.trim() : null,
+        workspace: accountType === "credit" ? defaultImportWorkspace : selectedAccount?.workspace ?? "shared",
+        notes: importDueDate ? `Fecha limite de pago: ${importDueDate}` : null,
+        movements: mapped,
+      });
 
       toast({
-        title: imported > 0 ? "Importación exitosa" : "Pagos actualizados",
-        description:
-          enrichableTcPayments.length > 0
-            ? `${imported} filas importadas y ${enrichableTcPayments.length} pagos TC existentes completados con cuenta origen.`
-            : `${imported} filas importadas. ${previewRows.length - imported} filas fueron omitidas.`,
+        title: "Movimientos enviados a revisión",
+        description: `${result.pending} pendientes y ${result.duplicates} duplicados quedaron en la bandeja.`,
       });
       setCsvHeaders([]);
       setCsvRows([]);
       setPreviewRows([]);
       setIgnoredRowIds(new Set());
       setFileName("");
+      setDetectedParser(null);
       setSelectedAccountId("");
+      navigate(`/movements?batch=${encodeURIComponent(result.batchId)}`);
     } catch {
       toast({
-        title: "No se pudo completar la importación",
-        description: "Hubo un problema al crear o actualizar movimientos.",
+        title: "No se pudo crear la carga",
+        description: "Hubo un problema al enviar los movimientos a revisión.",
         variant: "destructive",
       });
     }
   };
 
   const parseCSV = useCallback(
-    (text: string) => {
+    (text: string, sourceFileName: string) => {
       const lines = text
         .split(/\r?\n/)
         .map((line) => line.replace(/\r/g, ""))
@@ -991,7 +462,15 @@ export default function ImportDataPage() {
           Object.values(row).some((value) => value.trim() !== ""),
         );
 
-      const detectedCreditImport = isLikelyCreditCardImport(headers, lines);
+      const parser = resolveParser({
+        fileName: sourceFileName,
+        headers,
+        lines,
+        accountType,
+        sourceKind: "csv",
+      });
+      setDetectedParser(parser);
+      const detectedCreditImport = parser.id === "credit-card";
       if (detectedCreditImport && accountType !== "credit") {
         setAccountType("credit");
       }
@@ -1004,7 +483,7 @@ export default function ImportDataPage() {
       setIgnoredRowIds(new Set());
       setCsvHeaders(headers);
       setCsvRows(rows);
-      setMapping(inferMapping(headers, rows));
+      setMapping(parser.inferMapping?.(headers, rows) ?? inferMapping(headers, rows));
     },
     [toast, accountType],
   );
@@ -1016,6 +495,7 @@ export default function ImportDataPage() {
       detectedCreditImport?: boolean;
       dueDate?: string | null;
       forceMapping?: ColumnMapping;
+      parser?: BankParser;
     },
   ) => {
     const detectedCreditImport = options?.detectedCreditImport ?? false;
@@ -1034,6 +514,7 @@ export default function ImportDataPage() {
     setCsvHeaders(headers);
     setCsvRows(rows);
     setMapping(options?.forceMapping ?? inferMapping(headers, rows));
+    setDetectedParser(options?.parser ?? null);
   }, [accountType]);
 
   const parsePdfWithClaude = useCallback(async (file: File) => {
@@ -1077,6 +558,7 @@ export default function ImportDataPage() {
       setPreviewRows([]);
       setIgnoredRowIds(new Set());
       setImportDueDate(null);
+      setDetectedParser(null);
 
       if (file.name.toLowerCase().endsWith(".pdf")) {
         setIsPdfProcessing(true);
@@ -1089,9 +571,20 @@ export default function ImportDataPage() {
             [PDF_COLUMN_HEADERS.installments]: movement.installments?.trim() || "01/01",
           }));
           const headers = Object.values(PDF_COLUMN_HEADERS);
+          const parser = resolveParser({
+            fileName: file.name,
+            headers,
+            lines: [
+              file.name,
+              ...extracted.movements.map((movement) => movement.description),
+            ],
+            accountType: "credit",
+            sourceKind: "pdf",
+          });
           applyNormalizedImportRows(headers, rows, {
             detectedCreditImport: true,
             dueDate: parseDateValue(extracted.payUntil),
+            parser,
             forceMapping: {
               date: PDF_COLUMN_HEADERS.date,
               description: PDF_COLUMN_HEADERS.description,
@@ -1114,7 +607,7 @@ export default function ImportDataPage() {
       const reader = new FileReader();
       reader.onload = (e) => {
         const text = e.target?.result as string;
-        if (text) parseCSV(text);
+        if (text) parseCSV(text, file.name);
       };
       reader.readAsText(file);
     },
@@ -1262,7 +755,7 @@ export default function ImportDataPage() {
   const purchaseTotal = purchaseRows.reduce((sum, row) => sum + row.amount, 0);
   const tcPaymentTotal = tcPaymentRows.reduce((sum, row) => sum + row.amount, 0);
   const importableCount = previewRows.filter(
-    (row) => !row.error && !row.duplicate && row.ccMovementType !== "reversal",
+    (row) => !row.error && row.ccMovementType !== "reversal",
   ).length;
   const expenseCategoryOptions = useMemo(() => {
     const names = new Set(
@@ -1276,6 +769,16 @@ export default function ImportDataPage() {
   }, [categories]);
 
   const importBatches = useMemo<ImportBatchSummary[]>(() => {
+    const reviewBatches = reviewImportBatches.map((batch: ImportBatch): ImportBatchSummary => ({
+      id: batch.id,
+      label: batch.label,
+      importedAt: batch.createdAt,
+      cardName: batch.creditCardName,
+      rows: batch.rowCount,
+      totalAmount: batch.totalIncome + batch.totalExpense,
+      status: batch.status,
+      kind: "review",
+    }));
     const grouped = new Map<string, ImportBatchSummary>();
 
     for (const transaction of transactions) {
@@ -1295,11 +798,13 @@ export default function ImportDataPage() {
         cardName: transaction.creditCardName ?? null,
         rows: 1,
         totalAmount: transaction.amount,
+        kind: "legacy",
       });
     }
 
-    return Array.from(grouped.values()).sort((left, right) => right.importedAt.localeCompare(left.importedAt));
-  }, [transactions]);
+    return [...reviewBatches, ...Array.from(grouped.values())]
+      .sort((left, right) => right.importedAt.localeCompare(left.importedAt));
+  }, [reviewImportBatches, transactions]);
 
   const latestImportBatchId = importBatches[0]?.id ?? null;
   const detailBatch = useMemo(
@@ -1322,6 +827,14 @@ export default function ImportDataPage() {
   );
 
   const deleteImportBatch = (batch: ImportBatchSummary) => {
+    if (batch.kind !== "legacy") {
+      toast({
+        title: "Carga en revisión",
+        description: "Los lotes nuevos se gestionan desde la bandeja de movimientos.",
+      });
+      return;
+    }
+
     const ids = transactions
       .filter((transaction) => transaction.importBatchId === batch.id)
       .map((transaction) => transaction.id);
@@ -1419,6 +932,11 @@ export default function ImportDataPage() {
                   {previewRows.length} filas detectadas
                 </Badge>
               )}
+              {detectedParser ? (
+                <Badge variant="outline">
+                  Parser: {detectedParser.label}
+                </Badge>
+              ) : null}
             </div>
           )}
         </CardContent>
@@ -1634,6 +1152,7 @@ export default function ImportDataPage() {
                       <div className="flex items-center gap-2">
                         <span>{batch.label}</span>
                         {isLatest ? <Badge variant="secondary">Última</Badge> : null}
+                        {batch.kind === "review" ? <Badge variant="outline">Revisión</Badge> : null}
                       </div>
                     </TableCell>
                     <TableCell>{batch.cardName ?? "-"}</TableCell>
@@ -1645,18 +1164,26 @@ export default function ImportDataPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setDetailBatchId(batch.id)}
+                          onClick={() => {
+                            if (batch.kind === "review") {
+                              navigate(`/movements?batch=${encodeURIComponent(batch.id)}`);
+                              return;
+                            }
+                            setDetailBatchId(batch.id);
+                          }}
                         >
-                          Ver detalle
+                          {batch.kind === "review" ? "Revisar" : "Ver detalle"}
                         </Button>
-                        <Button
-                          variant={isLatest ? "destructive" : "outline"}
-                          size="sm"
-                          onClick={() => setBatchToDelete(batch)}
-                          disabled={deleteImportMutation.isPending}
-                        >
-                          Eliminar lote
-                        </Button>
+                        {batch.kind === "legacy" ? (
+                          <Button
+                            variant={isLatest ? "destructive" : "outline"}
+                            size="sm"
+                            onClick={() => setBatchToDelete(batch)}
+                            disabled={deleteImportMutation.isPending}
+                          >
+                            Eliminar lote
+                          </Button>
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1851,7 +1378,7 @@ export default function ImportDataPage() {
                   disabled={importMutation.isPending}
                   data-testid="button-import"
                 >
-                  {importMutation.isPending ? "Importando..." : `Importar ${importableCount} filas`}
+                  {importMutation.isPending ? "Enviando..." : `Enviar ${importableCount} a revisión`}
                 </Button>
               </div>
             </div>
@@ -1869,7 +1396,7 @@ export default function ImportDataPage() {
                   <span className="tabular-nums font-medium">{formatCLP(tcPaymentTotal)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>{reversalRows.length} reversas detectadas <span className="text-muted-foreground text-xs">(no se importarán)</span></span>
+                  <span>{reversalRows.length} reversas detectadas <span className="text-muted-foreground text-xs">(no se enviarán)</span></span>
                   <span className="tabular-nums text-muted-foreground">—</span>
                 </div>
                 {importDueDate && (
@@ -1924,12 +1451,11 @@ export default function ImportDataPage() {
                           {row.error && <p className="text-xs text-red-600 dark:text-red-400">{row.error}</p>}
                           {row.ccMovementType === "tc_payment" && row.duplicate && !row.error ? (
                             <p className="text-xs text-amber-600 dark:text-amber-400">
-                              Pago TC ya registrado — no se importará duplicado
-                              {selectedCreditCardDefaultAccount ? ", y se completará la cuenta origen si faltaba" : ""}
+                              Pago TC ya registrado — se enviará como duplicado para revisar
                             </p>
                           ) : null}
                           {row.ccMovementType === "reversal" && !row.error && (
-                            <p className="text-xs text-yellow-600 dark:text-yellow-400">Reversa detectada — no se importará</p>
+                            <p className="text-xs text-yellow-600 dark:text-yellow-400">Reversa detectada — no se enviará</p>
                           )}
                         </div>
                       </TableCell>

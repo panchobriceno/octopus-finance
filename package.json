@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "NODE_ENV=development tsx server/index.ts",
     "build": "vite build --config vite.config.ts && node -e \"const fs=require('fs'),p=require('path'),d=p.join(__dirname,'dist/public/assets');fs.readdirSync(d).filter(f=>f.endsWith('.js')).forEach(f=>{const fp=p.join(d,f);fs.writeFileSync(fp,fs.readFileSync(fp,'utf8').replace(/indexedDB/g,'_idbNoop'))})\" ",
+    "audit:data": "tsx scripts/firestore-audit.ts",
+    "repair:data": "tsx scripts/firestore-repair-data.ts",
     "check": "tsc",
+    "test": "vitest run",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
@@ -98,7 +101,8 @@
     "tailwindcss": "^3.4.17",
     "tsx": "^4.20.5",
     "typescript": "5.6.3",
-    "vite": "^7.3.0"
+    "vite": "^7.3.0",
+    "vitest": "^4.1.9"
   },
   "overrides": {
     "drizzle-kit": {

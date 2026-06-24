@@ -1,0 +1,26 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Octopus logo</title>
+  <desc id="desc">Circular octopus mark with tentacles in purple and teal tones.</desc>
+  <defs>
+    <linearGradient id="shell" x1="56" y1="40" x2="204" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B89BFF" />
+      <stop offset="1" stop-color="#58E3D0" />
+    </linearGradient>
+    <linearGradient id="tentacle" x1="72" y1="126" x2="184" y2="214" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8C72FF" />
+      <stop offset="1" stop-color="#36D5C2" />
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="56" fill="#151223" />
+  <circle cx="128" cy="104" r="58" fill="url(#shell)" />
+  <circle cx="108" cy="96" r="7" fill="#151223" />
+  <circle cx="148" cy="96" r="7" fill="#151223" />
+  <path d="M110 120c8 8 28 8 36 0" stroke="#151223" stroke-width="8" stroke-linecap="round" />
+  <path d="M88 144c0 18 2 38-12 52" stroke="url(#tentacle)" stroke-width="12" stroke-linecap="round" />
+  <path d="M108 150c0 20-2 42-16 60" stroke="url(#tentacle)" stroke-width="12" stroke-linecap="round" />
+  <path d="M128 152c0 24 0 46 0 64" stroke="url(#tentacle)" stroke-width="12" stroke-linecap="round" />
+  <path d="M148 150c0 20 2 42 16 60" stroke="url(#tentacle)" stroke-width="12" stroke-linecap="round" />
+  <path d="M168 144c0 18-2 38 12 52" stroke="url(#tentacle)" stroke-width="12" stroke-linecap="round" />
+  <path d="M76 138c-10 10-16 22-18 36" stroke="url(#tentacle)" stroke-width="10" stroke-linecap="round" />
+  <path d="M180 138c10 10 16 22 18 36" stroke="url(#tentacle)" stroke-width="10" stroke-linecap="round" />
+</svg>

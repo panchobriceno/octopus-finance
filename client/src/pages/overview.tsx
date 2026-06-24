@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, type ReactNode } from "react";
+import { useLocation } from "wouter";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, rectSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -26,6 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -37,7 +39,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import {
-  DollarSign, TrendingUp, TrendingDown, Wallet, Plus, Trash2, Pencil, X, CreditCard, GripVertical, Eye, EyeOff, Settings2, Save,
+  AlertTriangle, ArrowRight, CalendarClock, DollarSign, TrendingUp, TrendingDown, Wallet, Plus, Trash2, Pencil, X, CreditCard, GripVertical, Eye, EyeOff, Settings2, Save,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -53,6 +55,7 @@ import {
 } from "@/lib/finance";
 import { useMonthlyBalances } from "@/lib/monthly-balances";
 import { getCreditCards } from "@/lib/credit-cards";
+import { getOperatingCashBalance, getSavingsBalance } from "@/domain/accounts";
 
 const FAMILY_CATEGORY_HINTS = [
   "dividendo",
@@ -91,6 +94,23 @@ function workspaceLabel(workspace: "business" | "family" | "dentist") {
 type TransactionStatusFilter = "all" | "paid" | "pending" | "cancelled" | "planned" | "actual";
 type TransactionWorkspaceFilter = "all" | "business" | "family" | "shared";
 type TransactionSortField = "date" | "name" | "amount" | "status" | "workspace";
+type DecisionAlertTone = "danger" | "warning" | "info" | "success";
+
+type DecisionAlert = {
+  tone: DecisionAlertTone;
+  title: string;
+  description: string;
+  href?: string;
+  actionLabel?: string;
+};
+
+type WorkspacePulse = {
+  label: string;
+  income: number;
+  expenses: number;
+  net: number;
+  accent: string;
+};
 
 function transactionWorkspaceLabel(workspace?: string | null) {
   if (workspace === "family") return "Familia";
@@ -125,6 +145,206 @@ function isCreditCardPurchaseMovement({
   paymentMethod: "cash" | "bank_account" | "credit_card";
 }) {
   return movementType === "expense" && paymentMethod === "credit_card";
+}
+
+function clampPercent(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+}
+
+function DecisionHeader({
+  availableCash,
+  totalCreditCardDebt,
+  netAfterCards,
+  currentMonthRealIncome,
+  currentMonthProjectedIncome,
+  currentMonthExpenseTotal,
+  currentMonthMargin,
+  currentMonthPaidVat,
+  nextVatDueDate,
+  alerts,
+  workspacePulses,
+  onNavigate,
+}: {
+  availableCash: number;
+  totalCreditCardDebt: number;
+  netAfterCards: number;
+  currentMonthRealIncome: number;
+  currentMonthProjectedIncome: number;
+  currentMonthExpenseTotal: number;
+  currentMonthMargin: number;
+  currentMonthPaidVat: number;
+  nextVatDueDate: string;
+  alerts: DecisionAlert[];
+  workspacePulses: WorkspacePulse[];
+  onNavigate: (path: string) => void;
+}) {
+  const primaryAlert = alerts[0];
+
+  const alertToneClass: Record<DecisionAlertTone, string> = {
+    danger: "border-red-200 bg-red-50 text-red-900 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-200",
+    warning: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200",
+    info: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/20 dark:text-sky-200",
+    success: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200",
+  };
+
+  return (
+    <section data-testid="decision-dashboard-header" className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+      <Card className="rounded-lg">
+        <CardContent className="p-5">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Wallet className="size-4" />
+                Caja disponible
+              </div>
+              <div className="mt-2 text-4xl font-semibold tracking-tight tabular-nums">
+                {formatCLP(availableCash)}
+              </div>
+              <div className={`mt-2 text-sm ${netAfterCards >= 0 ? "text-muted-foreground" : "text-red-600 dark:text-red-400"}`}>
+                Neto después de deuda TC: {formatCLP(netAfterCards)}
+              </div>
+            </div>
+
+            <div className="grid min-w-[260px] gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <div className="rounded-md border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-muted-foreground">Deuda tarjetas</span>
+                  <CreditCard className="size-4 text-red-500" />
+                </div>
+                <div className="mt-2 text-2xl font-semibold tabular-nums text-red-600 dark:text-red-400">
+                  {formatCLP(totalCreditCardDebt)}
+                </div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-muted-foreground">IVA a separar</span>
+                  <CalendarClock className="size-4 text-sky-500" />
+                </div>
+                <div className="mt-2 text-2xl font-semibold tabular-nums">
+                  {formatCLP(currentMonthPaidVat)}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">Vence {formatDate(nextVatDueDate)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Ingresado este mes</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
+                {formatCLP(currentMonthRealIncome)}
+              </p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Por cobrar</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-sky-700 dark:text-sky-300">
+                {formatCLP(currentMonthProjectedIncome)}
+              </p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Gasto ejecutado</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">
+                {formatCLP(currentMonthExpenseTotal)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Margen {Number.isFinite(currentMonthMargin) ? `${currentMonthMargin.toFixed(1)}%` : "-"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Button type="button" onClick={() => onNavigate("/movements")}>
+              Revisar movimientos
+              <ArrowRight className="ml-2 size-4" />
+            </Button>
+            <Button type="button" variant="outline" onClick={() => onNavigate("/client-payments")}>
+              Ver cobros
+            </Button>
+            <Button type="button" variant="outline" onClick={() => onNavigate("/credit-cards")}>
+              Ver tarjetas
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4">
+        <Card className="rounded-lg">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <AlertTriangle className="size-4 text-amber-500" />
+              Atención
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 p-4 pt-0">
+            <div className={`rounded-md border p-3 ${alertToneClass[primaryAlert.tone]}`}>
+              <div className="text-sm font-semibold">{primaryAlert.title}</div>
+              <div className="mt-1 text-xs opacity-80">{primaryAlert.description}</div>
+              {primaryAlert.href && primaryAlert.actionLabel ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 h-8 bg-background/70"
+                  onClick={() => onNavigate(primaryAlert.href!)}
+                >
+                  {primaryAlert.actionLabel}
+                </Button>
+              ) : null}
+            </div>
+            {alerts.slice(1, 4).map((alert, index) => (
+              <button
+                key={`${index}-${alert.title}`}
+                type="button"
+                className="flex w-full items-start justify-between gap-3 rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/50"
+                onClick={() => alert.href && onNavigate(alert.href)}
+              >
+                <span>
+                  <span className="block text-sm font-medium">{alert.title}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{alert.description}</span>
+                </span>
+                {alert.href ? <ArrowRight className="mt-0.5 size-4 text-muted-foreground" /> : null}
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-lg">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-base font-semibold">Pulso por ámbito</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 p-4 pt-0">
+            {workspacePulses.map((pulse) => {
+              const expenseRate = pulse.income > 0
+                ? (pulse.expenses / pulse.income) * 100
+                : pulse.expenses > 0
+                  ? 100
+                  : 0;
+
+              return (
+                <div key={pulse.label} className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full" style={{ backgroundColor: pulse.accent }} />
+                      <span className="font-medium">{pulse.label}</span>
+                    </div>
+                    <span className={pulse.net >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-600 dark:text-red-400"}>
+                      {formatCLP(pulse.net)}
+                    </span>
+                  </div>
+                  <Progress value={clampPercent(expenseRate)} className="h-2" />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Ingreso {formatCLP(pulse.income)}</span>
+                    <span>Gasto {formatCLP(pulse.expenses)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  );
 }
 
 const DASHBOARD_CARD_IDS = [
@@ -972,6 +1192,7 @@ function TransactionForm({
 
 // ── Main Page ────────────────────────────────────────────────────
 export default function OverviewPage() {
+  const [, navigate] = useLocation();
   const [createFormMode, setCreateFormMode] = useState<"transaction" | "internal">("transaction");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isConfigMode, setIsConfigMode] = useState(false);
@@ -1014,19 +1235,11 @@ export default function OverviewPage() {
   const currentMonthKey = getCurrentMonthKey();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const openingBalance = useMemo(
-    () =>
-      accounts.reduce(
-        (sum, account) => sum + (account.type !== "savings" ? (account.currentBalance ?? 0) : 0),
-        0,
-      ),
+    () => getOperatingCashBalance(accounts),
     [accounts],
   );
   const savingsBalance = useMemo(
-    () =>
-      accounts.reduce(
-        (sum, account) => sum + (account.type === "savings" ? (account.currentBalance ?? 0) : 0),
-        0,
-      ),
+    () => getSavingsBalance(accounts),
     [accounts],
   );
 
@@ -1091,7 +1304,13 @@ export default function OverviewPage() {
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
       const normalized = normalizeTransaction(tx);
-      if (selectedAccountFilter !== "all" && tx.accountId !== selectedAccountFilter) return false;
+      if (
+        selectedAccountFilter !== "all" &&
+        tx.accountId !== selectedAccountFilter &&
+        tx.destinationAccountId !== selectedAccountFilter
+      ) {
+        return false;
+      }
       if (filterCategory !== "all" && tx.category !== filterCategory) return false;
       if (filterFromDate && tx.date < filterFromDate) return false;
       if (filterToDate && tx.date > filterToDate) return false;
@@ -1179,7 +1398,9 @@ export default function OverviewPage() {
     () =>
       selectedAccountFilter === "all"
         ? financialTransactions
-        : financialTransactions.filter((tx) => tx.accountId === selectedAccountFilter),
+        : financialTransactions.filter(
+            (tx) => tx.accountId === selectedAccountFilter || tx.destinationAccountId === selectedAccountFilter,
+          ),
     [financialTransactions, selectedAccountFilter],
   );
   const businessMetrics = useMemo(
@@ -1194,6 +1415,38 @@ export default function OverviewPage() {
     () => summarizeWorkspaceTransactions(filteredFinancialTransactions, "dentist", accounts),
     [accounts, filteredFinancialTransactions],
   );
+  const globalBusinessMetrics = useMemo(
+    () => summarizeWorkspaceTransactions(financialTransactions, "business", accounts),
+    [accounts, financialTransactions],
+  );
+  const globalFamilyMetrics = useMemo(
+    () => summarizeWorkspaceTransactions(financialTransactions, "family", accounts),
+    [accounts, financialTransactions],
+  );
+  const globalDentistMetrics = useMemo(
+    () => summarizeWorkspaceTransactions(financialTransactions, "dentist", accounts),
+    [accounts, financialTransactions],
+  );
+  const globalCurrentMonthFinancialTransactions = useMemo(
+    () => financialTransactions.filter((tx) => tx.date.startsWith(currentMonthKey)),
+    [currentMonthKey, financialTransactions],
+  );
+  const globalCurrentMonthBusinessMetrics = useMemo(
+    () => summarizeWorkspaceTransactions(globalCurrentMonthFinancialTransactions, "business", accounts),
+    [accounts, globalCurrentMonthFinancialTransactions],
+  );
+  const globalCurrentMonthFamilyMetrics = useMemo(
+    () => summarizeWorkspaceTransactions(globalCurrentMonthFinancialTransactions, "family", accounts),
+    [accounts, globalCurrentMonthFinancialTransactions],
+  );
+  const globalCurrentMonthDentistMetrics = useMemo(
+    () => summarizeWorkspaceTransactions(globalCurrentMonthFinancialTransactions, "dentist", accounts),
+    [accounts, globalCurrentMonthFinancialTransactions],
+  );
+  const globalTotalCreditCardDebt = Math.max(
+    0,
+    globalBusinessMetrics.creditCardDebt + globalFamilyMetrics.creditCardDebt + globalDentistMetrics.creditCardDebt,
+  );
   const totalIncome = filteredFinancialTransactions.reduce((sum, tx) => sum + getTransactionIncomeImpact(tx, "all"), 0);
   const totalExpenses = filteredFinancialTransactions.reduce((sum, tx) => sum + getTransactionExpenseImpact(tx, "all"), 0);
   const balance = totalIncome - totalExpenses;
@@ -1205,9 +1458,15 @@ export default function OverviewPage() {
     () => summarizeClientPaymentsByMonth(filteredClientPayments),
     [filteredClientPayments],
   );
+  const globalClientPaymentsByMonth = useMemo(
+    () => summarizeClientPaymentsByMonth(clientPayments),
+    [clientPayments],
+  );
   const currentMonthPaidVat = clientPaymentsByMonth[currentMonthKey]?.paidVat ?? 0;
+  const globalCurrentMonthPaidVat = globalClientPaymentsByMonth[currentMonthKey]?.paidVat ?? 0;
   const nextVatDueDate = getVatProjectionDateForMonth(currentMonthKey);
   const businessAvailableAfterVat = businessMetrics.cashFlow - currentMonthPaidVat;
+  const globalBusinessAvailableAfterVat = globalBusinessMetrics.cashFlow - globalCurrentMonthPaidVat;
   const currentMonthRealIncome = useMemo(() => {
     const paidClientIncome = filteredClientPayments.reduce((sum, payment) => {
       const referenceDate = payment.paymentDate ?? payment.expectedDate ?? payment.dueDate ?? payment.issueDate ?? "";
@@ -1231,6 +1490,29 @@ export default function OverviewPage() {
 
     return paidClientIncome + actualIncomeTransactions;
   }, [currentMonthKey, filteredClientPayments, filteredFinancialTransactions]);
+  const globalCurrentMonthRealIncome = useMemo(() => {
+    const paidClientIncome = clientPayments.reduce((sum, payment) => {
+      const referenceDate = payment.paymentDate ?? payment.expectedDate ?? payment.dueDate ?? payment.issueDate ?? "";
+      if (payment.status !== "paid" || !referenceDate.startsWith(currentMonthKey)) return sum;
+      return sum + payment.netAmount;
+    }, 0);
+
+    const actualIncomeTransactions = financialTransactions.reduce((sum, tx) => {
+      if (
+        tx.type !== "income" ||
+        tx.subtype !== "actual" ||
+        tx.status !== "paid" ||
+        tx.sourceClientPaymentId ||
+        !tx.date.startsWith(currentMonthKey)
+      ) {
+        return sum;
+      }
+
+      return sum + tx.amount;
+    }, 0);
+
+    return paidClientIncome + actualIncomeTransactions;
+  }, [clientPayments, currentMonthKey, financialTransactions]);
   const currentMonthProjectedIncome = useMemo(
     () =>
       filteredClientPayments.reduce((sum, payment) => {
@@ -1248,6 +1530,23 @@ export default function OverviewPage() {
       }, 0),
     [currentMonthKey, filteredClientPayments],
   );
+  const globalCurrentMonthProjectedIncome = useMemo(
+    () =>
+      clientPayments.reduce((sum, payment) => {
+        const referenceDate = payment.expectedDate ?? payment.dueDate ?? payment.issueDate ?? "";
+        if (!referenceDate.startsWith(currentMonthKey)) return sum;
+        if (
+          payment.status !== "invoiced" &&
+          payment.status !== "receivable" &&
+          payment.status !== "projected"
+        ) {
+          return sum;
+        }
+
+        return sum + payment.netAmount;
+      }, 0),
+    [clientPayments, currentMonthKey],
+  );
   const currentMonthExpenseTotal = useMemo(
     () =>
       filteredFinancialTransactions.reduce((sum, tx) => {
@@ -1256,9 +1555,21 @@ export default function OverviewPage() {
       }, 0),
     [currentMonthKey, filteredFinancialTransactions],
   );
+  const globalCurrentMonthExpenseTotal = useMemo(
+    () =>
+      financialTransactions.reduce((sum, tx) => {
+        if (!tx.date.startsWith(currentMonthKey)) return sum;
+        return sum + getTransactionExpenseImpact(tx, "all");
+      }, 0),
+    [currentMonthKey, financialTransactions],
+  );
   const currentMonthMargin =
     currentMonthRealIncome > 0
       ? ((currentMonthRealIncome - currentMonthExpenseTotal) / currentMonthRealIncome) * 100
+      : 0;
+  const globalCurrentMonthMargin =
+    globalCurrentMonthRealIncome > 0
+      ? ((globalCurrentMonthRealIncome - globalCurrentMonthExpenseTotal) / globalCurrentMonthRealIncome) * 100
       : 0;
   const summaryOpeningBalance = selectedAccount ? (selectedAccount.currentBalance ?? 0) : openingBalance;
   const currentMonthSummary = useMemo(() => {
@@ -1286,6 +1597,111 @@ export default function OverviewPage() {
   const unassignedCurrentMonthTransactions = useMemo(
     () => transactions.filter((tx) => tx.date.startsWith(currentMonthKey) && !tx.accountId).length,
     [currentMonthKey, transactions],
+  );
+  const globalOverdueReceivables = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return clientPayments.filter((payment) => {
+      const dueDate = payment.dueDate ?? payment.expectedDate ?? "";
+      return (
+        dueDate &&
+        dueDate < today &&
+        payment.status !== "paid" &&
+        payment.status !== "cancelled"
+      );
+    }).length;
+  }, [clientPayments]);
+  const decisionAlerts = useMemo<DecisionAlert[]>(() => {
+    const nextAlerts: DecisionAlert[] = [];
+
+    if (globalBusinessAvailableAfterVat < 0) {
+      nextAlerts.push({
+        tone: "danger",
+        title: "Octopus queda negativo después de IVA",
+        description: `Faltan ${formatCLP(Math.abs(globalBusinessAvailableAfterVat))} para cubrir caja empresa e IVA cobrado.`,
+        href: "/cash-flow",
+        actionLabel: "Ver flujo",
+      });
+    }
+
+    if (globalOverdueReceivables > 0) {
+      nextAlerts.push({
+        tone: "danger",
+        title: `${globalOverdueReceivables} cobro${globalOverdueReceivables === 1 ? "" : "s"} vencido${globalOverdueReceivables === 1 ? "" : "s"}`,
+        description: "Hay ingresos comprometidos que todavía no cargan como pagados.",
+        href: "/client-payments",
+        actionLabel: "Revisar cobros",
+      });
+    }
+
+    if (unassignedCurrentMonthTransactions > 0) {
+      nextAlerts.push({
+        tone: "warning",
+        title: `${unassignedCurrentMonthTransactions} movimiento${unassignedCurrentMonthTransactions === 1 ? "" : "s"} sin cuenta`,
+        description: "Asignarlos mejora caja disponible, conciliacion y cierres.",
+        href: "/movements",
+        actionLabel: "Revisar",
+      });
+    }
+
+    if (globalTotalCreditCardDebt > 0) {
+      nextAlerts.push({
+        tone: "warning",
+        title: "Deuda TC abierta",
+        description: `${formatCLP(globalTotalCreditCardDebt)} siguen como deuda hasta registrar pagos de tarjeta.`,
+        href: "/credit-cards",
+        actionLabel: "Ver tarjetas",
+      });
+    }
+
+    if (globalOverdueReceivables === 0 && globalCurrentMonthProjectedIncome > 0) {
+      nextAlerts.push({
+        tone: "info",
+        title: "Ingreso por cobrar este mes",
+        description: `${formatCLP(globalCurrentMonthProjectedIncome)} aún pueden entrar si los pagos cargan.`,
+        href: "/client-payments",
+        actionLabel: "Ver cobros",
+      });
+    }
+
+    return nextAlerts.length > 0
+      ? nextAlerts
+      : [{
+          tone: "success",
+          title: "Sin alertas criticas",
+          description: "No hay cobros vencidos, movimientos sin cuenta ni caja negativa detectada.",
+        }];
+  }, [
+    globalBusinessAvailableAfterVat,
+    globalCurrentMonthProjectedIncome,
+    globalOverdueReceivables,
+    globalTotalCreditCardDebt,
+    unassignedCurrentMonthTransactions,
+  ]);
+  const workspacePulses = useMemo<WorkspacePulse[]>(
+    () => [
+      {
+        label: "Octopus",
+        income: globalCurrentMonthBusinessMetrics.income,
+        expenses: globalCurrentMonthBusinessMetrics.expenses,
+        net: globalCurrentMonthBusinessMetrics.cashFlow,
+        accent: "#2563eb",
+      },
+      {
+        label: "Familia",
+        income: globalCurrentMonthFamilyMetrics.income,
+        expenses: globalCurrentMonthFamilyMetrics.expenses,
+        net: globalCurrentMonthFamilyMetrics.cashFlow,
+        accent: "#16a34a",
+      },
+      {
+        label: "Consulta",
+        income: globalCurrentMonthDentistMetrics.income,
+        expenses: globalCurrentMonthDentistMetrics.expenses,
+        net: globalCurrentMonthDentistMetrics.cashFlow,
+        accent: "#d97706",
+      },
+    ],
+    [globalCurrentMonthBusinessMetrics, globalCurrentMonthDentistMetrics, globalCurrentMonthFamilyMetrics],
   );
 
   useEffect(() => {
@@ -1721,6 +2137,7 @@ export default function OverviewPage() {
           ? formData.accountId || null
           : null,
         destinationWorkspace: formData.movementType === "transfer" ? formData.destinationWorkspace : null,
+        destinationAccountId: null,
         creditCardName: formData.paymentMethod === "credit_card" || formData.movementType === "credit_card_payment"
           ? formData.creditCardName || null
           : null,
@@ -1786,7 +2203,8 @@ export default function OverviewPage() {
         movementType: formData.movementType,
         paymentMethod: "bank_account",
         accountId: sourceAccount.id,
-        destinationWorkspace: destinationLabel,
+        destinationWorkspace: destinationAccount ? accountWorkspaceLabel(destinationAccount.workspace) : null,
+        destinationAccountId: destinationAccount?.id ?? null,
         creditCardName: formData.movementType === "credit_card_payment" ? destinationLabel : null,
         installmentCount: null,
       },
@@ -1850,6 +2268,7 @@ export default function OverviewPage() {
             ? formData.accountId || null
             : null,
           destinationWorkspace: formData.movementType === "transfer" ? formData.destinationWorkspace : null,
+          destinationAccountId: null,
           creditCardName: formData.paymentMethod === "credit_card" || formData.movementType === "credit_card_payment"
             ? formData.creditCardName || null
             : null,
@@ -1970,6 +2389,23 @@ export default function OverviewPage() {
         <p className="text-sm text-muted-foreground">
           Arrastra las tarjetas para reordenarlas y usa el ojo para ocultarlas o volver a mostrarlas.
         </p>
+      ) : null}
+
+      {!isConfigMode ? (
+        <DecisionHeader
+          availableCash={openingBalance}
+          totalCreditCardDebt={globalTotalCreditCardDebt}
+          netAfterCards={openingBalance - globalTotalCreditCardDebt}
+          currentMonthRealIncome={globalCurrentMonthRealIncome}
+          currentMonthProjectedIncome={globalCurrentMonthProjectedIncome}
+          currentMonthExpenseTotal={globalCurrentMonthExpenseTotal}
+          currentMonthMargin={globalCurrentMonthMargin}
+          currentMonthPaidVat={globalCurrentMonthPaidVat}
+          nextVatDueDate={nextVatDueDate}
+          alerts={decisionAlerts}
+          workspacePulses={workspacePulses}
+          onNavigate={navigate}
+        />
       ) : null}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCardDragEnd}>

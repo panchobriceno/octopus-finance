@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useAccounts,
   useCreateAccount,
@@ -7,6 +7,7 @@ import {
   useTransactions,
 } from "@/lib/hooks";
 import type { Account } from "@shared/schema";
+import { getAccountBalanceBreakdowns } from "@/domain/accounts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,46 +52,20 @@ export default function AccountsPage() {
     notes: "",
   });
 
-  const calculatedBalanceByAccount = new Map(
-    accounts.map((account) => {
-      const movementDelta = transactions.reduce((sum, tx) => {
-        const status = tx.status ?? "paid";
-        const movementType = tx.movementType ?? (tx.type === "income" ? "income" : "expense");
-
-        if (!(status === "paid" || status === "actual")) {
-          return sum;
-        }
-
-        if (tx.accountId === account.id) {
-          if (tx.type === "income") return sum + tx.amount;
-
-          if (movementType === "transfer") return sum - tx.amount;
-          if (movementType === "credit_card_payment") return sum - tx.amount;
-
-          if (tx.type === "expense") return sum - tx.amount;
-        }
-
-        // Technical debt:
-        // incoming transfers are currently matched by destinationWorkspace using the
-        // destination account name as free text. When we add destinationAccountId,
-        // this should be replaced by an ID-based match.
-        if (movementType === "transfer" && tx.destinationWorkspace === account.name) {
-          return sum + tx.amount;
-        }
-
-        return sum;
-      }, 0);
-
-      return [account.id, account.currentBalance + movementDelta];
-    }),
+  const balanceBreakdowns = useMemo(
+    () => getAccountBalanceBreakdowns(accounts, transactions),
+    [accounts, transactions],
+  );
+  const balanceBreakdownByAccountId = useMemo(
+    () => new Map(balanceBreakdowns.map((breakdown) => [breakdown.account.id, breakdown])),
+    [balanceBreakdowns],
   );
 
-  const totals = accounts.reduce(
+  const totals = balanceBreakdowns.reduce(
     (acc, account) => {
-      const calculatedBalance = calculatedBalanceByAccount.get(account.id) ?? account.currentBalance;
-      acc.base += account.currentBalance ?? 0;
-      acc.calculated += calculatedBalance;
-      acc.difference += calculatedBalance - account.currentBalance;
+      acc.base += account.bankBalance;
+      acc.calculated += account.reconciledBalance;
+      acc.difference += account.difference;
       return acc;
     },
     { base: 0, calculated: 0, difference: 0 },
@@ -150,7 +125,7 @@ export default function AccountsPage() {
     if (!editForm.name.trim() || !editForm.bank.trim() || Number.isNaN(currentBalance)) {
       toast({
         title: "Datos inválidos",
-        description: "Completa nombre, banco y saldo base con valores válidos.",
+        description: "Completa nombre, banco y saldo banco con valores válidos.",
         variant: "destructive",
       });
       return;
@@ -195,9 +170,8 @@ export default function AccountsPage() {
       </div>
 
       <p className="text-sm text-muted-foreground max-w-2xl">
-        Aquí puedes llevar tus cuentas bancarias y tarjetas como catálogo base. Por ahora la vista
-        está pensada para crear cuentas nuevas, revisar las existentes y actualizar tanto sus
-        datos base como el saldo cuando lo necesites.
+        Aquí puedes mantener el saldo disponible informado por el banco y compararlo contra los
+        movimientos registrados para detectar diferencias.
       </p>
 
       <Card>
@@ -273,8 +247,8 @@ export default function AccountsPage() {
                 <TableHead>Banco</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Ámbito</TableHead>
-                <TableHead>Saldo base</TableHead>
-                <TableHead>Saldo calculado</TableHead>
+                <TableHead>Saldo banco</TableHead>
+                <TableHead>Según movimientos</TableHead>
                 <TableHead>Diferencia</TableHead>
                 <TableHead>Actualizado</TableHead>
                 <TableHead className="text-right pr-5">Acciones</TableHead>
@@ -282,8 +256,9 @@ export default function AccountsPage() {
             </TableHeader>
             <TableBody>
               {accounts.map((account) => {
-                const calculatedBalance = calculatedBalanceByAccount.get(account.id) ?? account.currentBalance;
-                const difference = calculatedBalance - account.currentBalance;
+                const breakdown = balanceBreakdownByAccountId.get(account.id);
+                const calculatedBalance = breakdown?.reconciledBalance ?? account.currentBalance;
+                const difference = breakdown?.difference ?? 0;
 
                 return (
                   <TableRow key={account.id}>

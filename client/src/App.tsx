@@ -22,6 +22,9 @@ import ClientPaymentsPage from "@/pages/client-payments";
 import SettingsPage from "@/pages/settings";
 import MonthlyClosePage from "@/pages/monthly-close";
 import CreditCardsPanelPage from "@/pages/credit-cards-panel";
+import MonthlyAutomationPage from "@/pages/monthly-automation";
+import BankMovementsPage from "@/pages/bank-movements";
+import DataHealthPage from "@/pages/data-health";
 import { getCurrentMonthKey } from "@/lib/finance";
 import { autoCarryForwardOpeningBalance } from "@/lib/monthly-balances";
 
@@ -35,6 +38,9 @@ function AppRouter() {
       <Route path="/client-payments" component={ClientPaymentsPage} />
       <Route path="/budget" component={BudgetPage} />
       <Route path="/monthly-close" component={MonthlyClosePage} />
+      <Route path="/automation" component={MonthlyAutomationPage} />
+      <Route path="/movements" component={BankMovementsPage} />
+      <Route path="/data-health" component={DataHealthPage} />
       <Route path="/credit-cards" component={CreditCardsPanelPage} />
       <Route path="/categories" component={CategoriesPage} />
       <Route path="/accounts" component={AccountsPage} />
