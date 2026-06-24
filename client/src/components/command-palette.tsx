@@ -9,6 +9,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { NAV_GROUPS } from "@/lib/navigation";
+import { ReceiptText } from "lucide-react";
 
 /**
  * Command palette global (Cmd/Ctrl+K) — Fase 2.3.
@@ -45,6 +46,18 @@ export function CommandPalette() {
       <CommandInput placeholder="Buscar pantalla… (Cmd+K)" />
       <CommandList>
         <CommandEmpty>Sin resultados.</CommandEmpty>
+        <CommandGroup heading="Acciones">
+          <CommandItem
+            value="Registrar gasto rapido OCR voucher boleta"
+            onSelect={() => {
+              setOpen(false);
+              window.dispatchEvent(new Event("octopus-quick-expense-open"));
+            }}
+          >
+            <ReceiptText className="mr-2 size-4" />
+            Registrar gasto rápido
+          </CommandItem>
+        </CommandGroup>
         {NAV_GROUPS.map((group) => (
           <CommandGroup key={group.label} heading={group.label}>
             {group.items.map((item) => (

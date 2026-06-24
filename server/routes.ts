@@ -19,6 +19,28 @@ Extrae TODOS los movimientos del período actual y devuelve ÚNICAMENTE un JSON 
 Los montos deben ser números positivos para compras y negativos para pagos a la tarjeta.
 Incluir TODOS los movimientos: compras, pagos, cargos, comisiones, cuotas de períodos anteriores.`;
 
+const RECEIPT_EXTRACTION_PROMPT = `Eres un extractor de vouchers, boletas y comprobantes de pago chilenos para una app de finanzas personales.
+Lee la imagen y devuelve ÚNICAMENTE un JSON válido, sin markdown ni explicaciones, con este formato:
+{
+  "merchantName": "nombre comercio o destinatario",
+  "description": "breve descripción del gasto",
+  "date": "YYYY-MM-DD",
+  "totalAmount": 12990,
+  "currency": "CLP",
+  "paymentMethod": "cash|bank_account|credit_card|unknown",
+  "creditCardName": "nombre de tarjeta o banco si aparece",
+  "installmentCount": 1,
+  "categoryHint": "categoría sugerida",
+  "confidence": 0.86,
+  "warnings": ["dato dudoso"]
+}
+Reglas:
+- totalAmount debe ser el total pagado, positivo, sin puntos ni símbolos.
+- Si hay cuotas, installmentCount debe ser el total de cuotas. Si no hay cuotas, usa 1.
+- Si un dato no aparece, usa null salvo paymentMethod, que debe ser "unknown".
+- Prioriza total final sobre subtotal, IVA, vuelto, propina o descuentos.
+- categoryHint debe ser corta, por ejemplo Comida, Auto, Salud, Digital, Hogar, Supermercado, Transporte o Servicios.`;
+
 type ClaudePdfMovement = {
   date: string;
   description: string;
@@ -31,7 +53,21 @@ type ClaudePdfExtraction = {
   movements: ClaudePdfMovement[];
 };
 
-function parseClaudePdfExtraction(rawText: string): ClaudePdfExtraction {
+type ReceiptExtraction = {
+  merchantName: string | null;
+  description: string | null;
+  date: string | null;
+  totalAmount: number | null;
+  currency: string;
+  paymentMethod: "cash" | "bank_account" | "credit_card" | "unknown";
+  creditCardName: string | null;
+  installmentCount: number | null;
+  categoryHint: string | null;
+  confidence: number;
+  warnings: string[];
+};
+
+function parseJsonOnly(rawText: string) {
   const normalized = rawText
     .trim()
     .replace(/^```json\s*/i, "")
@@ -39,7 +75,11 @@ function parseClaudePdfExtraction(rawText: string): ClaudePdfExtraction {
     .replace(/\s*```$/i, "")
     .trim();
 
-  const parsed = JSON.parse(normalized) as Partial<ClaudePdfExtraction>;
+  return JSON.parse(normalized) as Record<string, unknown>;
+}
+
+function parseClaudePdfExtraction(rawText: string): ClaudePdfExtraction {
+  const parsed = parseJsonOnly(rawText) as Partial<ClaudePdfExtraction>;
   if (!Array.isArray(parsed.movements)) {
     throw new Error("Claude no devolvió una lista válida de movimientos.");
   }
@@ -53,6 +93,58 @@ function parseClaudePdfExtraction(rawText: string): ClaudePdfExtraction {
       installments: typeof movement?.installments === "string" ? movement.installments : "",
     })),
   };
+}
+
+function asNullableString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function asNullableNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[^\d.-]/g, ""));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function parseReceiptExtraction(rawText: string): ReceiptExtraction {
+  const parsed = parseJsonOnly(rawText);
+  const method = parsed.paymentMethod;
+  const paymentMethod =
+    method === "cash" || method === "bank_account" || method === "credit_card" || method === "unknown"
+      ? method
+      : "unknown";
+  const totalAmount = asNullableNumber(parsed.totalAmount);
+  const installmentCount = asNullableNumber(parsed.installmentCount);
+  const confidence = asNullableNumber(parsed.confidence);
+
+  return {
+    merchantName: asNullableString(parsed.merchantName),
+    description: asNullableString(parsed.description),
+    date: asNullableString(parsed.date),
+    totalAmount: totalAmount && totalAmount > 0 ? Math.round(totalAmount) : null,
+    currency: asNullableString(parsed.currency) ?? "CLP",
+    paymentMethod,
+    creditCardName: asNullableString(parsed.creditCardName),
+    installmentCount: installmentCount && installmentCount > 0 ? Math.round(installmentCount) : null,
+    categoryHint: asNullableString(parsed.categoryHint),
+    confidence: confidence && confidence >= 0 && confidence <= 1 ? confidence : 0,
+    warnings: Array.isArray(parsed.warnings)
+      ? parsed.warnings.map(asNullableString).filter((warning): warning is string => Boolean(warning))
+      : [],
+  };
+}
+
+async function readClaudeTextResponse(response: Response) {
+  const payload = await response.json() as {
+    content?: Array<{ type: string; text?: string }>;
+  };
+  return payload.content
+    ?.filter((block) => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text)
+    .join("\n")
+    .trim();
 }
 
 export async function registerRoutes(
@@ -258,14 +350,7 @@ export async function registerRoutes(
         return res.status(502).json({ error: errorText || "Claude no pudo procesar el PDF." });
       }
 
-      const payload = await response.json() as {
-        content?: Array<{ type: string; text?: string }>;
-      };
-      const responseText = payload.content
-        ?.filter((block) => block.type === "text" && typeof block.text === "string")
-        .map((block) => block.text)
-        .join("\n")
-        .trim();
+      const responseText = await readClaudeTextResponse(response);
 
       if (!responseText) {
         return res.status(502).json({ error: "Claude no devolvió contenido legible para el PDF." });
@@ -276,6 +361,77 @@ export async function registerRoutes(
       console.error("PDF extraction failed:", error);
       return res.status(500).json({
         error: error instanceof Error ? error.message : "No se pudo extraer información del PDF.",
+      });
+    }
+  });
+
+  app.post("/api/extract-receipt", async (req, res) => {
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicApiKey) {
+      return res.status(500).json({ error: "ANTHROPIC_API_KEY no está configurada en el servidor." });
+    }
+
+    const imageBase64 = typeof req.body?.imageBase64 === "string" ? req.body.imageBase64.trim() : "";
+    const mediaType = typeof req.body?.mediaType === "string" ? req.body.mediaType.trim() : "";
+    const allowedMediaTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
+    if (!imageBase64) {
+      return res.status(400).json({ error: "Expected imageBase64 string" });
+    }
+    if (!allowedMediaTypes.has(mediaType)) {
+      return res.status(400).json({ error: "Formato no soportado. Usa JPG, PNG, WEBP o GIF." });
+    }
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": anthropicApiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 2000,
+          temperature: 0,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: mediaType,
+                    data: imageBase64,
+                  },
+                },
+                {
+                  type: "text",
+                  text: RECEIPT_EXTRACTION_PROMPT,
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return res.status(502).json({ error: errorText || "Claude no pudo procesar la imagen." });
+      }
+
+      const responseText = await readClaudeTextResponse(response);
+
+      if (!responseText) {
+        return res.status(502).json({ error: "Claude no devolvió contenido legible para la imagen." });
+      }
+
+      return res.json(parseReceiptExtraction(responseText));
+    } catch (error) {
+      console.error("Receipt extraction failed:", error);
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "No se pudo extraer información del voucher.",
       });
     }
   });

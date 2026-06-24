@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "@/components/command-palette";
+import { QuickExpenseCapture } from "@/components/finance/quick-expense-capture";
 import NotFound from "@/pages/not-found";
 import OverviewPage from "@/pages/overview";
 import CashFlowPage from "@/pages/cash-flow";
@@ -67,6 +68,7 @@ function App() {
       <TooltipProvider>
         <Router hook={useHashLocation}>
           <CommandPalette />
+          <QuickExpenseCapture />
           <SidebarProvider style={sidebarStyle as React.CSSProperties}>
             <div className="flex h-screen w-full">
               <AppSidebar />
