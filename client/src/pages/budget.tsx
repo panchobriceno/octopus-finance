@@ -34,6 +34,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { BudgetBar } from "@/components/finance/budget-bar";
 import { useToast } from "@/hooks/use-toast";
 import { Calculator, GripVertical, Save, TrendingUp, TrendingDown, Target, Trash2 } from "lucide-react";
 import { normalizeTransaction, summarizeClientPaymentsByMonth } from "@/lib/finance";
@@ -1286,6 +1287,12 @@ export default function BudgetPage() {
                                   {getBudgetEntryMeta(group) ? (
                                     <p className="text-[11px] text-muted-foreground">{getBudgetEntryMeta(group)}</p>
                                   ) : null}
+                                  <BudgetBar
+                                    budget={budget}
+                                    reference={executionReference}
+                                    actual={actualByGroup[group] ?? 0}
+                                    committed={committedByGroup[group] ?? 0}
+                                  />
                                 </div>
                               </TableCell>
                               <TableCell>
