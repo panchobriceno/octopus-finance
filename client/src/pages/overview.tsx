@@ -5,6 +5,7 @@ import { SortableContext, arrayMove, useSortable, rectSortingStrategy } from "@d
 import { CSS } from "@dnd-kit/utilities";
 import { formatCLP, formatDate } from "@/lib/utils";
 import { AmountText } from "@/components/finance/amount-text";
+import { SegmentedControl } from "@/components/finance/segmented-control";
 import {
   useTransactions,
   useClientPayments,
@@ -551,6 +552,8 @@ interface TransactionFormProps {
     notes: string;
   }) => void;
   onCancel?: () => void;
+  /** Solo en modo editar: abre la confirmación de borrado del movimiento. */
+  onDelete?: () => void;
 }
 
 function InternalMovementForm({
@@ -758,6 +761,7 @@ function TransactionForm({
   isPending,
   onSubmit,
   onCancel,
+  onDelete,
 }: TransactionFormProps) {
   const { toast } = useToast();
   const [creditCards, setCreditCards] = useState<string[]>([]);
@@ -884,56 +888,58 @@ function TransactionForm({
     });
   };
 
+  const applyMovementType = (
+    movementType: "income" | "expense" | "transfer" | "credit_card_payment",
+  ) => {
+    setFormMovementType(movementType);
+    setFormCategoryId("");
+    setFormItemId("");
+    setFormInstallmentCount("1");
+    setFormPaymentMethod("bank_account");
+    if (movementType === "credit_card_payment") {
+      setFormAccountId("");
+    }
+  };
+
+  const movementTypeOptions: { value: typeof formMovementType; label: string; testId?: string }[] =
+    mode === "edit"
+      ? [
+          { value: "income", label: "Ingreso", testId: "type-income" },
+          { value: "expense", label: "Gasto", testId: "type-expense" },
+          { value: "credit_card_payment", label: "Pago TC", testId: "type-cc-payment" },
+          { value: "transfer", label: "Transferencia", testId: "type-transfer" },
+        ]
+      : [
+          { value: "income", label: "Ingreso", testId: "type-income" },
+          { value: "expense", label: "Gasto", testId: "type-expense" },
+        ];
+
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       <div className="space-y-1.5">
         <p className="text-xs text-muted-foreground">Ambito</p>
-        <Select value={formWorkspace} onValueChange={(v) => setFormWorkspace(v as "business" | "family" | "dentist")}>
-          <SelectTrigger data-testid="select-workspace">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="business">Empresa</SelectItem>
-            <SelectItem value="family">Familia</SelectItem>
-            <SelectItem value="dentist">Consulta Dentista</SelectItem>
-          </SelectContent>
-        </Select>
+        <SegmentedControl
+          testId="select-workspace"
+          ariaLabel="Ámbito"
+          value={formWorkspace}
+          onChange={(v) => setFormWorkspace(v)}
+          options={[
+            { value: "business", label: "Empresa", testId: "workspace-business" },
+            { value: "family", label: "Familia", testId: "workspace-family" },
+            { value: "dentist", label: "Consulta", testId: "workspace-dentist" },
+          ]}
+        />
       </div>
 
       <div className="space-y-1.5">
         <p className="text-xs text-muted-foreground">Tipo de movimiento</p>
-        <Select
+        <SegmentedControl
+          testId="select-movement-type"
+          ariaLabel="Tipo de movimiento"
           value={formMovementType}
-          onValueChange={(v) => {
-            const movementType = v as "income" | "expense" | "transfer" | "credit_card_payment";
-            setFormMovementType(movementType);
-            setFormCategoryId("");
-            setFormItemId("");
-            setFormInstallmentCount("1");
-            if (movementType === "income") {
-              setFormPaymentMethod("bank_account");
-            } else {
-              setFormPaymentMethod("bank_account");
-            }
-            if (movementType === "credit_card_payment") {
-              setFormAccountId("");
-            }
-          }}
-        >
-          <SelectTrigger data-testid="select-movement-type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="income">Ingreso</SelectItem>
-            <SelectItem value="expense">Gasto</SelectItem>
-            {mode === "edit" ? (
-              <>
-                <SelectItem value="credit_card_payment">Pago tarjeta</SelectItem>
-                <SelectItem value="transfer">Transferencia</SelectItem>
-              </>
-            ) : null}
-          </SelectContent>
-        </Select>
+          onChange={applyMovementType}
+          options={movementTypeOptions}
+        />
       </div>
 
       <div className="space-y-1.5">
@@ -1195,33 +1201,33 @@ function TransactionForm({
         />
       </div>
 
-      <div className="sm:col-span-2 lg:col-span-4">
-        {mode === "create" ? (
+      <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap items-center gap-2 pt-1">
+        {mode === "edit" && onDelete ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-[#ff6f8d] hover:bg-[#ff6f8d]/10 hover:text-[#ff6f8d]"
+            onClick={onDelete}
+            data-testid="button-delete-from-edit"
+          >
+            <Trash2 className="size-4 mr-1.5" />
+            Eliminar
+          </Button>
+        ) : null}
+        <div className="ml-auto flex items-center gap-2">
+          {onCancel && (
+            <Button type="button" variant="outline" onClick={onCancel} data-testid="button-cancel-edit">
+              Cancelar
+            </Button>
+          )}
           <Button
             type="submit"
-            className="w-full"
             disabled={isPending}
-            data-testid="button-add-transaction"
+            data-testid={mode === "create" ? "button-add-transaction" : "button-save-transaction"}
           >
-            {isPending ? "Guardando..." : "Agregar"}
+            {isPending ? "Guardando..." : mode === "create" ? "Guardar movimiento" : "Guardar cambios"}
           </Button>
-        ) : (
-          <div className="flex gap-2">
-            <Button
-              type="submit"
-              className="flex-1"
-              disabled={isPending}
-              data-testid="button-save-transaction"
-            >
-              {isPending ? "Guardando..." : "Guardar"}
-            </Button>
-            {onCancel && (
-              <Button type="button" variant="outline" onClick={onCancel} data-testid="button-cancel-edit">
-                <X className="size-4" />
-              </Button>
-            )}
-          </div>
-        )}
+        </div>
       </div>
     </form>
   );
@@ -2830,10 +2836,10 @@ export default function OverviewPage() {
                 <div>
                   <DialogTitle className="flex items-center gap-2">
                     <Plus className="size-4" />
-                    Agregar Movimiento
+                    Nuevo movimiento
                   </DialogTitle>
                   <DialogDescription>
-                    Completa el formulario para registrar una transacción o un movimiento interno.
+                    Registra una transacción o un movimiento interno.
                   </DialogDescription>
                 </div>
                 <div className="flex items-center gap-2">
@@ -2864,6 +2870,7 @@ export default function OverviewPage() {
                 accounts={accounts}
                 isPending={createMutation.isPending}
                 onSubmit={handleCreate}
+                onCancel={() => setShowCreateDialog(false)}
               />
             ) : (
               <InternalMovementForm
@@ -2878,7 +2885,7 @@ export default function OverviewPage() {
         <Dialog open={!!editingTx} onOpenChange={(open) => { if (!open) setEditingTx(null); }}>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
-              <DialogTitle>Editar Transacción</DialogTitle>
+              <DialogTitle>Editar movimiento</DialogTitle>
               <DialogDescription>
                 Modifica los campos y guarda los cambios.
               </DialogDescription>
@@ -2894,6 +2901,7 @@ export default function OverviewPage() {
                 isPending={updateMutation.isPending}
                 onSubmit={handleEdit}
                 onCancel={() => setEditingTx(null)}
+                onDelete={() => { const tx = editingTx; setEditingTx(null); setDeletingTx(tx); }}
               />
             )}
           </DialogContent>
@@ -3485,10 +3493,10 @@ export default function OverviewPage() {
               <div>
                 <DialogTitle className="flex items-center gap-2">
                   <Plus className="size-4" />
-                  Agregar Movimiento
+                  Nuevo movimiento
                 </DialogTitle>
                 <DialogDescription>
-                  Completa el formulario para registrar una transacción o un movimiento interno.
+                  Registra una transacción o un movimiento interno.
                 </DialogDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -3519,6 +3527,7 @@ export default function OverviewPage() {
               accounts={accounts}
               isPending={createMutation.isPending}
               onSubmit={handleCreate}
+              onCancel={() => setShowCreateDialog(false)}
             />
           ) : (
             <InternalMovementForm
@@ -3534,7 +3543,7 @@ export default function OverviewPage() {
       <Dialog open={!!editingTx} onOpenChange={(open) => { if (!open) setEditingTx(null); }}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Editar Transacción</DialogTitle>
+            <DialogTitle>Editar movimiento</DialogTitle>
             <DialogDescription>
               Modifica los campos y guarda los cambios.
             </DialogDescription>
@@ -3550,6 +3559,7 @@ export default function OverviewPage() {
               isPending={updateMutation.isPending}
               onSubmit={handleEdit}
               onCancel={() => setEditingTx(null)}
+              onDelete={() => { const tx = editingTx; setEditingTx(null); setDeletingTx(tx); }}
             />
           )}
         </DialogContent>
