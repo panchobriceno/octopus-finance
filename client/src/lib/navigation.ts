@@ -15,6 +15,7 @@ import {
   Tags,
   Target,
   Upload,
+  Wallet,
 } from "lucide-react";
 
 export type NavGroupLabel =
@@ -47,7 +48,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Operación mensual",
     items: [
-      { title: "Movimientos", url: "/movements", icon: Inbox },
+      { title: "Movimientos", url: "/transactions", icon: Wallet },
+      { title: "Revisión de cartola", url: "/movements", icon: Inbox },
       { title: "Conciliación", url: "/reconciliation", icon: Scale },
       { title: "Automatización", url: "/automation", icon: CalendarClock },
       { title: "Panel de Tarjetas", url: "/credit-cards", icon: CreditCard },

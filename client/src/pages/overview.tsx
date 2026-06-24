@@ -93,6 +93,7 @@ import {
 } from "@/lib/finance";
 import { useMonthlyBalances } from "@/lib/monthly-balances";
 import { getCreditCards } from "@/lib/credit-cards";
+import { buildTransactionPayload, getTransactionFormInitialValues } from "@/lib/transaction-form";
 import { getOperatingCashBalance, getSavingsBalance } from "@/domain/accounts";
 
 const FAMILY_CATEGORY_HINTS = [
@@ -556,7 +557,7 @@ interface TransactionFormProps {
   onDelete?: () => void;
 }
 
-function InternalMovementForm({
+export function InternalMovementForm({
   accounts,
   isPending,
   onSubmit,
@@ -752,7 +753,7 @@ function InternalMovementForm({
   );
 }
 
-function TransactionForm({
+export function TransactionForm({
   mode,
   categories,
   items,
@@ -2142,61 +2143,21 @@ export default function OverviewPage() {
     installmentCount: string;
     notes: string;
   }) => {
-    const selectedCategory = formData.categoryId ? categoryMap[formData.categoryId] : null;
-    const selectedItem = formData.itemId ? itemMap[formData.itemId] : null;
-    const derivedName =
-      formData.movementType === "transfer"
-        ? `Transferencia ${workspaceLabel(formData.workspace)} -> ${workspaceLabel(formData.destinationWorkspace)}`
-        : formData.movementType === "credit_card_payment"
-        ? `Pago ${formData.creditCardName || "Tarjeta"}`
-        : selectedItem?.name ?? selectedCategory?.name ?? "";
-    const derivedCategory =
-      formData.movementType === "transfer"
-        ? "Transferencias"
-        : formData.movementType === "credit_card_payment"
-        ? "Pago Tarjeta"
-        : selectedCategory?.name ?? "";
-    if (!derivedName || !derivedCategory) {
+    const { ok, message, payload } = buildTransactionPayload(formData, { categoryMap, itemMap });
+    if (!ok) {
       toast({
         title: "Faltan datos para crear la transacción",
-        description: "Revisa categoría, subcategoría o tipo de movimiento.",
+        description: message ?? undefined,
         variant: "destructive",
       });
       return;
     }
-    createMutation.mutate(
-      {
-        name: derivedName,
-        category: derivedCategory,
-        amount: parseFloat(formData.amount),
-        type: formData.movementType === "income" ? "income" : "expense",
-        date: formData.date,
-        notes: formData.notes || null,
-        subtype: formData.subtype,
-        status: formData.status,
-        itemId: formData.itemId || null,
-        workspace: formData.workspace,
-        movementType: formData.movementType,
-        paymentMethod: formData.paymentMethod,
-        accountId: formData.paymentMethod === "bank_account" && formData.movementType !== "transfer"
-          ? formData.accountId || null
-          : null,
-        destinationWorkspace: formData.movementType === "transfer" ? formData.destinationWorkspace : null,
-        destinationAccountId: null,
-        creditCardName: formData.paymentMethod === "credit_card" || formData.movementType === "credit_card_payment"
-          ? formData.creditCardName || null
-          : null,
-        installmentCount: formData.paymentMethod === "credit_card" && formData.movementType === "expense"
-          ? Number.parseInt(formData.installmentCount || "1", 10)
-          : null,
+    createMutation.mutate(payload, {
+      onSuccess: () => {
+        setShowCreateDialog(false);
+        toast({ title: "Transacción creada" });
       },
-      {
-        onSuccess: () => {
-          setShowCreateDialog(false);
-          toast({ title: "Transacción creada" });
-        },
-      }
-    );
+    });
   };
 
   const handleCreateInternalMovement = (formData: {
@@ -2279,80 +2240,20 @@ export default function OverviewPage() {
     notes: string;
   }) => {
     if (!editingTx) return;
-    const selectedCategory = formData.categoryId ? categoryMap[formData.categoryId] : null;
-    const selectedItem = formData.itemId ? itemMap[formData.itemId] : null;
-    const derivedName =
-      formData.movementType === "transfer"
-        ? `Transferencia ${workspaceLabel(formData.workspace)} -> ${workspaceLabel(formData.destinationWorkspace)}`
-        : formData.movementType === "credit_card_payment"
-        ? `Pago ${formData.creditCardName || "Tarjeta"}`
-        : selectedItem?.name ?? selectedCategory?.name ?? "";
-    const derivedCategory =
-      formData.movementType === "transfer"
-        ? "Transferencias"
-        : formData.movementType === "credit_card_payment"
-        ? "Pago Tarjeta"
-        : selectedCategory?.name ?? "";
+    const { payload } = buildTransactionPayload(formData, { categoryMap, itemMap });
     updateMutation.mutate(
-      {
-        id: editingTx.id,
-        data: {
-          name: derivedName,
-          category: derivedCategory,
-          amount: parseFloat(formData.amount),
-          type: formData.movementType === "income" ? "income" : "expense",
-          date: formData.date,
-          notes: formData.notes || null,
-          subtype: formData.subtype,
-          status: formData.status,
-          itemId: formData.itemId || null,
-          workspace: formData.workspace,
-          movementType: formData.movementType,
-          paymentMethod: formData.paymentMethod,
-          accountId: formData.paymentMethod === "bank_account" && formData.movementType !== "transfer"
-            ? formData.accountId || null
-            : null,
-          destinationWorkspace: formData.movementType === "transfer" ? formData.destinationWorkspace : null,
-          destinationAccountId: null,
-          creditCardName: formData.paymentMethod === "credit_card" || formData.movementType === "credit_card_payment"
-            ? formData.creditCardName || null
-            : null,
-          installmentCount: formData.paymentMethod === "credit_card" && formData.movementType === "expense"
-            ? Number.parseInt(formData.installmentCount || "1", 10)
-            : null,
-        },
-      },
+      { id: editingTx.id, data: payload },
       {
         onSuccess: () => {
           setEditingTx(null);
           toast({ title: "Transacción actualizada" });
         },
-      }
+      },
     );
   };
 
   // Resolve a transaction to initial form values for editing
-  const getEditValues = (tx: Transaction) => {
-    const normalized = normalizeTransaction(tx);
-    const catId = categoryNameToId[tx.category] ?? "";
-    const itmId = tx.itemId ?? "";
-    return {
-      categoryId: catId,
-      itemId: itmId,
-      amount: String(tx.amount),
-      date: tx.date,
-      subtype: tx.subtype as "actual" | "planned",
-      status: tx.status as "pending" | "paid" | "cancelled",
-      workspace: normalized.workspace,
-      movementType: normalized.movementType,
-      paymentMethod: normalized.paymentMethod,
-      accountId: tx.accountId ?? "",
-      destinationWorkspace: normalized.destinationWorkspace ?? (normalized.workspace === "business" ? "family" : "business"),
-      creditCardName: normalized.creditCardName ?? "",
-      installmentCount: String((tx.installmentCount ?? 1)),
-      notes: tx.notes ?? "",
-    };
-  };
+  const getEditValues = (tx: Transaction) => getTransactionFormInitialValues(tx, categoryNameToId);
 
   const toggleHiddenCard = (cardId: DashboardCardId) => {
     setDraftHiddenCards((current) =>
@@ -2683,7 +2584,7 @@ export default function OverviewPage() {
             <OverviewPanel
               title="Movimientos recientes"
               aside={
-                <Button type="button" variant="ghost" className="h-8 px-2 text-[#bb9eff]" onClick={() => navigate("/movements")}>
+                <Button type="button" variant="ghost" className="h-8 px-2 text-[#bb9eff]" onClick={() => navigate("/transactions")}>
                   Ver todos <ChevronRight className="ml-1 size-4" />
                 </Button>
               }

@@ -25,6 +25,7 @@ import MonthlyAutomationPage from "@/pages/monthly-automation";
 import BankMovementsPage from "@/pages/bank-movements";
 import DataHealthPage from "@/pages/data-health";
 import ReconciliationPage from "@/pages/reconciliation";
+import TransactionsPage from "@/pages/transactions";
 import { getCurrentMonthKey } from "@/lib/finance";
 import { autoCarryForwardOpeningBalance } from "@/lib/monthly-balances";
 
@@ -39,6 +40,7 @@ function AppRouter() {
       <Route path="/budget" component={BudgetPage} />
       <Route path="/monthly-close" component={MonthlyClosePage} />
       <Route path="/automation" component={MonthlyAutomationPage} />
+      <Route path="/transactions" component={TransactionsPage} />
       <Route path="/movements" component={BankMovementsPage} />
       <Route path="/reconciliation" component={ReconciliationPage} />
       <Route path="/data-health" component={DataHealthPage} />
