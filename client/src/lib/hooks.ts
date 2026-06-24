@@ -686,6 +686,12 @@ export function useBulkConvertImportedMovements() {
   });
 }
 
+export function usePreviewBulkImportedMovementConversion() {
+  return useMutation({
+    mutationFn: (ids: string[]) => fs.previewBulkImportedMovementConversion(ids),
+  });
+}
+
 export function useMovementRules() {
   return useQuery<MovementRule[]>({
     queryKey: ["movement-rules"],

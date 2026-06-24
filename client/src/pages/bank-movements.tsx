@@ -14,6 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type { ImportedMovement } from "@shared/schema";
+import type { BulkImportedMovementConversionPreflight } from "@/lib/firestore";
 import {
   useAccounts,
   useBulkConvertImportedMovements,
@@ -22,6 +23,7 @@ import {
   useDiscardImportedMovement,
   useImportBatches,
   useImportedMovements,
+  usePreviewBulkImportedMovementConversion,
   useRollbackImportBatch,
   useSeedDemoImportedMovements,
 } from "@/lib/hooks";
@@ -106,6 +108,10 @@ function formatShortDate(date: string) {
   return `${day}/${month}/${year}`;
 }
 
+function formatPreflightCandidate(candidate: { date: string; description: string }) {
+  return `${formatShortDate(candidate.date)} · ${candidate.description}`;
+}
+
 function movementCategoryType(movement: ImportedMovement) {
   return movement.suggestedMovementType === "income" ? "income" : "expense";
 }
@@ -124,6 +130,8 @@ export default function BankMovementsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [batchFilter, setBatchFilter] = useState("latest");
   const [rollbackBatchId, setRollbackBatchId] = useState<string | null>(null);
+  const [bulkPreflightOpen, setBulkPreflightOpen] = useState(false);
+  const [bulkPreflight, setBulkPreflight] = useState<BulkImportedMovementConversionPreflight | null>(null);
   const [search, setSearch] = useState("");
   const [overrides, setOverrides] = useState<Record<string, RowOverride>>({});
 
@@ -146,6 +154,7 @@ export default function BankMovementsPage() {
   const seedDemoMutation = useSeedDemoImportedMovements();
   const convertMutation = useConvertImportedMovement();
   const bulkConvertMutation = useBulkConvertImportedMovements();
+  const bulkPreflightMutation = usePreviewBulkImportedMovementConversion();
   const discardMutation = useDiscardImportedMovement();
   const rollbackBatchMutation = useRollbackImportBatch();
 
@@ -201,6 +210,14 @@ export default function BankMovementsPage() {
         .map((movement) => movement.id),
     [movements],
   );
+  const bulkPreflightIssues = useMemo(() => {
+    if (!bulkPreflight) return [];
+    return [
+      ...bulkPreflight.duplicates.map((candidate) => ({ ...candidate, tone: "Duplicado" })),
+      ...bulkPreflight.reviewRequired.map((candidate) => ({ ...candidate, tone: "Revisar" })),
+      ...bulkPreflight.blocked.map((candidate) => ({ ...candidate, tone: "Bloqueado" })),
+    ];
+  }, [bulkPreflight]);
 
   const categoryOptionsByType = useMemo(() => {
     const income = new Set<string>();
@@ -284,12 +301,30 @@ export default function BankMovementsPage() {
     if (!pendingHighConfidenceIds.length) return;
 
     try {
-      const result = await bulkConvertMutation.mutateAsync(pendingHighConfidenceIds);
+      const preflight = await bulkPreflightMutation.mutateAsync(pendingHighConfidenceIds);
+      setBulkPreflight(preflight);
+      setBulkPreflightOpen(true);
+    } catch (error) {
+      toast({
+        title: "No se pudo revisar el lote",
+        description: error instanceof Error ? error.message : "Intenta convertir fila por fila para aislar el problema.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleConfirmBulkConvert = async () => {
+    if (!bulkPreflight) return;
+
+    try {
+      const result = await bulkConvertMutation.mutateAsync(bulkPreflight.requestedIds);
       const failedCount = result.failed?.length ?? 0;
+      setBulkPreflightOpen(false);
+      setBulkPreflight(null);
       toast({
         title: failedCount ? "Conversion masiva con observaciones" : "Conversion masiva lista",
         description: failedCount
-          ? `${result.converted} convertidos, ${failedCount} con error. Revisa esos movimientos fila por fila.`
+          ? `${result.converted} convertidos, ${result.duplicatesMarked ?? 0} duplicados, ${result.reviewRequired ?? 0} por revisar y ${result.blocked ?? 0} bloqueados.`
           : `${result.converted} convertidos, ${result.skipped} omitidos.`,
         variant: failedCount ? "destructive" : "default",
       });
@@ -392,11 +427,13 @@ export default function BankMovementsPage() {
             </Button>
             <Button
               onClick={handleBulkConvert}
-              disabled={!pendingHighConfidenceIds.length || bulkConvertMutation.isPending}
+              disabled={!pendingHighConfidenceIds.length || bulkConvertMutation.isPending || bulkPreflightMutation.isPending}
               data-testid="button-convert-confident-movements"
             >
               <ListChecks className="mr-2 size-4" />
-              {pendingHighConfidenceIds.length > 0
+              {bulkPreflightMutation.isPending
+                ? "Revisando..."
+                : pendingHighConfidenceIds.length > 0
                 ? `Convertir ${pendingHighConfidenceIds.length} confiables`
                 : "Convertir confiables"}
             </Button>
@@ -765,6 +802,75 @@ export default function BankMovementsPage() {
             disabled={rollbackBatchMutation.isPending}
           >
             {rollbackBatchMutation.isPending ? "Omitiendo..." : "Omitir lote"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <AlertDialog open={bulkPreflightOpen} onOpenChange={(open) => {
+      setBulkPreflightOpen(open);
+      if (!open && !bulkConvertMutation.isPending) setBulkPreflight(null);
+    }}>
+      <AlertDialogContent className="max-w-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Revisar conversion masiva</AlertDialogTitle>
+          <AlertDialogDescription>
+            Se revisaron {bulkPreflight?.total ?? 0} movimientos de alta confianza antes de crear transacciones reales.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {bulkPreflight ? (
+          <div className="space-y-4">
+            <div className="grid gap-2 sm:grid-cols-4">
+              <div className="rounded-lg border border-[#bb9eff]/10 bg-background/40 p-3">
+                <p className="text-xs text-muted-foreground">Listos</p>
+                <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.ready}</p>
+              </div>
+              <div className="rounded-lg border border-[#bb9eff]/10 bg-background/40 p-3">
+                <p className="text-xs text-muted-foreground">Duplicados</p>
+                <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.duplicates.length}</p>
+              </div>
+              <div className="rounded-lg border border-[#bb9eff]/10 bg-background/40 p-3">
+                <p className="text-xs text-muted-foreground">Por revisar</p>
+                <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.reviewRequired.length}</p>
+              </div>
+              <div className="rounded-lg border border-[#bb9eff]/10 bg-background/40 p-3">
+                <p className="text-xs text-muted-foreground">Bloqueados</p>
+                <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.blocked.length}</p>
+              </div>
+            </div>
+            {bulkPreflightIssues.length > 0 ? (
+              <div className="max-h-64 overflow-auto rounded-lg border border-[#bb9eff]/10">
+                {bulkPreflightIssues.slice(0, 8).map((candidate) => (
+                  <div key={`${candidate.tone}-${candidate.id}`} className="border-b border-[#bb9eff]/10 p-3 last:border-b-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{candidate.tone}</Badge>
+                      <span className="text-sm font-medium">{formatPreflightCandidate(candidate)}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{candidate.reason}</p>
+                  </div>
+                ))}
+                {bulkPreflightIssues.length > 8 ? (
+                  <div className="p-3 text-xs text-muted-foreground">
+                    Y {bulkPreflightIssues.length - 8} observaciones mas.
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">
+                No hay duplicados ni bloqueos detectados para este lote.
+              </div>
+            )}
+          </div>
+        ) : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={bulkConvertMutation.isPending}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(event) => {
+              event.preventDefault();
+              void handleConfirmBulkConvert();
+            }}
+            disabled={!bulkPreflight?.ready || bulkConvertMutation.isPending}
+          >
+            {bulkConvertMutation.isPending ? "Convirtiendo..." : `Convertir ${bulkPreflight?.ready ?? 0} listos`}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

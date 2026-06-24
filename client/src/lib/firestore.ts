@@ -87,6 +87,27 @@ export type CreateImportedMovementBatchInput = {
   movements: ImportedMovementBatchRow[];
 };
 
+export type BulkImportedMovementConversionCandidate = {
+  id: string;
+  description: string;
+  date: string;
+  amount: number;
+  sourceName: string;
+  reason: string;
+  duplicateTransactionId?: string | null;
+  duplicateTransactionName?: string | null;
+};
+
+export type BulkImportedMovementConversionPreflight = {
+  requestedIds: string[];
+  total: number;
+  readyIds: string[];
+  ready: number;
+  duplicates: BulkImportedMovementConversionCandidate[];
+  reviewRequired: BulkImportedMovementConversionCandidate[];
+  blocked: BulkImportedMovementConversionCandidate[];
+};
+
 // ── Helper: map Firestore snapshot to typed array ───────────────
 function snapToArray<T>(snap: QuerySnapshot<DocumentData>): T[] {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
@@ -1931,6 +1952,128 @@ async function markImportedMovementAsDuplicate(id: string, duplicateTransactionI
   });
 }
 
+function makeBulkConversionCandidate(
+  movement: ImportedMovement,
+  reason: string,
+  duplicateTransaction?: Transaction | null,
+): BulkImportedMovementConversionCandidate {
+  return {
+    id: movement.id,
+    description: movement.description,
+    date: movement.date,
+    amount: Number(movement.amount) || 0,
+    sourceName: movement.sourceName,
+    reason,
+    duplicateTransactionId: duplicateTransaction?.id ?? null,
+    duplicateTransactionName: duplicateTransaction?.name ?? null,
+  };
+}
+
+function getBulkConversionReviewReason(
+  movement: ImportedMovement,
+  payload: Omit<Transaction, "id">,
+) {
+  const normalizedCategory = normalizeText(payload.category);
+  if (!normalizedCategory || normalizedCategory === normalizeText(FALLBACK_CATEGORY_NAME) || normalizedCategory === "otros") {
+    return "Categoria generica o vacia.";
+  }
+  if (Number(movement.confidence) < 85) {
+    return "Confianza menor a 85%.";
+  }
+  if (payload.paymentMethod === "bank_account" && !payload.accountId) {
+    return "Falta cuenta bancaria de origen.";
+  }
+  if (payload.paymentMethod === "credit_card" && !payload.creditCardName) {
+    return "Falta tarjeta de credito.";
+  }
+  if (payload.movementType === "credit_card_payment" && !payload.creditCardName) {
+    return "Falta tarjeta pagada.";
+  }
+  return null;
+}
+
+export async function previewBulkImportedMovementConversion(
+  ids: string[],
+): Promise<BulkImportedMovementConversionPreflight> {
+  const requestedIds = Array.from(new Set(ids.filter(Boolean)));
+  const preflight: BulkImportedMovementConversionPreflight = {
+    requestedIds,
+    total: requestedIds.length,
+    readyIds: [],
+    ready: 0,
+    duplicates: [],
+    reviewRequired: [],
+    blocked: [],
+  };
+
+  for (const id of requestedIds) {
+    const movementSnapshot = await getDoc(doc(db, "importedMovements", id));
+    if (!movementSnapshot.exists()) {
+      preflight.blocked.push({
+        id,
+        description: "Movimiento no encontrado",
+        date: "",
+        amount: 0,
+        sourceName: "",
+        reason: "Ya no existe en la bandeja.",
+      });
+      continue;
+    }
+
+    const movement = { id: movementSnapshot.id, ...movementSnapshot.data() } as ImportedMovement;
+    if (movement.status !== "pending") {
+      preflight.blocked.push(
+        makeBulkConversionCandidate(movement, `Estado actual: ${movement.status}.`),
+      );
+      continue;
+    }
+
+    const batchSnapshot = await getDoc(doc(db, "importBatches", movement.batchId));
+    const batchLabel = batchSnapshot.exists()
+      ? ((batchSnapshot.data() as Partial<ImportBatch>).label ?? movement.sourceName)
+      : movement.sourceName;
+    const transactionPayload = {
+      ...buildTransactionFromImportedMovement(movement),
+      importBatchLabel: batchLabel,
+    };
+
+    try {
+      assertCompleteTransfer(transactionPayload);
+    } catch (error) {
+      preflight.blocked.push(
+        makeBulkConversionCandidate(
+          movement,
+          error instanceof Error ? error.message : "Movimiento incompleto.",
+        ),
+      );
+      continue;
+    }
+
+    const duplicateTransaction = await findExistingTransactionForPayload(transactionPayload);
+    if (duplicateTransaction) {
+      preflight.duplicates.push(
+        makeBulkConversionCandidate(
+          movement,
+          `Coincide con ${duplicateTransaction.name}.`,
+          duplicateTransaction,
+        ),
+      );
+      continue;
+    }
+
+    const reviewReason = getBulkConversionReviewReason(movement, transactionPayload);
+    if (reviewReason) {
+      preflight.reviewRequired.push(makeBulkConversionCandidate(movement, reviewReason));
+      continue;
+    }
+
+    preflight.readyIds.push(id);
+  }
+
+  preflight.ready = preflight.readyIds.length;
+  return preflight;
+}
+
 export async function seedDemoImportedMovements() {
   const now = nowIso();
   const monthKey = getCurrentMonthKey();
@@ -2330,10 +2473,44 @@ export async function convertImportedMovementToTransaction(
 export async function bulkConvertImportedMovements(ids: string[]) {
   let converted = 0;
   let skipped = 0;
+  let duplicatesMarked = 0;
+  let reviewRequired = 0;
+  let blocked = 0;
   const failed: Array<{ id: string; error: string }> = [];
   const categoryKeys = await getExistingCategoryKeys();
+  const preflight = await previewBulkImportedMovementConversion(ids);
 
-  for (const id of ids) {
+  for (const duplicate of preflight.duplicates) {
+    if (duplicate.duplicateTransactionId) {
+      await markImportedMovementAsDuplicate(duplicate.id, duplicate.duplicateTransactionId);
+      duplicatesMarked += 1;
+    }
+    skipped += 1;
+    failed.push({
+      id: duplicate.id,
+      error: duplicate.reason,
+    });
+  }
+
+  for (const candidate of preflight.reviewRequired) {
+    reviewRequired += 1;
+    skipped += 1;
+    failed.push({
+      id: candidate.id,
+      error: candidate.reason,
+    });
+  }
+
+  for (const candidate of preflight.blocked) {
+    blocked += 1;
+    skipped += 1;
+    failed.push({
+      id: candidate.id,
+      error: candidate.reason,
+    });
+  }
+
+  for (const id of preflight.readyIds) {
     try {
       await convertImportedMovementToTransaction(id, {}, { categoryKeys });
       converted += 1;
@@ -2346,7 +2523,7 @@ export async function bulkConvertImportedMovements(ids: string[]) {
     }
   }
 
-  return { converted, skipped, failed };
+  return { converted, skipped, failed, duplicatesMarked, reviewRequired, blocked };
 }
 
 // ════════════════════════════════════════════════════════════════
