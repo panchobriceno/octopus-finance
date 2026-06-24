@@ -28,9 +28,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import { AmountText } from "@/components/finance/amount-text";
 import {
+  FinanceAlertDialogContent,
+  FinanceAlertDialogHeader,
   FinanceDialogBody,
   FinanceDialogContent,
+  FinanceDialogFooter,
   FinanceDialogHeader,
   FinanceSegmentedControl,
 } from "@/components/finance/finance-dialog";
@@ -45,8 +49,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import {
   Area,
@@ -1352,6 +1355,87 @@ function EditMovementDialog({
   );
 }
 
+function DeleteTransactionsDialog({
+  open,
+  onOpenChange,
+  transactions,
+  totalCount,
+  isPending,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  transactions: Transaction[];
+  totalCount: number;
+  isPending: boolean;
+  onConfirm: () => void;
+}) {
+  const previewTransactions = transactions.slice(0, 3);
+  const hiddenCount = Math.max(0, totalCount - previewTransactions.length);
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <FinanceAlertDialogContent>
+        <FinanceAlertDialogHeader
+          icon={<Trash2 className="size-4" />}
+          title={totalCount === 1 ? "Eliminar movimiento" : "Eliminar movimientos"}
+          description={
+            totalCount === 1
+              ? "Esta acción quitará el movimiento seleccionado del mes."
+              : `Esta acción quitará ${totalCount} movimientos seleccionados del mes.`
+          }
+        />
+        <FinanceDialogBody className="space-y-4">
+          <div className="rounded-xl border border-[#ff6f8d]/20 bg-[#ff6f8d]/10 px-4 py-3 text-sm text-[#ffd3dc]">
+            Esta acción no se puede deshacer. Si el movimiento venía de una cartola importada, tendrás que importarlo o crearlo nuevamente.
+          </div>
+
+          {previewTransactions.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#8f879e]">Vista previa</p>
+              <div className="space-y-2">
+                {previewTransactions.map((tx) => (
+                  <div key={tx.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/7 bg-[#171225] px-3 py-2">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold text-[#f1e9fc]">{tx.name}</span>
+                      <span className="block text-xs text-[#8f879e]">{formatDate(tx.date)} · {tx.category}</span>
+                    </span>
+                    <AmountText
+                      value={tx.type === "income" ? tx.amount : -tx.amount}
+                      showSign
+                      className="shrink-0 text-sm font-bold"
+                    />
+                  </div>
+                ))}
+              </div>
+              {hiddenCount > 0 ? (
+                <p className="text-xs text-[#aea8be]">Y {hiddenCount} movimiento{hiddenCount === 1 ? "" : "s"} más.</p>
+              ) : null}
+            </div>
+          ) : null}
+        </FinanceDialogBody>
+        <FinanceDialogFooter>
+          <AlertDialogCancel
+            className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]"
+            data-testid="button-cancel-bulk-delete"
+            disabled={isPending}
+          >
+            Cancelar
+          </AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-[#ff6f8d] text-[#0f0c1c] hover:bg-[#ff8da3]"
+            onClick={onConfirm}
+            disabled={isPending || totalCount === 0}
+            data-testid="button-confirm-bulk-delete"
+          >
+            {isPending ? "Eliminando..." : totalCount === 1 ? "Eliminar movimiento" : `Eliminar ${totalCount}`}
+          </AlertDialogAction>
+        </FinanceDialogFooter>
+      </FinanceAlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 // ── Main Page ────────────────────────────────────────────────────
 export default function OverviewPage() {
   const [, navigate] = useLocation();
@@ -1364,6 +1448,7 @@ export default function OverviewPage() {
   const [selectedAccountFilter, setSelectedAccountFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteTargetTx, setDeleteTargetTx] = useState<Transaction | null>(null);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
   const [creditCards, setCreditCards] = useState<string[]>([]);
@@ -1447,6 +1532,9 @@ export default function OverviewPage() {
     () => transactions.filter((tx) => selectedIds.has(tx.id)),
     [selectedIds, transactions],
   );
+  const deleteDialogTransactions = deleteTargetTx ? [deleteTargetTx] : selectedTransactionsForBulkEdit;
+  const deleteDialogCount = deleteTargetTx ? 1 : selectedIds.size;
+  const deleteDialogOpen = Boolean(deleteTargetTx) || showDeleteDialog;
   const bulkEditIncludesCreditCardPurchases = useMemo(
     () =>
       selectedTransactionsForBulkEdit.some((tx) => {
@@ -2241,6 +2329,37 @@ export default function OverviewPage() {
     setBulkEditWorkspace("__keep__");
     setBulkEditStatus("__keep__");
     toast({ title: `${ids.length} transacciones actualizadas` });
+  };
+
+  const closeDeleteDialog = () => {
+    setShowDeleteDialog(false);
+    setDeleteTargetTx(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteTargetTx) {
+      deleteMutation.mutate(deleteTargetTx.id, {
+        onSuccess: () => {
+          toast({ title: "Movimiento eliminado" });
+          closeDeleteDialog();
+        },
+      });
+      return;
+    }
+
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) {
+      closeDeleteDialog();
+      return;
+    }
+
+    bulkDeleteMutation.mutate(ids, {
+      onSuccess: (data) => {
+        setSelectedIds(new Set());
+        closeDeleteDialog();
+        toast({ title: `${data.deleted} transacciones eliminadas` });
+      },
+    });
   };
 
   // ── Form handlers ──
@@ -3447,7 +3566,7 @@ export default function OverviewPage() {
                           variant="ghost"
                           size="icon"
                           className="size-8"
-                          onClick={() => deleteMutation.mutate(tx.id)}
+                          onClick={() => setDeleteTargetTx(tx)}
                           data-testid={`button-delete-${tx.id}`}
                         >
                           <Trash2 className="size-3.5 text-muted-foreground" />
@@ -3475,38 +3594,16 @@ export default function OverviewPage() {
         <span className="sr-only">Agregar movimiento</span>
       </Button>
 
-      {/* Bulk Delete Confirmation Dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar transacciones</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Estás seguro de que quieres eliminar{" "}
-              <span className="font-semibold text-foreground">{selectedIds.size}</span>{" "}
-              transacci{selectedIds.size === 1 ? "ón" : "ones"}? Esta acción no se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-bulk-delete">Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() =>
-                bulkDeleteMutation.mutate(Array.from(selectedIds), {
-                  onSuccess: (data) => {
-                    setSelectedIds(new Set());
-                    setShowDeleteDialog(false);
-                    toast({ title: `${data.deleted} transacciones eliminadas` });
-                  },
-                })
-              }
-              disabled={bulkDeleteMutation.isPending}
-              data-testid="button-confirm-bulk-delete"
-            >
-              {bulkDeleteMutation.isPending ? "Eliminando..." : `Eliminar ${selectedIds.size}`}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteTransactionsDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) closeDeleteDialog();
+        }}
+        transactions={deleteDialogTransactions}
+        totalCount={deleteDialogCount}
+        isPending={deleteMutation.isPending || bulkDeleteMutation.isPending}
+        onConfirm={handleConfirmDelete}
+      />
 
       <CreateMovementDialog
         open={showCreateDialog}
@@ -3534,75 +3631,86 @@ export default function OverviewPage() {
       />
 
       <Dialog open={showBulkEditDialog} onOpenChange={setShowBulkEditDialog}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Editar transacciones seleccionadas</DialogTitle>
-            <DialogDescription>
-              Aplica cambios masivos a las transacciones seleccionadas. Los campos en “No cambiar” se mantienen igual.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <p className="text-sm text-muted-foreground">Categoría</p>
-              <Select value={bulkEditCategory} onValueChange={setBulkEditCategory}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__keep__">No cambiar</SelectItem>
-                  {transactionCategoryOptions.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <FinanceDialogContent size="sm">
+          <FinanceDialogHeader
+            icon={<Pencil className="size-4" />}
+            title="Editar selección"
+            description={`Aplica cambios a ${selectedIds.size} movimiento${selectedIds.size === 1 ? "" : "s"}. Los campos en "No cambiar" se mantienen igual.`}
+          />
+          <FinanceDialogBody className="space-y-4">
+            <div className="rounded-xl border border-white/7 bg-[#171225] px-4 py-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#8f879e]">Selección actual</p>
+              <p className="mt-1 text-sm text-[#f1e9fc]">
+                {selectedIds.size} movimiento{selectedIds.size === 1 ? "" : "s"} seleccionado{selectedIds.size === 1 ? "" : "s"}
+              </p>
+              <p className="mt-1 text-xs text-[#aea8be]">
+                Usa esta acción para corregir categoría, ámbito o estado en lote sin tocar montos ni fechas.
+              </p>
             </div>
-            <div className="grid gap-2 md:grid-cols-2">
+
+            <div className="grid gap-4">
               <div className="grid gap-2">
-                <p className="text-sm text-muted-foreground">Ámbito</p>
-                <Select value={bulkEditWorkspace} onValueChange={setBulkEditWorkspace}>
+                <p className="text-sm text-[#aea8be]">Categoría</p>
+                <Select value={bulkEditCategory} onValueChange={setBulkEditCategory}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__keep__">No cambiar</SelectItem>
-                    <SelectItem value="business">Empresa</SelectItem>
-                    <SelectItem value="family">Familia</SelectItem>
-                    <SelectItem value="dentist">Consulta Dentista</SelectItem>
+                    {transactionCategoryOptions.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
-                <p className="text-sm text-muted-foreground">Estado</p>
-                <Select value={bulkEditStatus} onValueChange={setBulkEditStatus}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__keep__">No cambiar</SelectItem>
-                    <SelectItem value="pending">Pendiente</SelectItem>
-                    <SelectItem value="paid">Pagado</SelectItem>
-                    <SelectItem value="cancelled">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
-                {bulkEditIncludesCreditCardPurchases ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    Las compras con tarjeta se liquidan mediante un Pago TC, no marcándolas como pagadas en lote.
-                  </p>
-                ) : null}
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <p className="text-sm text-[#aea8be]">Ámbito</p>
+                  <Select value={bulkEditWorkspace} onValueChange={setBulkEditWorkspace}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__keep__">No cambiar</SelectItem>
+                      <SelectItem value="business">Empresa</SelectItem>
+                      <SelectItem value="family">Familia</SelectItem>
+                      <SelectItem value="dentist">Consulta Dentista</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <p className="text-sm text-[#aea8be]">Estado</p>
+                  <Select value={bulkEditStatus} onValueChange={setBulkEditStatus}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__keep__">No cambiar</SelectItem>
+                      <SelectItem value="pending">Pendiente</SelectItem>
+                      <SelectItem value="paid">Pagado</SelectItem>
+                      <SelectItem value="cancelled">Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {bulkEditIncludesCreditCardPurchases ? (
+                    <p className="text-[11px] text-[#aea8be]">
+                      Las compras con tarjeta se liquidan mediante un Pago TC, no marcándolas como pagadas en lote.
+                    </p>
+                  ) : null}
+                </div>
               </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowBulkEditDialog(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={handleBulkEdit} disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? "Guardando..." : `Actualizar ${selectedIds.size}`}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
+          </FinanceDialogBody>
+          <FinanceDialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkEditDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleBulkEdit} disabled={updateMutation.isPending || selectedIds.size === 0}>
+              {updateMutation.isPending ? "Guardando..." : `Actualizar ${selectedIds.size}`}
+            </Button>
+          </FinanceDialogFooter>
+        </FinanceDialogContent>
       </Dialog>
 
       <Dialog open={!!payDialog} onOpenChange={(open) => { if (!open) setPayDialog(null); }}>

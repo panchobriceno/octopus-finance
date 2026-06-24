@@ -37,17 +37,18 @@ import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import {
+  FinanceAlertDialogContent,
+  FinanceAlertDialogHeader,
+  FinanceDialogBody,
+  FinanceDialogFooter,
+} from "@/components/finance/finance-dialog";
 import { StepFlow } from "@/components/finance/step-flow";
 
 type StatusFilter = "active" | "pending" | "duplicate" | "converted" | "reconciled" | "discarded" | "all";
@@ -851,17 +852,30 @@ export default function BankMovementsPage() {
     <AlertDialog open={Boolean(rollbackBatchId)} onOpenChange={(open) => {
       if (!open) setRollbackBatchId(null);
     }}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Omitir movimientos pendientes del lote</AlertDialogTitle>
-          <AlertDialogDescription>
-            Se omitiran {rollbackCandidates} movimientos pendientes o duplicados
-            {selectedBatch ? ` de ${selectedBatch.label}` : ""}. Los {dashboard.converted} convertidos y {dashboard.reconciled} conciliados permaneceran como movimientos resueltos.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={rollbackBatchMutation.isPending}>Cancelar</AlertDialogCancel>
+      <FinanceAlertDialogContent>
+        <FinanceAlertDialogHeader
+          icon={<XCircle className="size-4" />}
+          title="Omitir pendientes del lote"
+          description={
+            selectedBatch
+              ? `${selectedBatch.label} tiene ${rollbackCandidates} movimientos pendientes o duplicados por omitir.`
+              : `Se omitirán ${rollbackCandidates} movimientos pendientes o duplicados.`
+          }
+        />
+        <FinanceDialogBody className="space-y-4">
+          <div className="rounded-xl border border-[#f59e0b]/20 bg-[#f59e0b]/10 px-4 py-3 text-sm text-[#ffd89a]">
+            Los {dashboard.converted} convertidos y {dashboard.reconciled} conciliados permanecerán como movimientos resueltos.
+          </div>
+        </FinanceDialogBody>
+        <FinanceDialogFooter>
+          <AlertDialogCancel
+            className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]"
+            disabled={rollbackBatchMutation.isPending}
+          >
+            Cancelar
+          </AlertDialogCancel>
           <AlertDialogAction
+            className="bg-[#f59e0b] text-[#0f0c1c] hover:bg-[#fbbf24]"
             onClick={(event) => {
               event.preventDefault();
               void handleRollbackBatch();
@@ -870,24 +884,47 @@ export default function BankMovementsPage() {
           >
             {rollbackBatchMutation.isPending ? "Omitiendo..." : "Omitir lote"}
           </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
+        </FinanceDialogFooter>
+      </FinanceAlertDialogContent>
     </AlertDialog>
     <AlertDialog open={Boolean(closeBatchId)} onOpenChange={(open) => {
       if (!open) setCloseBatchId(null);
     }}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Cerrar lote importado</AlertDialogTitle>
-          <AlertDialogDescription>
-            {selectedBatch
-              ? `Se cerrara ${selectedBatch.label}. Ya no quedan pendientes ni duplicados: ${dashboard.converted} convertidos, ${dashboard.reconciled} conciliados y ${dashboard.discarded} omitidos.`
-              : "Se cerrara este lote importado."}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={closeBatchMutation.isPending}>Cancelar</AlertDialogCancel>
+      <FinanceAlertDialogContent>
+        <FinanceAlertDialogHeader
+          icon={<CheckCircle2 className="size-4" />}
+          title="Cerrar lote importado"
+          description={
+            selectedBatch
+              ? `Se cerrará ${selectedBatch.label}. Ya no quedan pendientes ni duplicados.`
+              : "Se cerrará este lote importado."
+          }
+        />
+        <FinanceDialogBody>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-xl border border-white/7 bg-[#171225] px-4 py-3">
+              <p className="text-xs text-[#aea8be]">Convertidos</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-[#9ef0cf]">{dashboard.converted}</p>
+            </div>
+            <div className="rounded-xl border border-white/7 bg-[#171225] px-4 py-3">
+              <p className="text-xs text-[#aea8be]">Conciliados</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-[#bb9eff]">{dashboard.reconciled}</p>
+            </div>
+            <div className="rounded-xl border border-white/7 bg-[#171225] px-4 py-3">
+              <p className="text-xs text-[#aea8be]">Omitidos</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-[#f59e0b]">{dashboard.discarded}</p>
+            </div>
+          </div>
+        </FinanceDialogBody>
+        <FinanceDialogFooter>
+          <AlertDialogCancel
+            className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]"
+            disabled={closeBatchMutation.isPending}
+          >
+            Cancelar
+          </AlertDialogCancel>
           <AlertDialogAction
+            className="bg-[#bb9eff] text-[#0f0c1c] hover:bg-[#a48bf6]"
             onClick={(event) => {
               event.preventDefault();
               void handleCloseBatch();
@@ -896,44 +933,43 @@ export default function BankMovementsPage() {
           >
             {closeBatchMutation.isPending ? "Cerrando..." : "Cerrar lote"}
           </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
+        </FinanceDialogFooter>
+      </FinanceAlertDialogContent>
     </AlertDialog>
     <AlertDialog open={bulkPreflightOpen} onOpenChange={(open) => {
       setBulkPreflightOpen(open);
       if (!open && !bulkConvertMutation.isPending) setBulkPreflight(null);
     }}>
-      <AlertDialogContent className="max-w-2xl">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Revisar conversion masiva</AlertDialogTitle>
-          <AlertDialogDescription>
-            Se revisaron {bulkPreflight?.total ?? 0} movimientos de alta confianza antes de crear transacciones reales.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
+      <FinanceAlertDialogContent size="md">
+        <FinanceAlertDialogHeader
+          icon={<ListChecks className="size-4" />}
+          title="Revisar conversión masiva"
+          description={`Se revisaron ${bulkPreflight?.total ?? 0} movimientos de alta confianza antes de crear transacciones reales.`}
+        />
         {bulkPreflight ? (
-          <div className="space-y-4">
+          <FinanceDialogBody className="space-y-4">
             <div className="grid gap-2 sm:grid-cols-4">
-              <div className="rounded-lg border border-[#bb9eff]/10 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Listos</p>
+              <div className="rounded-xl border border-white/7 bg-[#171225] p-3">
+                <p className="text-xs text-[#aea8be]">Listos</p>
                 <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.ready}</p>
               </div>
-              <div className="rounded-lg border border-[#bb9eff]/10 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Duplicados</p>
+              <div className="rounded-xl border border-white/7 bg-[#171225] p-3">
+                <p className="text-xs text-[#aea8be]">Duplicados</p>
                 <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.duplicates.length}</p>
               </div>
-              <div className="rounded-lg border border-[#bb9eff]/10 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Por revisar</p>
+              <div className="rounded-xl border border-white/7 bg-[#171225] p-3">
+                <p className="text-xs text-[#aea8be]">Por revisar</p>
                 <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.reviewRequired.length}</p>
               </div>
-              <div className="rounded-lg border border-[#bb9eff]/10 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Bloqueados</p>
+              <div className="rounded-xl border border-white/7 bg-[#171225] p-3">
+                <p className="text-xs text-[#aea8be]">Bloqueados</p>
                 <p className="mt-1 text-xl font-semibold tabular-nums">{bulkPreflight.blocked.length}</p>
               </div>
             </div>
             {bulkPreflightIssues.length > 0 ? (
-              <div className="max-h-64 overflow-auto rounded-lg border border-[#bb9eff]/10">
+              <div className="max-h-64 overflow-auto rounded-xl border border-white/7">
                 {bulkPreflightIssues.slice(0, 8).map((candidate) => (
-                  <div key={`${candidate.tone}-${candidate.id}`} className="border-b border-[#bb9eff]/10 p-3 last:border-b-0">
+                  <div key={`${candidate.tone}-${candidate.id}`} className="border-b border-white/7 p-3 last:border-b-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline">{candidate.tone}</Badge>
                       <span className="text-sm font-medium">{formatPreflightCandidate(candidate)}</span>
@@ -948,15 +984,21 @@ export default function BankMovementsPage() {
                 ) : null}
               </div>
             ) : (
-              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">
+              <div className="rounded-xl border border-[#9ef0cf]/20 bg-[#9ef0cf]/10 p-3 text-sm text-[#9ef0cf]">
                 No hay duplicados ni bloqueos detectados para este lote.
               </div>
             )}
-          </div>
+          </FinanceDialogBody>
         ) : null}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={bulkConvertMutation.isPending}>Cancelar</AlertDialogCancel>
+        <FinanceDialogFooter>
+          <AlertDialogCancel
+            className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]"
+            disabled={bulkConvertMutation.isPending}
+          >
+            Cancelar
+          </AlertDialogCancel>
           <AlertDialogAction
+            className="bg-[#bb9eff] text-[#0f0c1c] hover:bg-[#a48bf6]"
             onClick={(event) => {
               event.preventDefault();
               void handleConfirmBulkConvert();
@@ -965,8 +1007,8 @@ export default function BankMovementsPage() {
           >
             {bulkConvertMutation.isPending ? "Convirtiendo..." : `Convertir ${bulkPreflight?.ready ?? 0} listos`}
           </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
+        </FinanceDialogFooter>
+      </FinanceAlertDialogContent>
     </AlertDialog>
     </>
   );
