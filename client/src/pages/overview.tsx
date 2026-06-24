@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import { AttentionFeed } from "@/components/overview/attention-feed";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -2407,6 +2408,8 @@ export default function OverviewPage() {
           onNavigate={navigate}
         />
       ) : null}
+
+      {!isConfigMode ? <AttentionFeed limit={4} /> : null}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCardDragEnd}>
         <SortableContext items={activeCardOrder} strategy={rectSortingStrategy}>
