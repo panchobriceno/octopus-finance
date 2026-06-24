@@ -37,10 +37,39 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  Area,
+  AreaChart,
+  BarChart,
+  Bar,
+  Cell,
+  Pie,
+  PieChart,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
 } from "recharts";
 import {
-  AlertTriangle, ArrowRight, CalendarClock, DollarSign, TrendingUp, TrendingDown, Wallet, Plus, Trash2, Pencil, X, CreditCard, GripVertical, Eye, EyeOff, Settings2, Save,
+  AlertTriangle,
+  ArrowRight,
+  CalendarClock,
+  ChevronRight,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  Plus,
+  Trash2,
+  Pencil,
+  X,
+  CreditCard,
+  GripVertical,
+  Eye,
+  EyeOff,
+  Settings2,
+  Save,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -2356,6 +2385,496 @@ export default function OverviewPage() {
           ))}
         </div>
         <Skeleton className="h-80 rounded-lg" />
+      </div>
+    );
+  }
+
+  const monthNamesLong = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  ];
+  const [currentYear, currentMonth] = currentMonthKey.split("-").map(Number);
+  const currentMonthLabel = `${monthNamesLong[(currentMonth ?? 1) - 1]} ${currentYear}`;
+  const currentMonthTransactions = visibleTransactions.filter((tx) => tx.date.startsWith(currentMonthKey));
+  const incomeMovementCount = globalCurrentMonthFinancialTransactions.filter(
+    (tx) => getTransactionIncomeImpact(tx, "all") > 0,
+  ).length;
+  const expenseMovementCount = globalCurrentMonthFinancialTransactions.filter(
+    (tx) => getTransactionExpenseImpact(tx, "all") > 0,
+  ).length;
+  const monthResult = globalCurrentMonthRealIncome - globalCurrentMonthExpenseTotal;
+  const monthResultMargin = globalCurrentMonthRealIncome > 0
+    ? Math.round((monthResult / globalCurrentMonthRealIncome) * 100)
+    : 0;
+  const recentDashboardTransactions = currentMonthTransactions.length > 0
+    ? currentMonthTransactions.slice(0, 5)
+    : visibleTransactions.slice(0, 5);
+  const maxWorkspaceAbs = Math.max(
+    1,
+    ...workspacePulses.map((pulse) => Math.abs(pulse.net)),
+    Math.abs(filteredSavingsBalance),
+  );
+  const workspaceRows = [
+    ...workspacePulses.map((pulse) => ({
+      label: pulse.label,
+      amount: pulse.net,
+      color: pulse.label === "Octopus" ? "#bb9eff" : pulse.label === "Familia" ? "#9ef0cf" : "#f59e0b",
+    })),
+    { label: "Ahorro", amount: filteredSavingsBalance, color: "#a48bf6" },
+  ];
+  const cashEvolutionData = (() => {
+    const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+    let businessRunning = openingBalance;
+    let familyRunning = familyMetrics.cashFlow;
+    const byDay = new Map<number, { business: number; family: number }>();
+
+    for (const tx of globalCurrentMonthFinancialTransactions) {
+      const day = Number(tx.date.slice(8, 10));
+      if (!Number.isFinite(day)) continue;
+      const workspace = tx.workspace ?? "business";
+      const delta = getTransactionIncomeImpact(tx, "all") - getTransactionExpenseImpact(tx, "all");
+      const current = byDay.get(day) ?? { business: 0, family: 0 };
+      if (workspace === "family") {
+        current.family += delta;
+      } else {
+        current.business += delta;
+      }
+      byDay.set(day, current);
+    }
+
+    return Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const deltas = byDay.get(day);
+      businessRunning += deltas?.business ?? 0;
+      familyRunning += deltas?.family ?? 0;
+      return {
+        day: String(day).padStart(2, "0"),
+        Empresa: businessRunning,
+        Personal: familyRunning,
+      };
+    });
+  })();
+  const categorySpendData = (() => {
+    const totals = new Map<string, number>();
+    for (const tx of globalCurrentMonthFinancialTransactions) {
+      const amount = getTransactionExpenseImpact(tx, "all");
+      if (amount <= 0) continue;
+      const category = tx.category || "Sin categoria";
+      totals.set(category, (totals.get(category) ?? 0) + amount);
+    }
+    return Array.from(totals.entries())
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 5)
+      .map(([name, amount]) => ({ name, amount }));
+  })();
+  const categoryTotal = categorySpendData.reduce((sum, item) => sum + item.amount, 0);
+  const categoryColors = ["#bb9eff", "#9ef0cf", "#a48bf6", "#f59e0b", "#ff6f8d"];
+  const upcomingCommitments = transactions
+    .filter((tx) => {
+      const normalized = normalizeTransaction(tx);
+      return tx.date.startsWith(currentMonthKey) && normalized.subtype === "planned" && normalized.status === "pending";
+    })
+    .sort((left, right) => left.date.localeCompare(right.date))
+    .slice(0, 4);
+
+  if (!isConfigMode) {
+    return (
+      <div className="h-full overflow-y-auto bg-[#0f0c1c] text-[#f1e9fc]">
+        <header className="sticky top-0 z-20 border-b border-white/7 bg-[#0b0914]/95 px-6 py-4 backdrop-blur-xl">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-xl font-extrabold tracking-tight">Resumen</h2>
+              <p className="mt-1 text-xs text-[#aea8be]">{currentMonthLabel} · vista consolidada</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-lg border border-white/10 bg-[#1a1528] p-1 text-xs font-bold text-[#aea8be]">
+                <button type="button" className="rounded-md bg-[#36304a] px-4 py-2 text-[#f1e9fc]">Ambos</button>
+                <button type="button" className="px-4 py-2">Personal</button>
+                <button type="button" className="px-4 py-2">Empresa</button>
+              </div>
+              <Button type="button" variant="outline" className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]">
+                {currentMonthLabel}
+              </Button>
+              <Button type="button" className="bg-[#bb9eff] text-[#0f0c1c] hover:bg-[#a48bf6]" onClick={() => navigate("/monthly-close")}>
+                Cerrar mes
+              </Button>
+              <Button type="button" variant="outline" size="icon" className="border-white/10 bg-[#141123]" onClick={handleStartConfig}>
+                <Settings2 className="size-4" />
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        <div className="mx-auto max-w-[1440px] space-y-4 p-6">
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.5fr_1fr_1fr_1fr]">
+            <Card className="overflow-hidden rounded-2xl border-[#bb9eff]/20 bg-[#1a1430] shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+              <CardContent className="relative min-h-[132px] p-5">
+                <div className="relative z-10">
+                  <p className="text-sm text-[#aea8be]">Caja total</p>
+                  <p className="mt-2 font-mono text-4xl font-bold tracking-tight text-[#f1e9fc] tabular-nums">
+                    {formatCLP(openingBalance)}
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="rounded-md bg-[#9ef0cf]/15 px-2 py-1 font-bold text-[#9ef0cf]">
+                      {openingBalance - globalTotalCreditCardDebt >= 0 ? "+" : "-"} neto TC
+                    </span>
+                    <span className="text-[#aea8be]">vs. deuda tarjetas {formatCLP(globalTotalCreditCardDebt)}</span>
+                  </div>
+                </div>
+                <div className="pointer-events-none absolute bottom-0 right-0 h-14 w-[72%] opacity-65">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={cashEvolutionData.slice(-14)}>
+                      <defs>
+                        <linearGradient id="cashGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#bb9eff" stopOpacity={0.75} />
+                          <stop offset="100%" stopColor="#bb9eff" stopOpacity={0.05} />
+                        </linearGradient>
+                      </defs>
+                      <Area type="monotone" dataKey="Empresa" stroke="#bb9eff" fill="url(#cashGradient)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl border-white/10 bg-[#11101b]">
+              <CardContent className="p-5">
+                <p className="text-sm text-[#aea8be]">Ingresos</p>
+                <p className="mt-3 font-mono text-2xl font-bold text-[#9ef0cf] tabular-nums">
+                  {formatCLP(globalCurrentMonthRealIncome)}
+                </p>
+                <p className="mt-2 text-xs text-[#aea8be]">{incomeMovementCount} movimientos</p>
+              </CardContent>
+            </Card>
+            <Card className="rounded-2xl border-white/10 bg-[#11101b]">
+              <CardContent className="p-5">
+                <p className="text-sm text-[#aea8be]">Gastos</p>
+                <p className="mt-3 font-mono text-2xl font-bold text-[#ff6f8d] tabular-nums">
+                  {formatCLP(globalCurrentMonthExpenseTotal)}
+                </p>
+                <p className="mt-2 text-xs text-[#aea8be]">{expenseMovementCount} movimientos</p>
+              </CardContent>
+            </Card>
+            <Card className="rounded-2xl border-white/10 bg-[#11101b]">
+              <CardContent className="p-5">
+                <p className="text-sm text-[#aea8be]">Resultado del mes</p>
+                <p className={`mt-3 font-mono text-2xl font-bold tabular-nums ${monthResult >= 0 ? "text-[#9ef0cf]" : "text-[#ff6f8d]"}`}>
+                  {monthResult >= 0 ? "+" : ""}{formatCLP(monthResult)}
+                </p>
+                <p className="mt-2 text-xs text-[#aea8be]">margen {monthResultMargin}%</p>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,1fr)]">
+            <Card className="rounded-2xl border-white/10 bg-[#11101b]">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-base font-bold">Evolución de caja</CardTitle>
+                <div className="flex items-center gap-4 text-xs text-[#aea8be]">
+                  <span className="flex items-center gap-2"><span className="size-2 rounded-sm bg-[#9ef0cf]" />Personal</span>
+                  <span className="flex items-center gap-2"><span className="size-2 rounded-sm bg-[#bb9eff]" />Empresa</span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[276px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={cashEvolutionData}>
+                      <defs>
+                        <linearGradient id="businessGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#bb9eff" stopOpacity={0.45} />
+                          <stop offset="100%" stopColor="#bb9eff" stopOpacity={0.02} />
+                        </linearGradient>
+                        <linearGradient id="familyGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#9ef0cf" stopOpacity={0.18} />
+                          <stop offset="100%" stopColor="#9ef0cf" stopOpacity={0.01} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+                      <XAxis dataKey="day" tick={{ fill: "#8f879e", fontSize: 11 }} interval={4} axisLine={false} tickLine={false} />
+                      <YAxis hide domain={["auto", "auto"]} />
+                      <Tooltip
+                        formatter={(value: number) => formatCLP(Number(value))}
+                        contentStyle={{ backgroundColor: "#171225", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px" }}
+                      />
+                      <Area type="monotone" dataKey="Empresa" stroke="#bb9eff" fill="url(#businessGradient)" strokeWidth={3} />
+                      <Area type="monotone" dataKey="Personal" stroke="#9ef0cf" fill="url(#familyGradient)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl border-white/10 bg-[#11101b]">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="flex items-center gap-2 text-base font-bold">
+                  <span className="size-2 rounded-full bg-[#f59e0b] shadow-[0_0_18px_rgba(245,158,11,0.7)]" />
+                  Requiere tu atención
+                </CardTitle>
+                <span className="text-xs font-bold text-[#aea8be]">{decisionAlerts.length}</span>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                {decisionAlerts.slice(0, 4).map((alert, index) => (
+                  <button
+                    key={`${alert.title}-${index}`}
+                    type="button"
+                    onClick={() => alert.href && navigate(alert.href)}
+                    className="flex w-full items-center gap-3 border-b border-white/7 px-0 py-3 text-left last:border-b-0"
+                  >
+                    <span className={`flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${
+                      alert.tone === "danger"
+                        ? "bg-[#ff6f8d]/15 text-[#ff6f8d]"
+                        : alert.tone === "warning"
+                          ? "bg-[#f59e0b]/15 text-[#f59e0b]"
+                          : alert.tone === "success"
+                            ? "bg-[#9ef0cf]/15 text-[#9ef0cf]"
+                            : "bg-[#bb9eff]/15 text-[#bb9eff]"
+                    }`}
+                    >
+                      !
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-bold text-[#f1e9fc]">{alert.title}</span>
+                      <span className="block truncate text-xs text-[#aea8be]">{alert.description}</span>
+                    </span>
+                    {alert.href ? <ChevronRight className="size-4 shrink-0 text-[#8f879e]" /> : null}
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(330px,0.8fr)]">
+            <Card className="rounded-2xl border-white/10 bg-[#11101b]">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-base font-bold">Movimientos recientes</CardTitle>
+                <Button type="button" variant="ghost" className="h-8 px-2 text-[#bb9eff]" onClick={() => navigate("/movements")}>
+                  Ver todos <ChevronRight className="ml-1 size-4" />
+                </Button>
+              </CardHeader>
+              <CardContent className="px-5 pb-3">
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[680px]">
+                    <TableHeader>
+                      <TableRow className="border-white/7 hover:bg-transparent">
+                        <TableHead className="text-xs uppercase tracking-wide text-[#8f879e]">Descripción</TableHead>
+                        <TableHead className="text-xs uppercase tracking-wide text-[#8f879e]">Categoría</TableHead>
+                        <TableHead className="text-xs uppercase tracking-wide text-[#8f879e]">Ámbito</TableHead>
+                        <TableHead className="min-w-[120px] text-right text-xs uppercase tracking-wide text-[#8f879e]">Monto</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recentDashboardTransactions.map((tx) => {
+                        const normalized = normalizeTransaction(tx);
+                        const isIncome = tx.type === "income";
+                        return (
+                          <TableRow key={tx.id} className="border-white/7 hover:bg-white/3">
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <span className={`flex size-8 items-center justify-center rounded-lg ${isIncome ? "bg-[#9ef0cf]/15 text-[#9ef0cf]" : "bg-[#ff6f8d]/15 text-[#ff6f8d]"}`}>
+                                  {isIncome ? "↑" : "↓"}
+                                </span>
+                                <span>
+                                  <span className="block max-w-[280px] truncate text-sm font-bold">{tx.name}</span>
+                                  <span className="block text-xs text-[#8f879e]">{formatDate(tx.date)}</span>
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm text-[#cfc7dd]">{tx.category || "Sin categoria"}</TableCell>
+                            <TableCell>
+                              <span className={`rounded-md px-2 py-1 text-xs font-bold ${
+                                normalized.workspace === "family"
+                                  ? "bg-[#9ef0cf]/15 text-[#9ef0cf]"
+                                  : "bg-[#bb9eff]/15 text-[#d6c7ff]"
+                              }`}
+                              >
+                                {transactionWorkspaceLabel(normalized.workspace)}
+                              </span>
+                            </TableCell>
+                            <TableCell className={`min-w-[120px] whitespace-nowrap text-right font-mono text-sm font-bold tabular-nums ${isIncome ? "text-[#9ef0cf]" : "text-[#ff6f8d]"}`}>
+                              {isIncome ? "+" : "-"}{formatCLP(tx.amount)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-4">
+              <Card className="rounded-2xl border-white/10 bg-[#11101b]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-bold">Gasto por categoría</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-4">
+                  <div className="h-32">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={categorySpendData} dataKey="amount" nameKey="name" innerRadius={38} outerRadius={60} paddingAngle={2}>
+                          {categorySpendData.map((entry, index) => (
+                            <Cell key={entry.name} fill={categoryColors[index % categoryColors.length]} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="space-y-2">
+                    {categorySpendData.length === 0 ? (
+                      <p className="text-sm text-[#aea8be]">Sin gastos del mes.</p>
+                    ) : categorySpendData.map((item, index) => (
+                      <div key={item.name} className="flex items-center justify-between gap-3 text-xs">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="size-2 rounded-sm" style={{ backgroundColor: categoryColors[index % categoryColors.length] }} />
+                          <span className="truncate font-bold">{item.name}</span>
+                        </span>
+                        <span className="text-[#aea8be]">{categoryTotal > 0 ? Math.round((item.amount / categoryTotal) * 100) : 0}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-2xl border-white/10 bg-[#11101b]">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-base font-bold">Próximos compromisos</CardTitle>
+                  <Button type="button" variant="ghost" className="h-8 px-2 text-[#bb9eff]" onClick={() => navigate("/automation")}>
+                    Ver
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {upcomingCommitments.length === 0 ? (
+                    <p className="text-sm text-[#aea8be]">No hay compromisos pendientes del mes.</p>
+                  ) : upcomingCommitments.map((tx) => (
+                    <div key={tx.id} className="flex items-center justify-between gap-3 border-b border-white/7 pb-3 last:border-b-0 last:pb-0">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-bold">{tx.name}</span>
+                        <span className="block text-xs text-[#8f879e]">{formatDate(tx.date)} · {transactionWorkspaceLabel(tx.workspace)}</span>
+                      </span>
+                      <span className="font-mono text-sm font-bold tabular-nums">{formatCLP(tx.amount)}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-2xl border-white/10 bg-[#11101b]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-bold">Caja por ámbito</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {workspaceRows.map((row) => (
+                    <div key={row.label} className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="flex items-center gap-2 font-bold">
+                          <span className="size-2 rounded-full" style={{ backgroundColor: row.color }} />
+                          {row.label}
+                        </span>
+                        <span className={`font-mono tabular-nums ${row.amount < 0 ? "text-[#ff6f8d]" : "text-[#9ef0cf]"}`}>
+                          {formatCLP(row.amount)}
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-white/7">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${Math.max(4, Math.min(100, (Math.abs(row.amount) / maxWorkspaceAbs) * 100))}%`,
+                            backgroundColor: row.amount < 0 ? "#ff6f8d" : row.color,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+        </div>
+
+        <Button
+          type="button"
+          onClick={() => setShowCreateDialog(true)}
+          className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#bb9eff] p-0 text-[#0f0c1c] shadow-[0_12px_35px_rgba(187,158,255,0.45)] transition-transform duration-200 hover:scale-105 hover:bg-[#ad89ff] active:scale-95"
+          data-testid="button-open-create-transaction-modal"
+        >
+          <Plus className="size-6" />
+          <span className="sr-only">Agregar movimiento</span>
+        </Button>
+
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogContent className="max-w-5xl">
+            <DialogHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3 pr-8">
+                <div>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Plus className="size-4" />
+                    Agregar Movimiento
+                  </DialogTitle>
+                  <DialogDescription>
+                    Completa el formulario para registrar una transacción o un movimiento interno.
+                  </DialogDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant={createFormMode === "transaction" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCreateFormMode("transaction")}
+                  >
+                    Transacción
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={createFormMode === "internal" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCreateFormMode("internal")}
+                  >
+                    Transferencia
+                  </Button>
+                </div>
+              </div>
+            </DialogHeader>
+            {createFormMode === "transaction" ? (
+              <TransactionForm
+                mode="create"
+                categories={categories}
+                items={items}
+                accounts={accounts}
+                isPending={createMutation.isPending}
+                onSubmit={handleCreate}
+              />
+            ) : (
+              <InternalMovementForm
+                accounts={accounts}
+                isPending={createMutation.isPending}
+                onSubmit={handleCreateInternalMovement}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!editingTx} onOpenChange={(open) => { if (!open) setEditingTx(null); }}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Editar Transacción</DialogTitle>
+              <DialogDescription>
+                Modifica los campos y guarda los cambios.
+              </DialogDescription>
+            </DialogHeader>
+            {editingTx && (
+              <TransactionForm
+                key={editingTx.id}
+                mode="edit"
+                categories={categories}
+                items={items}
+                accounts={accounts}
+                initialValues={getEditValues(editingTx)}
+                isPending={updateMutation.isPending}
+                onSubmit={handleEdit}
+                onCancel={() => setEditingTx(null)}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

@@ -13,14 +13,12 @@ import {
 } from "@/components/ui/sidebar";
 import { NAV_GROUPS } from "@/lib/navigation";
 
-// Clases idénticas a las actuales — no cambia el look del item activo.
 const ITEM_CLASS =
-  "mx-0 h-11 rounded-full px-5 text-[#c9baff]/40 transition-all duration-300 " +
-  "hover:bg-[#27233a] hover:text-[#c9baff] " +
-  "data-[active=true]:bg-gradient-to-r data-[active=true]:from-[#bb9eff] " +
-  "data-[active=true]:to-[#a691f9] data-[active=true]:text-[#0f0c1c] " +
-  "data-[active=true]:shadow-[0_0_20px_rgba(187,158,255,0.5)] " +
-  "data-[active=true]:hover:text-[#0f0c1c]";
+  "mx-0 h-10 rounded-lg px-3 text-[#cfc7dd]/62 transition-all duration-200 " +
+  "hover:bg-[#211a31] hover:text-[#f1e9fc] " +
+  "data-[active=true]:border data-[active=true]:border-[#bb9eff]/24 " +
+  "data-[active=true]:bg-[#2a213d] data-[active=true]:text-[#d8c7ff] " +
+  "data-[active=true]:shadow-[inset_0_0_0_1px_rgba(187,158,255,0.1)]";
 
 export function AppSidebar() {
   const [location] = useLocation();
@@ -39,30 +37,30 @@ export function AppSidebar() {
   return (
     <Sidebar
       data-testid="sidebar-nav"
-      className="border-r border-[#bb9eff]/5 bg-[#141123]/90 text-[#ece5fc] backdrop-blur-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)]"
+      className="border-r border-white/10 bg-[#0f0c1c] text-[#ece5fc]"
     >
-      <SidebarHeader className="px-6 pb-6 pt-8">
-        <div className="flex items-center gap-3 px-2">
+      <SidebarHeader className="px-5 pb-6 pt-7">
+        <div className="flex items-center gap-3 px-1">
           <img
             src={logoSrc}
             alt="Octopus Finance Logo"
-            className="size-10 rounded-2xl object-cover ring-2 ring-[#bb9eff]/30 electric-glow"
+            className="size-9 rounded-xl object-cover ring-1 ring-white/10"
           />
           <div>
-            <h1 className="text-xl font-black tracking-tighter text-[#bb9eff] drop-shadow-[0_0_10px_rgba(187,158,255,0.6)]">
+            <h1 className="text-base font-extrabold tracking-tight text-[#f1e9fc]">
               Octopus Finance
             </h1>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#ad89ff]/60">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#aea8be]">
               Dashboard
             </p>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-4">
+      <SidebarContent className="px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {NAV_GROUPS.map((group) => (
-          <SidebarGroup key={group.label} className="mt-2">
-            <SidebarGroupLabel className="px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#ad89ff]/50">
+          <SidebarGroup key={group.label} className="mt-1">
+            <SidebarGroupLabel className="px-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#8f879e]">
               {group.label}
             </SidebarGroupLabel>
             <SidebarGroupContent>
@@ -77,7 +75,7 @@ export function AppSidebar() {
                     >
                       <Link href={item.url}>
                         <item.icon className="size-4 shrink-0" />
-                        <span className="font-headline text-sm font-bold uppercase tracking-wide">
+                        <span className="truncate text-sm font-semibold">
                           {item.title}
                         </span>
                         {item.badge ? (
