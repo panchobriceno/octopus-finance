@@ -1224,6 +1224,7 @@ function TransactionForm({
 export default function OverviewPage() {
   const [, navigate] = useLocation();
   const [createFormMode, setCreateFormMode] = useState<"transaction" | "internal">("transaction");
+  const [overviewScope, setOverviewScope] = useState<"all" | "family" | "business">("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isConfigMode, setIsConfigMode] = useState(false);
   const [draftCardOrder, setDraftCardOrder] = useState<DashboardCardId[]>([...DASHBOARD_CARD_IDS]);
@@ -2395,16 +2396,46 @@ export default function OverviewPage() {
   ];
   const [currentYear, currentMonth] = currentMonthKey.split("-").map(Number);
   const currentMonthLabel = `${monthNamesLong[(currentMonth ?? 1) - 1]} ${currentYear}`;
-  const currentMonthTransactions = visibleTransactions.filter((tx) => tx.date.startsWith(currentMonthKey));
-  const incomeMovementCount = globalCurrentMonthFinancialTransactions.filter(
+  const overviewScopeLabel = overviewScope === "all" ? "total" : overviewScope === "family" ? "personal" : "empresa";
+  const dashboardTransactions = sortedTransactions.filter((tx) => {
+    if (overviewScope === "all") return true;
+    return normalizeTransaction(tx).workspace === overviewScope;
+  });
+  const dashboardFinancialTransactions = financialTransactions.filter((tx) => {
+    if (overviewScope === "all") return true;
+    return (tx.workspace ?? "business") === overviewScope;
+  });
+  const dashboardCurrentMonthFinancialTransactions = dashboardFinancialTransactions.filter((tx) =>
+    tx.date.startsWith(currentMonthKey),
+  );
+  const currentMonthTransactions = dashboardTransactions.filter((tx) => tx.date.startsWith(currentMonthKey));
+  const dashboardCurrentMonthIncome = dashboardCurrentMonthFinancialTransactions.reduce(
+    (sum, tx) => sum + getTransactionIncomeImpact(tx, "all"),
+    0,
+  );
+  const dashboardCurrentMonthExpenses = dashboardCurrentMonthFinancialTransactions.reduce(
+    (sum, tx) => sum + getTransactionExpenseImpact(tx, "all"),
+    0,
+  );
+  const dashboardCreditCardDebt = overviewScope === "family"
+    ? Math.max(0, globalFamilyMetrics.creditCardDebt)
+    : overviewScope === "business"
+      ? Math.max(0, globalBusinessMetrics.creditCardDebt)
+      : globalTotalCreditCardDebt;
+  const dashboardCash = overviewScope === "family"
+    ? globalFamilyMetrics.cashFlow
+    : overviewScope === "business"
+      ? globalBusinessMetrics.cashFlow
+      : openingBalance;
+  const incomeMovementCount = dashboardCurrentMonthFinancialTransactions.filter(
     (tx) => getTransactionIncomeImpact(tx, "all") > 0,
   ).length;
-  const expenseMovementCount = globalCurrentMonthFinancialTransactions.filter(
+  const expenseMovementCount = dashboardCurrentMonthFinancialTransactions.filter(
     (tx) => getTransactionExpenseImpact(tx, "all") > 0,
   ).length;
-  const monthResult = globalCurrentMonthRealIncome - globalCurrentMonthExpenseTotal;
-  const monthResultMargin = globalCurrentMonthRealIncome > 0
-    ? Math.round((monthResult / globalCurrentMonthRealIncome) * 100)
+  const monthResult = dashboardCurrentMonthIncome - dashboardCurrentMonthExpenses;
+  const monthResultMargin = dashboardCurrentMonthIncome > 0
+    ? Math.round((monthResult / dashboardCurrentMonthIncome) * 100)
     : 0;
   const recentDashboardTransactions = currentMonthTransactions.length > 0
     ? currentMonthTransactions.slice(0, 5)
@@ -2428,7 +2459,7 @@ export default function OverviewPage() {
     let familyRunning = familyMetrics.cashFlow;
     const byDay = new Map<number, { business: number; family: number }>();
 
-    for (const tx of globalCurrentMonthFinancialTransactions) {
+    for (const tx of dashboardCurrentMonthFinancialTransactions) {
       const day = Number(tx.date.slice(8, 10));
       if (!Number.isFinite(day)) continue;
       const workspace = tx.workspace ?? "business";
@@ -2456,7 +2487,7 @@ export default function OverviewPage() {
   })();
   const categorySpendData = (() => {
     const totals = new Map<string, number>();
-    for (const tx of globalCurrentMonthFinancialTransactions) {
+    for (const tx of dashboardCurrentMonthFinancialTransactions) {
       const amount = getTransactionExpenseImpact(tx, "all");
       if (amount <= 0) continue;
       const category = tx.category || "Sin categoria";
@@ -2472,12 +2503,22 @@ export default function OverviewPage() {
   const upcomingCommitments = transactions
     .filter((tx) => {
       const normalized = normalizeTransaction(tx);
-      return tx.date.startsWith(currentMonthKey) && normalized.subtype === "planned" && normalized.status === "pending";
+      return tx.date.startsWith(currentMonthKey) &&
+        normalized.subtype === "planned" &&
+        normalized.status === "pending" &&
+        (overviewScope === "all" || normalized.workspace === overviewScope);
     })
     .sort((left, right) => left.date.localeCompare(right.date))
     .slice(0, 4);
 
   if (!isConfigMode) {
+    const scopeButtonClass = (scope: "all" | "family" | "business") =>
+      `rounded-md px-4 py-2 transition ${
+        overviewScope === scope
+          ? "bg-[#36304a] text-[#f1e9fc]"
+          : "text-[#aea8be] hover:text-[#f1e9fc]"
+      }`;
+
     return (
       <div className="h-full overflow-y-auto bg-[#0f0c1c] text-[#f1e9fc]">
         <header className="sticky top-0 z-20 border-b border-white/7 bg-[#0b0914]/95 px-6 py-4 backdrop-blur-xl">
@@ -2488,9 +2529,9 @@ export default function OverviewPage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="inline-flex rounded-lg border border-white/10 bg-[#1a1528] p-1 text-xs font-bold text-[#aea8be]">
-                <button type="button" className="rounded-md bg-[#36304a] px-4 py-2 text-[#f1e9fc]">Ambos</button>
-                <button type="button" className="px-4 py-2">Personal</button>
-                <button type="button" className="px-4 py-2">Empresa</button>
+                <button type="button" className={scopeButtonClass("all")} onClick={() => setOverviewScope("all")}>Ambos</button>
+                <button type="button" className={scopeButtonClass("family")} onClick={() => setOverviewScope("family")}>Personal</button>
+                <button type="button" className={scopeButtonClass("business")} onClick={() => setOverviewScope("business")}>Empresa</button>
               </div>
               <Button type="button" variant="outline" className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]">
                 {currentMonthLabel}
@@ -2498,7 +2539,7 @@ export default function OverviewPage() {
               <Button type="button" className="bg-[#bb9eff] text-[#0f0c1c] hover:bg-[#a48bf6]" onClick={() => navigate("/monthly-close")}>
                 Cerrar mes
               </Button>
-              <Button type="button" variant="outline" size="icon" className="border-white/10 bg-[#141123]" onClick={handleStartConfig}>
+              <Button type="button" variant="outline" size="icon" className="border-white/10 bg-[#141123]" onClick={() => navigate("/settings")} title="Ajustes">
                 <Settings2 className="size-4" />
               </Button>
             </div>
@@ -2510,15 +2551,15 @@ export default function OverviewPage() {
             <Card className="overflow-hidden rounded-2xl border-[#bb9eff]/20 bg-[#1a1430] shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
               <CardContent className="relative min-h-[132px] p-5">
                 <div className="relative z-10">
-                  <p className="text-sm text-[#aea8be]">Caja total</p>
+                  <p className="text-sm text-[#aea8be]">Caja {overviewScopeLabel}</p>
                   <p className="mt-2 font-mono text-4xl font-bold tracking-tight text-[#f1e9fc] tabular-nums">
-                    {formatCLP(openingBalance)}
+                    {formatCLP(dashboardCash)}
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                     <span className="rounded-md bg-[#9ef0cf]/15 px-2 py-1 font-bold text-[#9ef0cf]">
-                      {openingBalance - globalTotalCreditCardDebt >= 0 ? "+" : "-"} neto TC
+                      {dashboardCash - dashboardCreditCardDebt >= 0 ? "+" : "-"} neto TC
                     </span>
-                    <span className="text-[#aea8be]">vs. deuda tarjetas {formatCLP(globalTotalCreditCardDebt)}</span>
+                    <span className="text-[#aea8be]">vs. deuda tarjetas {formatCLP(dashboardCreditCardDebt)}</span>
                   </div>
                 </div>
                 <div className="pointer-events-none absolute bottom-0 right-0 h-14 w-[72%] opacity-65">
@@ -2541,7 +2582,7 @@ export default function OverviewPage() {
               <CardContent className="p-5">
                 <p className="text-sm text-[#aea8be]">Ingresos</p>
                 <p className="mt-3 font-mono text-2xl font-bold text-[#9ef0cf] tabular-nums">
-                  {formatCLP(globalCurrentMonthRealIncome)}
+                  {formatCLP(dashboardCurrentMonthIncome)}
                 </p>
                 <p className="mt-2 text-xs text-[#aea8be]">{incomeMovementCount} movimientos</p>
               </CardContent>
@@ -2550,7 +2591,7 @@ export default function OverviewPage() {
               <CardContent className="p-5">
                 <p className="text-sm text-[#aea8be]">Gastos</p>
                 <p className="mt-3 font-mono text-2xl font-bold text-[#ff6f8d] tabular-nums">
-                  {formatCLP(globalCurrentMonthExpenseTotal)}
+                  {formatCLP(dashboardCurrentMonthExpenses)}
                 </p>
                 <p className="mt-2 text-xs text-[#aea8be]">{expenseMovementCount} movimientos</p>
               </CardContent>
