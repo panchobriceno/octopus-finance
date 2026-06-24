@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Switch, Route, Router } from "wouter";
+import { useEffect, useState } from "react";
+import { Switch, Route, Router, useLocation } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -8,12 +8,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "@/components/command-palette";
+import { ImportWizardDialog } from "@/components/finance/import-wizard-dialog";
 import { QuickExpenseCapture } from "@/components/finance/quick-expense-capture";
 import NotFound from "@/pages/not-found";
 import OverviewPage from "@/pages/overview";
 import CashFlowPage from "@/pages/cash-flow";
 import PnLPage from "@/pages/pnl";
-import ImportDataPage from "@/pages/import-data";
 import CategoriesPage from "@/pages/categories";
 import ItemsManagerPage from "@/pages/items-manager";
 import AccountsPage from "@/pages/accounts";
@@ -28,16 +28,36 @@ import DataHealthPage from "@/pages/data-health";
 import ReconciliationPage from "@/pages/reconciliation";
 import TransactionsPage from "@/pages/transactions";
 import { getCurrentMonthKey } from "@/lib/finance";
+import { IMPORT_WIZARD_OPEN_EVENT, openImportWizard } from "@/lib/import-wizard";
 import { autoCarryForwardOpeningBalance } from "@/lib/monthly-balances";
 
 // Wrappers estables: estas páginas ahora aceptan props opcionales (modo wizard),
 // lo que choca con el tipo de `component` de wouter. Un wrapper de identidad fija
 // las usa sin props en su ruta, sin remontar.
 function ImportRoute() {
-  return <ImportDataPage />;
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    navigate("/movements");
+    openImportWizard();
+  }, [navigate]);
+
+  return null;
 }
 function MovementsRoute() {
   return <BankMovementsPage />;
+}
+
+function GlobalImportWizard() {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const openWizard = () => setOpen(true);
+    window.addEventListener(IMPORT_WIZARD_OPEN_EVENT, openWizard);
+    return () => window.removeEventListener(IMPORT_WIZARD_OPEN_EVENT, openWizard);
+  }, []);
+
+  return <ImportWizardDialog open={open} onOpenChange={setOpen} />;
 }
 
 function AppRouter() {
@@ -80,6 +100,7 @@ function App() {
       <TooltipProvider>
         <Router hook={useHashLocation}>
           <CommandPalette />
+          <GlobalImportWizard />
           <QuickExpenseCapture />
           <SidebarProvider style={sidebarStyle as React.CSSProperties}>
             <div className="flex h-screen w-full">

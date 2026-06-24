@@ -14,7 +14,6 @@ import {
   Settings,
   Tags,
   Target,
-  Upload,
   Wallet,
 } from "lucide-react";
 
@@ -54,7 +53,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "Automatización", url: "/automation", icon: CalendarClock },
       { title: "Panel de Tarjetas", url: "/credit-cards", icon: CreditCard },
       { title: "Cierre Mensual", url: "/monthly-close", icon: ClipboardList },
-      { title: "Importar Datos", url: "/import", icon: Upload },
     ],
   },
   {

@@ -9,7 +9,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { NAV_GROUPS } from "@/lib/navigation";
-import { ReceiptText } from "lucide-react";
+import { ReceiptText, Upload } from "lucide-react";
+import { openImportWizard } from "@/lib/import-wizard";
 
 /**
  * Command palette global (Cmd/Ctrl+K) — Fase 2.3.
@@ -47,6 +48,17 @@ export function CommandPalette() {
       <CommandList>
         <CommandEmpty>Sin resultados.</CommandEmpty>
         <CommandGroup heading="Acciones">
+          <CommandItem
+            value="Importar cartola banco tarjeta csv pdf"
+            onSelect={() => {
+              setOpen(false);
+              navigate("/movements");
+              openImportWizard();
+            }}
+          >
+            <Upload className="mr-2 size-4" />
+            Importar cartola
+          </CommandItem>
           <CommandItem
             value="Registrar gasto rapido OCR voucher boleta"
             onSelect={() => {

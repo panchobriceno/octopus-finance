@@ -25,7 +25,8 @@ const STEPS: { key: WizardStep | "confirm"; n: number; label: string }[] = [
  * REUTILIZA las páginas existentes en modo embebido (ImportDataPage,
  * BankMovementsPage); no reescribe el parser ni la conversión. El "Confirmar
  * importación" es el preflight de conversión masiva que ya vive en la página de
- * revisión. /import y /movements siguen funcionando standalone.
+ * revisión. /import queda como ruta legacy que abre este wizard y aterriza en
+ * /movements; /movements sigue funcionando standalone.
  */
 export function ImportWizardDialog({
   open,

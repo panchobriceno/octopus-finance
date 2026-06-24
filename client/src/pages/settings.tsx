@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { getCreditCards, saveCreditCards } from "@/lib/credit-cards";
+import { openImportWizard } from "@/lib/import-wizard";
 
 const STORAGE_KEY = "octopus_app_logo";
 
@@ -39,21 +40,39 @@ function QuickLink({
   icon: Icon,
   title,
   description,
+  onClick,
 }: {
-  href: string;
+  href?: string;
   icon: typeof ArrowRight;
   title: string;
   description: string;
+  onClick?: () => void;
 }) {
+  const content = (
+    <>
+      <Icon className="size-4 shrink-0 text-primary" />
+      <span className="flex flex-col items-start gap-1">
+        <span className="text-sm font-semibold text-foreground">{title}</span>
+        <span className="text-xs text-muted-foreground">{description}</span>
+      </span>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <Button
+        variant="outline"
+        onClick={onClick}
+        className="h-auto justify-start rounded-2xl border-[#bb9eff]/10 bg-background/40 px-4 py-4 text-left"
+      >
+        {content}
+      </Button>
+    );
+  }
+
   return (
     <Button asChild variant="outline" className="h-auto justify-start rounded-2xl border-[#bb9eff]/10 bg-background/40 px-4 py-4 text-left">
-      <Link href={href}>
-        <Icon className="size-4 shrink-0 text-primary" />
-        <span className="flex flex-col items-start gap-1">
-          <span className="text-sm font-semibold text-foreground">{title}</span>
-          <span className="text-xs text-muted-foreground">{description}</span>
-        </span>
-      </Link>
+      <Link href={href ?? "/"}>{content}</Link>
     </Button>
   );
 }
@@ -235,7 +254,7 @@ export default function SettingsPage() {
             <CardContent className="space-y-3">
               <QuickLink href="/" icon={ArrowRight} title="Ver resumen" description="Volver al panel principal." />
               <QuickLink href="/cash-flow" icon={ArrowRight} title="Abrir flujo de caja" description="Ir al tablero financiero." />
-              <QuickLink href="/import" icon={ArrowRight} title="Importar datos" description="Cargar o revisar movimientos." />
+              <QuickLink icon={ArrowRight} title="Importar datos" description="Cargar o revisar movimientos." onClick={openImportWizard} />
             </CardContent>
           </Card>
         </div>

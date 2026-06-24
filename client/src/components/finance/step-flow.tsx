@@ -6,14 +6,14 @@ export type StepFlowStep = {
   hint?: string;
   /** Si se pasa, el paso enlaza a esa ruta (debe existir en App.tsx). */
   href?: string;
+  onClick?: () => void;
 };
 
 /**
  * Guía estática de orientación — Fase 1.1.
  *
- * NO es un stepper con estado (la bandeja y la importación son rutas separadas
- * a propósito; no se fusionaron). Solo orienta sobre el flujo de 3 pasos y deja
- * el paso 1 a un clic de la importación.
+ * NO es un stepper con estado: solo orienta el flujo de 3 pasos. El paso 1 puede
+ * abrir el wizard global de importación sin sacar al usuario de la bandeja.
  */
 export function StepFlow({
   steps,
@@ -45,7 +45,15 @@ export function StepFlow({
         );
         return (
           <li key={step.label} className="flex flex-1 items-center gap-1">
-            {step.href ? (
+            {step.onClick ? (
+              <button
+                type="button"
+                onClick={step.onClick}
+                className="rounded-lg px-1 text-left transition hover:opacity-80"
+              >
+                {inner}
+              </button>
+            ) : step.href ? (
               <Link
                 href={step.href}
                 className="rounded-lg px-1 transition hover:opacity-80"

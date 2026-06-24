@@ -33,6 +33,7 @@ import {
   type ReconciliationStatus,
 } from "@/domain/reconciliation";
 import { accountDisplayName, isActiveAccount } from "@/domain/accounts";
+import { openImportWizard } from "@/lib/import-wizard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -411,7 +412,7 @@ export default function ReconciliationPage() {
                     <ArrowRightLeft className="mr-2 size-4" />
                     Movimientos
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => navigate("/import")}>
+                  <Button variant="outline" size="sm" onClick={openImportWizard}>
                     <FileSearch className="mr-2 size-4" />
                     Importar
                   </Button>

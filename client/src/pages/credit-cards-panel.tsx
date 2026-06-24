@@ -33,6 +33,7 @@ import {
 } from "@/lib/hooks";
 import { buildCreditCardInstallmentProjectionTransactions, getMonthKeyFromDate, isExecutedTransaction, normalizeTransaction } from "@/lib/finance";
 import { getCreditCards } from "@/lib/credit-cards";
+import { openImportWizard } from "@/lib/import-wizard";
 import { cn, formatCLP } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -625,11 +626,9 @@ export default function CreditCardsPanelPage() {
               Revisar movimientos
             </Link>
           </Button>
-          <Button asChild size="sm">
-            <Link href="/import">
+          <Button size="sm" onClick={openImportWizard}>
               <Upload className="size-4 mr-2" />
               Importar cartola
-            </Link>
           </Button>
         </div>
       </div>

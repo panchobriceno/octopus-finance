@@ -29,6 +29,7 @@ import {
   useSeedDemoImportedMovements,
 } from "@/lib/hooks";
 import { buildImportedMovementDashboard, normalizeImportText } from "@/domain/bank-imports";
+import { openImportWizard } from "@/lib/import-wizard";
 import { formatCLP } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -482,7 +483,7 @@ export default function BankMovementsPage({
             {!embedded && (
               <>
                 <Button
-                  onClick={() => navigate("/import")}
+                  onClick={openImportWizard}
                   data-testid="button-import-bank-statement"
                 >
                   <Upload className="mr-2 size-4" />
@@ -535,7 +536,7 @@ export default function BankMovementsPage({
         {!embedded && (
           <StepFlow
             steps={[
-              { label: "Importar cartola", hint: "Subí el CSV o PDF", href: "/import" },
+              { label: "Importar cartola", hint: "Subí el CSV o PDF", onClick: openImportWizard },
               { label: "Revisar y clasificar", hint: "Categoría, cuenta y duplicados" },
               { label: "Confirmar", hint: "Convertir en transacciones" },
             ]}
@@ -671,11 +672,11 @@ export default function BankMovementsPage({
                       </p>
                     </div>
                     <div className="flex flex-wrap justify-center gap-2">
-                      <Button onClick={() => navigate("/")}>
+                      <Button onClick={() => navigate("/transactions")}>
                         Ver transacciones
                         <ArrowRight className="ml-2 size-4" />
                       </Button>
-                      <Button variant="outline" onClick={() => navigate("/import")}>
+                      <Button variant="outline" onClick={openImportWizard}>
                         Importar nuevo lote
                       </Button>
                     </div>
@@ -691,7 +692,7 @@ export default function BankMovementsPage({
                     </div>
                     <div className="flex flex-wrap justify-center gap-2">
                       <Button
-                        onClick={() => navigate("/import")}
+                        onClick={openImportWizard}
                         data-testid="button-import-empty-movements"
                       >
                         <Upload className="mr-2 size-4" />
