@@ -3,6 +3,8 @@ import {
   buildImportedMovement,
   buildTransactionFromImportedMovement,
   findMatchingTransactionForPayload,
+  getImportBatchLifecycleStatus,
+  summarizeImportBatchLifecycle,
 } from "../bank-imports";
 
 describe("bank import domain", () => {
@@ -96,5 +98,42 @@ describe("bank import domain", () => {
     ]);
 
     expect(match).toBeNull();
+  });
+
+  it("derives lifecycle status for import batches", () => {
+    const baseMovement = {
+      id: "movement-1",
+      ...buildImportedMovement({
+        batchId: "batch-1",
+        source: "manual_file",
+        sourceName: "Cartola banco",
+        sourceType: "bank_account",
+        accountId: "account-1",
+        date: "2026-06-23",
+        description: "Movimiento",
+        amount: 1000,
+        direction: "expense",
+        category: "Otros",
+        workspace: "family",
+        movementType: "expense",
+        paymentMethod: "bank_account",
+        createdAt: "2026-06-23T12:00:00.000Z",
+      }),
+    };
+
+    expect(getImportBatchLifecycleStatus(summarizeImportBatchLifecycle([
+      { ...baseMovement, id: "pending", status: "pending" },
+    ]))).toBe("reviewing");
+    expect(getImportBatchLifecycleStatus(summarizeImportBatchLifecycle([
+      { ...baseMovement, id: "converted", status: "converted" },
+      { ...baseMovement, id: "pending", status: "pending" },
+    ]))).toBe("partially_converted");
+    expect(getImportBatchLifecycleStatus(summarizeImportBatchLifecycle([
+      { ...baseMovement, id: "converted", status: "converted" },
+      { ...baseMovement, id: "discarded", status: "discarded" },
+    ]))).toBe("completed");
+    expect(getImportBatchLifecycleStatus(summarizeImportBatchLifecycle([
+      { ...baseMovement, id: "converted", status: "converted" },
+    ]), "closed")).toBe("closed");
   });
 });

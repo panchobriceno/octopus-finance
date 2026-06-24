@@ -628,6 +628,7 @@ export function useDiscardImportedMovement() {
   return useMutation({
     mutationFn: (id: string) => fs.discardImportedMovement(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["import-batches"] });
       queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
     },
   });
@@ -652,6 +653,16 @@ export function useRollbackImportBatch() {
   });
 }
 
+export function useCloseImportBatch() {
+  return useMutation({
+    mutationFn: (batchId: string) => fs.closeImportBatch(batchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["import-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
+    },
+  });
+}
+
 export function useConvertImportedMovement() {
   return useMutation({
     mutationFn: ({
@@ -668,6 +679,7 @@ export function useConvertImportedMovement() {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
     },
     onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["import-batches"] });
       queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
     },
   });
@@ -681,6 +693,7 @@ export function useBulkConvertImportedMovements() {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
     },
     onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["import-batches"] });
       queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
     },
   });

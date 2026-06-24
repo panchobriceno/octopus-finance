@@ -394,7 +394,7 @@ export interface ImportBatch {
   totalIncome: number;
   totalExpense: number;
   duplicateCount: number;
-  status: string; // "reviewing" | "closed"
+  status: string; // "reviewing" | "partially_converted" | "completed" | "closed"
   isDemo: boolean;
   notes: string | null;
   closedAt?: string | null;
@@ -735,7 +735,7 @@ export const insertImportBatchSchema = z.object({
   totalIncome: z.number().min(0).optional(),
   totalExpense: z.number().min(0).optional(),
   duplicateCount: z.number().int().min(0).optional(),
-  status: z.enum(["reviewing", "closed"]).optional(),
+  status: z.enum(["reviewing", "partially_converted", "completed", "closed"]).optional(),
   isDemo: z.boolean().optional(),
   notes: z.string().nullable().optional(),
   closedAt: z.string().nullable().optional(),

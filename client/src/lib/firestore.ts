@@ -45,8 +45,10 @@ import {
   buildTransactionFromImportedMovement,
   buildTransactionMatchKey,
   findMatchingTransactionForPayload,
+  getImportBatchLifecycleStatus,
   findBestMovementRule,
   applyMovementRule,
+  summarizeImportBatchLifecycle,
   type ImportedMovementOverride,
   type MovementSeedInput,
 } from "@/domain/bank-imports";
@@ -1547,6 +1549,63 @@ export async function getImportedMovements(options: {
   });
 }
 
+async function getImportBatchMovements(batchId: string) {
+  const snap = await getDocs(query(importedMovementsCol(), where("batchId", "==", batchId)));
+  return snapToArray<ImportedMovement>(snap);
+}
+
+async function syncImportBatchLifecycle(batchId: string, options: { close?: boolean } = {}) {
+  const batchRef = doc(db, "importBatches", batchId);
+  const batchSnapshot = await getDoc(batchRef);
+  if (!batchSnapshot.exists()) {
+    throw new Error("Lote de importacion no encontrado.");
+  }
+
+  const batchData = batchSnapshot.data() as ImportBatch;
+  const movements = await getImportBatchMovements(batchId);
+  const summary = summarizeImportBatchLifecycle(movements);
+  const now = nowIso();
+
+  if (options.close) {
+    if (summary.total === 0) {
+      throw new Error("No se puede cerrar un lote sin movimientos.");
+    }
+    if (summary.unresolved > 0) {
+      throw new Error(
+        `No se puede cerrar el lote: quedan ${summary.pending} pendientes y ${summary.duplicate} duplicados por resolver.`,
+      );
+    }
+
+    await updateDoc(batchRef, {
+      status: "closed",
+      closedAt: batchData.closedAt ?? now,
+      rowCount: summary.total,
+      duplicateCount: summary.duplicate,
+      updatedAt: now,
+    });
+    return { batchId, status: "closed", summary, closedAt: batchData.closedAt ?? now };
+  }
+
+  if (batchData.status === "closed") {
+    return { batchId, status: "closed", summary, closedAt: batchData.closedAt ?? null };
+  }
+
+  const status = getImportBatchLifecycleStatus(summary, batchData.status);
+  await updateDoc(batchRef, {
+    status,
+    closedAt: null,
+    rowCount: summary.total,
+    duplicateCount: summary.duplicate,
+    updatedAt: now,
+  });
+
+  return { batchId, status, summary, closedAt: null };
+}
+
+export async function closeImportBatch(batchId: string) {
+  return syncImportBatchLifecycle(batchId, { close: true });
+}
+
 export async function updateImportedMovement(id: string, data: Record<string, any>) {
   const payload = {
     ...data,
@@ -1557,11 +1616,18 @@ export async function updateImportedMovement(id: string, data: Record<string, an
 }
 
 export async function discardImportedMovement(id: string) {
-  return updateImportedMovement(id, {
+  const movementSnapshot = await getDoc(doc(db, "importedMovements", id));
+  if (!movementSnapshot.exists()) {
+    throw new Error("Movimiento importado no encontrado.");
+  }
+  const movement = { id: movementSnapshot.id, ...movementSnapshot.data() } as ImportedMovement;
+  const result = await updateImportedMovement(id, {
     status: "discarded",
     discardReason: "manual",
     discardedAt: nowIso(),
   });
+  await syncImportBatchLifecycle(movement.batchId);
+  return result;
 }
 
 export async function rollbackImportBatch(batchId: string) {
@@ -1944,12 +2010,18 @@ async function findExistingTransactionForPayload(payload: Omit<Transaction, "id"
 }
 
 async function markImportedMovementAsDuplicate(id: string, duplicateTransactionId: string) {
+  const movementSnapshot = await getDoc(doc(db, "importedMovements", id));
+  if (!movementSnapshot.exists()) {
+    throw new Error("Movimiento importado no encontrado.");
+  }
+  const movement = { id: movementSnapshot.id, ...movementSnapshot.data() } as ImportedMovement;
   const updatedAt = nowIso();
   await updateDoc(doc(db, "importedMovements", id), {
     status: "duplicate",
     duplicateTransactionId,
     updatedAt,
   });
+  await syncImportBatchLifecycle(movement.batchId);
 }
 
 function makeBulkConversionCandidate(
@@ -2428,7 +2500,7 @@ export async function convertImportedMovementToTransaction(
     options.categoryKeys,
   );
 
-  return runTransaction(db, async (transaction) => {
+  const result = await runTransaction(db, async (transaction) => {
     const freshMovementSnapshot = await transaction.get(movementRef);
     if (!freshMovementSnapshot.exists()) {
       throw new Error("Movimiento importado no encontrado.");
@@ -2466,8 +2538,11 @@ export async function convertImportedMovementToTransaction(
       transactionId: transactionRef.id,
       transactionIds: [transactionRef.id],
       movementId: id,
+      batchId: freshMovement.batchId,
     };
   });
+  await syncImportBatchLifecycle(result.batchId);
+  return result;
 }
 
 export async function bulkConvertImportedMovements(ids: string[]) {

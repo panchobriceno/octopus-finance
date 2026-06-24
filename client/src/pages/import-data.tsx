@@ -73,6 +73,20 @@ type ImportBatchSummary = {
   kind: "review" | "legacy";
 };
 
+const IMPORT_BATCH_STATUS_LABELS: Record<string, string> = {
+  reviewing: "En revisión",
+  partially_converted: "Parcial",
+  completed: "Listo",
+  closed: "Cerrado",
+};
+
+function importBatchStatusTone(status: string) {
+  if (status === "closed") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
+  if (status === "completed") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
+  if (status === "partially_converted") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
+  return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
+}
+
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
   const chunkSize = 0x8000;
@@ -780,9 +794,11 @@ export default function ImportDataPage() {
       kind: "review",
     }));
     const grouped = new Map<string, ImportBatchSummary>();
+    const reviewBatchIds = new Set(reviewBatches.map((batch) => batch.id));
 
     for (const transaction of transactions) {
       if (!transaction.importBatchId || !transaction.importedAt) continue;
+      if (reviewBatchIds.has(transaction.importBatchId)) continue;
 
       const current = grouped.get(transaction.importBatchId);
       if (current) {
@@ -1152,7 +1168,11 @@ export default function ImportDataPage() {
                       <div className="flex items-center gap-2">
                         <span>{batch.label}</span>
                         {isLatest ? <Badge variant="secondary">Última</Badge> : null}
-                        {batch.kind === "review" ? <Badge variant="outline">Revisión</Badge> : null}
+                        {batch.kind === "review" && batch.status ? (
+                          <Badge className={importBatchStatusTone(batch.status)}>
+                            {IMPORT_BATCH_STATUS_LABELS[batch.status] ?? batch.status}
+                          </Badge>
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell>{batch.cardName ?? "-"}</TableCell>

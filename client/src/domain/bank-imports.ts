@@ -12,6 +12,17 @@ export type ImportedMovementDashboard = {
   averageConfidence: number;
 };
 
+export type ImportBatchLifecycleStatus = "reviewing" | "partially_converted" | "completed" | "closed";
+
+export type ImportBatchLifecycleSummary = {
+  total: number;
+  pending: number;
+  duplicate: number;
+  converted: number;
+  discarded: number;
+  unresolved: number;
+};
+
 export type ImportedMovementOverride = {
   name?: string;
   category?: string;
@@ -306,4 +317,30 @@ export function buildImportedMovementDashboard(
       ? Math.round(confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length)
       : 0,
   };
+}
+
+export function summarizeImportBatchLifecycle(movements: ImportedMovement[]): ImportBatchLifecycleSummary {
+  const pending = movements.filter((movement) => movement.status === "pending").length;
+  const duplicate = movements.filter((movement) => movement.status === "duplicate").length;
+  const converted = movements.filter((movement) => movement.status === "converted").length;
+  const discarded = movements.filter((movement) => movement.status === "discarded").length;
+
+  return {
+    total: movements.length,
+    pending,
+    duplicate,
+    converted,
+    discarded,
+    unresolved: pending + duplicate,
+  };
+}
+
+export function getImportBatchLifecycleStatus(
+  summary: ImportBatchLifecycleSummary,
+  currentStatus?: string | null,
+): ImportBatchLifecycleStatus {
+  if (currentStatus === "closed") return "closed";
+  if (summary.total > 0 && summary.unresolved === 0) return "completed";
+  if (summary.converted > 0 || summary.discarded > 0) return "partially_converted";
+  return "reviewing";
 }

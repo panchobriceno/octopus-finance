@@ -19,6 +19,7 @@ import {
   useAccounts,
   useBulkConvertImportedMovements,
   useCategories,
+  useCloseImportBatch,
   useConvertImportedMovement,
   useDiscardImportedMovement,
   useImportBatches,
@@ -83,6 +84,20 @@ const PAYMENT_LABELS: Record<string, string> = {
   cash: "Caja",
 };
 
+const BATCH_STATUS_LABELS: Record<string, string> = {
+  reviewing: "En revision",
+  partially_converted: "Parcial",
+  completed: "Listo para cerrar",
+  closed: "Cerrado",
+};
+
+function batchStatusTone(status: string) {
+  if (status === "closed") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
+  if (status === "completed") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
+  if (status === "partially_converted") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
+  return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
+}
+
 function statusTone(status: string) {
   if (status === "converted") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
   if (status === "duplicate") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
@@ -130,6 +145,7 @@ export default function BankMovementsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [batchFilter, setBatchFilter] = useState("latest");
   const [rollbackBatchId, setRollbackBatchId] = useState<string | null>(null);
+  const [closeBatchId, setCloseBatchId] = useState<string | null>(null);
   const [bulkPreflightOpen, setBulkPreflightOpen] = useState(false);
   const [bulkPreflight, setBulkPreflight] = useState<BulkImportedMovementConversionPreflight | null>(null);
   const [search, setSearch] = useState("");
@@ -157,6 +173,7 @@ export default function BankMovementsPage() {
   const bulkPreflightMutation = usePreviewBulkImportedMovementConversion();
   const discardMutation = useDiscardImportedMovement();
   const rollbackBatchMutation = useRollbackImportBatch();
+  const closeBatchMutation = useCloseImportBatch();
 
   useEffect(() => {
     const batchId = new URLSearchParams(searchString).get("batch");
@@ -376,9 +393,36 @@ export default function BankMovementsPage() {
     }
   };
 
+  const handleCloseBatch = async () => {
+    if (!closeBatchId) return;
+
+    try {
+      const result = await closeBatchMutation.mutateAsync(closeBatchId);
+      setCloseBatchId(null);
+      setStatusFilter("all");
+      toast({
+        title: "Lote cerrado",
+        description: `${result.summary.converted} convertidos y ${result.summary.discarded} omitidos. El lote quedo bloqueado para nuevas revisiones.`,
+      });
+    } catch (error) {
+      toast({
+        title: "No se pudo cerrar el lote",
+        description: error instanceof Error ? error.message : "Revisa pendientes y duplicados antes de cerrar.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const isLoading = batchesLoading || movementsLoading;
   const rollbackCandidates = dashboard.pending + dashboard.duplicate;
-  const canRollbackSelectedBatch = Boolean(selectedBatchId) && batchFilter !== "all" && rollbackCandidates > 0;
+  const isSelectedBatchClosed = selectedBatch?.status === "closed";
+  const canRollbackSelectedBatch = Boolean(selectedBatchId) && batchFilter !== "all" && rollbackCandidates > 0 && !isSelectedBatchClosed;
+  const canCloseSelectedBatch =
+    Boolean(selectedBatchId) &&
+    batchFilter !== "all" &&
+    dashboard.total > 0 &&
+    rollbackCandidates === 0 &&
+    !isSelectedBatchClosed;
   const isAllBatchesView = batchFilter === "all";
   const scopeLabel = isAllBatchesView ? "en la vista" : "en el lote";
   const isSelectedBatchComplete = !isAllBatchesView && dashboard.total > 0 && dashboard.pending === 0 && dashboard.duplicate === 0;
@@ -403,6 +447,9 @@ export default function BankMovementsPage() {
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <Badge variant="outline">Lote actual</Badge>
                 <span>{selectedBatch.label}</span>
+                <Badge className={batchStatusTone(selectedBatch.status)}>
+                  {BATCH_STATUS_LABELS[selectedBatch.status] ?? selectedBatch.status}
+                </Badge>
                 {selectedBatchPeriod ? <span>· {selectedBatchPeriod}</span> : null}
                 <span>· {dashboard.total} movimientos</span>
               </div>
@@ -427,7 +474,7 @@ export default function BankMovementsPage() {
             </Button>
             <Button
               onClick={handleBulkConvert}
-              disabled={!pendingHighConfidenceIds.length || bulkConvertMutation.isPending || bulkPreflightMutation.isPending}
+              disabled={!pendingHighConfidenceIds.length || bulkConvertMutation.isPending || bulkPreflightMutation.isPending || isSelectedBatchClosed}
               data-testid="button-convert-confident-movements"
             >
               <ListChecks className="mr-2 size-4" />
@@ -445,6 +492,15 @@ export default function BankMovementsPage() {
             >
               <XCircle className="mr-2 size-4" />
               Omitir lote
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => selectedBatchId && setCloseBatchId(selectedBatchId)}
+              disabled={!canCloseSelectedBatch || closeBatchMutation.isPending}
+              data-testid="button-close-import-batch"
+            >
+              <CheckCircle2 className="mr-2 size-4" />
+              Cerrar lote
             </Button>
           </div>
         </div>
@@ -637,7 +693,7 @@ export default function BankMovementsPage() {
                       const selectedCategory = rowOverride.category ?? movement.suggestedCategory;
                       const selectedWorkspace = rowOverride.workspace ?? movement.suggestedWorkspace;
                       const selectedAccountId = rowOverride.accountId ?? movement.accountId ?? "none";
-                      const canReview = movement.status === "pending" || movement.status === "duplicate";
+                      const canReview = !isSelectedBatchClosed && (movement.status === "pending" || movement.status === "duplicate");
                       const sourceAccount = movement.accountId ? accountById.get(movement.accountId) : null;
 
                       return (
@@ -802,6 +858,32 @@ export default function BankMovementsPage() {
             disabled={rollbackBatchMutation.isPending}
           >
             {rollbackBatchMutation.isPending ? "Omitiendo..." : "Omitir lote"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <AlertDialog open={Boolean(closeBatchId)} onOpenChange={(open) => {
+      if (!open) setCloseBatchId(null);
+    }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Cerrar lote importado</AlertDialogTitle>
+          <AlertDialogDescription>
+            {selectedBatch
+              ? `Se cerrara ${selectedBatch.label}. Ya no quedan pendientes ni duplicados: ${dashboard.converted} convertidos y ${dashboard.discarded} omitidos.`
+              : "Se cerrara este lote importado."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={closeBatchMutation.isPending}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(event) => {
+              event.preventDefault();
+              void handleCloseBatch();
+            }}
+            disabled={closeBatchMutation.isPending}
+          >
+            {closeBatchMutation.isPending ? "Cerrando..." : "Cerrar lote"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
