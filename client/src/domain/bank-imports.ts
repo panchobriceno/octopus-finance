@@ -4,6 +4,7 @@ export type ImportedMovementDashboard = {
   total: number;
   pending: number;
   converted: number;
+  reconciled: number;
   discarded: number;
   duplicate: number;
   pendingIncome: number;
@@ -19,6 +20,7 @@ export type ImportBatchLifecycleSummary = {
   pending: number;
   duplicate: number;
   converted: number;
+  reconciled: number;
   discarded: number;
   unresolved: number;
 };
@@ -58,7 +60,7 @@ export type MovementSeedInput = {
   matchedRuleId?: string | null;
   duplicateTransactionId?: string | null;
   duplicateMovementId?: string | null;
-  status?: "pending" | "converted" | "discarded" | "duplicate";
+  status?: "pending" | "converted" | "reconciled" | "discarded" | "duplicate";
   notes?: string | null;
   isDemo?: boolean;
   createdAt: string;
@@ -296,6 +298,7 @@ export function buildImportedMovementDashboard(
 ): ImportedMovementDashboard {
   const pending = movements.filter((movement) => movement.status === "pending");
   const converted = movements.filter((movement) => movement.status === "converted");
+  const reconciled = movements.filter((movement) => movement.status === "reconciled");
   const confidenceValues = movements
     .map((movement) => Number(movement.confidence) || 0)
     .filter((value) => value > 0);
@@ -304,6 +307,7 @@ export function buildImportedMovementDashboard(
     total: movements.length,
     pending: pending.length,
     converted: converted.length,
+    reconciled: reconciled.length,
     discarded: movements.filter((movement) => movement.status === "discarded").length,
     duplicate: movements.filter((movement) => movement.status === "duplicate").length,
     pendingIncome: pending
@@ -323,6 +327,7 @@ export function summarizeImportBatchLifecycle(movements: ImportedMovement[]): Im
   const pending = movements.filter((movement) => movement.status === "pending").length;
   const duplicate = movements.filter((movement) => movement.status === "duplicate").length;
   const converted = movements.filter((movement) => movement.status === "converted").length;
+  const reconciled = movements.filter((movement) => movement.status === "reconciled").length;
   const discarded = movements.filter((movement) => movement.status === "discarded").length;
 
   return {
@@ -330,6 +335,7 @@ export function summarizeImportBatchLifecycle(movements: ImportedMovement[]): Im
     pending,
     duplicate,
     converted,
+    reconciled,
     discarded,
     unresolved: pending + duplicate,
   };
@@ -341,6 +347,6 @@ export function getImportBatchLifecycleStatus(
 ): ImportBatchLifecycleStatus {
   if (currentStatus === "closed") return "closed";
   if (summary.total > 0 && summary.unresolved === 0) return "completed";
-  if (summary.converted > 0 || summary.discarded > 0) return "partially_converted";
+  if (summary.converted > 0 || summary.reconciled > 0 || summary.discarded > 0) return "partially_converted";
   return "reviewing";
 }

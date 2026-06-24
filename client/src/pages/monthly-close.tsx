@@ -9,10 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn, formatCLP } from "@/lib/utils";
 import {
+  useAccounts,
   useBudgets,
   useCategories,
   useClientPayments,
   useImportBatches,
+  useImportedMovements,
   useMonthlyCloseSnapshots,
   useReopenMonthlyCloseSnapshot,
   useSaveMonthlyCloseSnapshot,
@@ -20,8 +22,10 @@ import {
 } from "@/lib/hooks";
 import { getTransactionExpenseImpact, isExecutedTransaction, normalizeTransaction, summarizeClientPaymentsByMonth } from "@/lib/finance";
 import { getFamilyIncomeJaviMap } from "@/lib/family-income";
+import { buildAllAccountReconciliationSummaries } from "@/domain/reconciliation";
+import { isActiveAccount } from "@/domain/accounts";
 import { useToast } from "@/hooks/use-toast";
-import type { Budget, Category, MonthlyCloseChecklistItem, MonthlyCloseSummaryRow } from "@shared/schema";
+import type { Account, Budget, Category, MonthlyCloseChecklistItem, MonthlyCloseSummaryRow } from "@shared/schema";
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -138,6 +142,10 @@ function batchTouchesMonth(batch: { periodStart?: string | null; periodEnd?: str
   return batch.periodStart <= `${monthKey}-31` && batch.periodEnd >= `${monthKey}-01`;
 }
 
+function isReconcilableAccount(account: Account) {
+  return isActiveAccount(account) && ["checking", "savings", "credit_card"].includes(account.type);
+}
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "Sin fecha";
   return value.slice(0, 16).replace("T", " ");
@@ -161,6 +169,8 @@ export default function MonthlyClosePage() {
   const { data: budgets = [], isLoading: budgetsLoading } = useBudgets();
   const { data: categories = [], isLoading: categoriesLoading } = useCategories();
   const { data: importBatches = [], isLoading: importBatchesLoading } = useImportBatches();
+  const { data: importedMovements = [], isLoading: importedMovementsLoading } = useImportedMovements({ limitCount: 1500 });
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
   const { data: monthlyCloseSnapshots = [], isLoading: closeSnapshotsLoading } = useMonthlyCloseSnapshots();
   const saveCloseMutation = useSaveMonthlyCloseSnapshot();
   const reopenCloseMutation = useReopenMonthlyCloseSnapshot();
@@ -278,6 +288,21 @@ export default function MonthlyClosePage() {
   const openImportBatches = importBatches.filter((batch) =>
     batch.status !== "closed" && batchTouchesMonth(batch, selectedMonthKey),
   );
+  const reconciliationSummaries = useMemo(
+    () =>
+      buildAllAccountReconciliationSummaries({
+        accounts: accounts.filter(isReconcilableAccount),
+        monthKey: selectedMonthKey,
+        transactions,
+        importedMovements,
+        importBatches,
+      }),
+    [accounts, selectedMonthKey, transactions, importedMovements, importBatches],
+  );
+  const reconciliationIssues = reconciliationSummaries.filter((summary) =>
+    summary.importedCount > 0 &&
+    (summary.unresolvedCount > 0 || Math.abs(summary.difference) > 1),
+  );
   const legacyExpenseCategories = categories.filter((category) =>
     category.type === "expense" && !category.workspace,
   );
@@ -309,6 +334,17 @@ export default function MonthlyClosePage() {
         : `${pendingClientPayments.length} cobros siguen abiertos o proyectados.`,
       status: pendingClientPayments.length === 0 ? "ready" : "warning",
       count: pendingClientPayments.length,
+    },
+    {
+      id: "account-reconciliation",
+      label: "Conciliación por cuenta",
+      detail: reconciliationIssues.length === 0
+        ? reconciliationSummaries.some((summary) => summary.importedCount > 0)
+          ? "Las cuentas con cartola importada no muestran diferencias abiertas."
+          : "No hay cartolas importadas para conciliar en este mes."
+        : `${reconciliationIssues.length} cuentas tienen diferencias o movimientos por resolver.`,
+      status: reconciliationIssues.length === 0 ? "ready" : "warning",
+      count: reconciliationIssues.length,
     },
     {
       id: "import-batches",
@@ -343,6 +379,8 @@ export default function MonthlyClosePage() {
     openImportBatches.length,
     pendingClientPayments.length,
     pendingTransactions.length,
+    reconciliationIssues.length,
+    reconciliationSummaries,
     uncategorizedTransactions.length,
   ]);
 
@@ -437,7 +475,7 @@ export default function MonthlyClosePage() {
     });
   };
 
-  const isLoading = txLoading || clientLoading || budgetsLoading || categoriesLoading || importBatchesLoading || closeSnapshotsLoading;
+  const isLoading = txLoading || clientLoading || budgetsLoading || categoriesLoading || importBatchesLoading || importedMovementsLoading || accountsLoading || closeSnapshotsLoading;
 
   if (isLoading) {
     return (

@@ -49,7 +49,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
-type StatusFilter = "active" | "pending" | "duplicate" | "converted" | "discarded" | "all";
+type StatusFilter = "active" | "pending" | "duplicate" | "converted" | "reconciled" | "discarded" | "all";
 
 type RowOverride = {
   category?: string;
@@ -61,6 +61,7 @@ const STATUS_LABELS: Record<string, string> = {
   pending: "Pendiente",
   duplicate: "Duplicado",
   converted: "Convertido",
+  reconciled: "Conciliado",
   discarded: "Omitido",
 };
 
@@ -99,7 +100,7 @@ function batchStatusTone(status: string) {
 }
 
 function statusTone(status: string) {
-  if (status === "converted") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
+  if (status === "converted" || status === "reconciled") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
   if (status === "duplicate") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
   if (status === "discarded") return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
   return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
@@ -381,7 +382,7 @@ export default function BankMovementsPage() {
         description: result.alreadyClosed
           ? "No habia movimientos pendientes para cambiar."
           : result.convertedRemaining
-            ? `${result.discarded} movimientos fueron omitidos. ${result.convertedRemaining} ya convertidos siguen como transacciones.`
+            ? `${result.discarded} movimientos fueron omitidos. ${result.convertedRemaining} ya resueltos se mantienen intactos.`
             : `${result.discarded} movimientos pendientes o duplicados fueron omitidos.`,
       });
     } catch (error) {
@@ -402,7 +403,7 @@ export default function BankMovementsPage() {
       setStatusFilter("all");
       toast({
         title: "Lote cerrado",
-        description: `${result.summary.converted} convertidos y ${result.summary.discarded} omitidos. El lote quedo bloqueado para nuevas revisiones.`,
+        description: `${result.summary.converted} convertidos, ${result.summary.reconciled} conciliados y ${result.summary.discarded} omitidos. El lote quedo bloqueado para nuevas revisiones.`,
       });
     } catch (error) {
       toast({
@@ -549,7 +550,7 @@ export default function BankMovementsPage() {
             <CardContent className="p-4 pt-0">
               <div className="flex items-end justify-between gap-3">
                 <div className="text-2xl font-semibold">{dashboard.averageConfidence}%</div>
-                <Badge variant="outline">{dashboard.converted} convertidos</Badge>
+                <Badge variant="outline">{dashboard.converted + dashboard.reconciled} resueltos</Badge>
               </div>
               <Progress className="mt-3 h-2" value={dashboard.averageConfidence} />
             </CardContent>
@@ -590,6 +591,7 @@ export default function BankMovementsPage() {
                 <SelectItem value="pending">Solo pendientes</SelectItem>
                 <SelectItem value="duplicate">Solo duplicados</SelectItem>
                 <SelectItem value="converted">Convertidos</SelectItem>
+                <SelectItem value="reconciled">Conciliados</SelectItem>
                 <SelectItem value="discarded">Omitidos</SelectItem>
                 <SelectItem value="all">Todos</SelectItem>
               </SelectContent>
@@ -627,7 +629,7 @@ export default function BankMovementsPage() {
                     <div>
                       <div className="font-medium">Lote procesado</div>
                       <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                        {dashboard.converted} convertidos y {dashboard.discarded} omitidos. No quedan pendientes ni duplicados en este lote.
+                        {dashboard.converted} convertidos, {dashboard.reconciled} conciliados y {dashboard.discarded} omitidos. No quedan pendientes ni duplicados en este lote.
                       </p>
                     </div>
                     <div className="flex flex-wrap justify-center gap-2">
@@ -819,10 +821,10 @@ export default function BankMovementsPage() {
                                 Omitir
                               </Button>
                             </div>
-                            {movement.status === "converted" && movement.matchedTransactionId ? (
+                            {["converted", "reconciled"].includes(movement.status) && movement.matchedTransactionId ? (
                               <div className="mt-2 flex justify-end text-xs text-muted-foreground">
                                 <BadgeCheck className="mr-1 size-3" />
-                                Transaccion creada
+                                {movement.status === "reconciled" ? "Transaccion conciliada" : "Transaccion creada"}
                               </div>
                             ) : null}
                           </TableCell>
@@ -845,7 +847,7 @@ export default function BankMovementsPage() {
           <AlertDialogTitle>Omitir movimientos pendientes del lote</AlertDialogTitle>
           <AlertDialogDescription>
             Se omitiran {rollbackCandidates} movimientos pendientes o duplicados
-            {selectedBatch ? ` de ${selectedBatch.label}` : ""}. Los {dashboard.converted} ya convertidos permaneceran como transacciones reales.
+            {selectedBatch ? ` de ${selectedBatch.label}` : ""}. Los {dashboard.converted} convertidos y {dashboard.reconciled} conciliados permaneceran como movimientos resueltos.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -870,7 +872,7 @@ export default function BankMovementsPage() {
           <AlertDialogTitle>Cerrar lote importado</AlertDialogTitle>
           <AlertDialogDescription>
             {selectedBatch
-              ? `Se cerrara ${selectedBatch.label}. Ya no quedan pendientes ni duplicados: ${dashboard.converted} convertidos y ${dashboard.discarded} omitidos.`
+              ? `Se cerrara ${selectedBatch.label}. Ya no quedan pendientes ni duplicados: ${dashboard.converted} convertidos, ${dashboard.reconciled} conciliados y ${dashboard.discarded} omitidos.`
               : "Se cerrara este lote importado."}
           </AlertDialogDescription>
         </AlertDialogHeader>

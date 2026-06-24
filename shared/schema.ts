@@ -456,7 +456,7 @@ export interface ImportedMovement {
   matchedRuleId: string | null;
   duplicateTransactionId: string | null;
   duplicateMovementId: string | null;
-  status: string; // "pending" | "converted" | "discarded" | "duplicate"
+  status: string; // "pending" | "converted" | "reconciled" | "discarded" | "duplicate"
   matchedTransactionId: string | null;
   notes: string | null;
   discardReason?: string | null;
@@ -772,7 +772,7 @@ export const insertImportedMovementSchema = z.object({
   matchedRuleId: z.string().nullable().optional(),
   duplicateTransactionId: z.string().nullable().optional(),
   duplicateMovementId: z.string().nullable().optional(),
-  status: z.enum(["pending", "converted", "discarded", "duplicate"]).optional(),
+  status: z.enum(["pending", "converted", "reconciled", "discarded", "duplicate"]).optional(),
   matchedTransactionId: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   discardReason: z.enum(["manual", "batch_rollback"]).nullable().optional(),

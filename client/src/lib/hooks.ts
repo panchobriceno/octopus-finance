@@ -634,6 +634,17 @@ export function useDiscardImportedMovement() {
   });
 }
 
+export function useConfirmImportedMovementMatch() {
+  return useMutation({
+    mutationFn: ({ id, transactionId }: { id: string; transactionId: string }) =>
+      fs.confirmImportedMovementMatch(id, transactionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["import-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
+    },
+  });
+}
+
 export function useDeleteImportedMovement() {
   return useMutation({
     mutationFn: (id: string) => fs.deleteImportedMovement(id),

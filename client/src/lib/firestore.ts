@@ -1630,6 +1630,38 @@ export async function discardImportedMovement(id: string) {
   return result;
 }
 
+export async function confirmImportedMovementMatch(id: string, transactionId: string) {
+  if (!transactionId) {
+    throw new Error("Selecciona una transaccion para confirmar el match.");
+  }
+
+  const movementSnapshot = await getDoc(doc(db, "importedMovements", id));
+  if (!movementSnapshot.exists()) {
+    throw new Error("Movimiento importado no encontrado.");
+  }
+
+  const transactionSnapshot = await getDoc(doc(db, "transactions", transactionId));
+  if (!transactionSnapshot.exists()) {
+    throw new Error("Transaccion existente no encontrada.");
+  }
+
+  const movement = { id: movementSnapshot.id, ...movementSnapshot.data() } as ImportedMovement;
+  if (!["pending", "duplicate"].includes(movement.status)) {
+    throw new Error("Solo los movimientos pendientes o duplicados se pueden conciliar.");
+  }
+
+  const now = nowIso();
+  await updateDoc(doc(db, "importedMovements", id), {
+    status: "reconciled",
+    matchedTransactionId: transactionId,
+    duplicateTransactionId: null,
+    convertedAt: now,
+    updatedAt: now,
+  });
+  await syncImportBatchLifecycle(movement.batchId);
+  return { movementId: id, transactionId, batchId: movement.batchId };
+}
+
 export async function rollbackImportBatch(batchId: string) {
   const batchRef = doc(db, "importBatches", batchId);
   const batchSnapshot = await getDoc(batchRef);
@@ -1640,7 +1672,7 @@ export async function rollbackImportBatch(batchId: string) {
   const convertedSnap = await getDocs(query(
     importedMovementsCol(),
     where("batchId", "==", batchId),
-    where("status", "==", "converted"),
+    where("status", "in", ["converted", "reconciled"]),
   ));
   const convertedRemaining = convertedSnap.size;
   const batchData = batchSnapshot.data() as ImportBatch;

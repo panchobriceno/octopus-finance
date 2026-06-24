@@ -133,6 +133,10 @@ describe("bank import domain", () => {
       { ...baseMovement, id: "discarded", status: "discarded" },
     ]))).toBe("completed");
     expect(getImportBatchLifecycleStatus(summarizeImportBatchLifecycle([
+      { ...baseMovement, id: "reconciled", status: "reconciled" },
+      { ...baseMovement, id: "discarded", status: "discarded" },
+    ]))).toBe("completed");
+    expect(getImportBatchLifecycleStatus(summarizeImportBatchLifecycle([
       { ...baseMovement, id: "converted", status: "converted" },
     ]), "closed")).toBe("closed");
   });

@@ -13,6 +13,7 @@ import {
   CalendarClock,
   Inbox,
   Database,
+  Scale,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useEffect, useState } from "react";
@@ -36,6 +37,7 @@ const mainNav = [
   { title: "Presupuesto", url: "/budget", icon: Target },
   { title: "Automatización", url: "/automation", icon: CalendarClock },
   { title: "Movimientos", url: "/movements", icon: Inbox },
+  { title: "Conciliación", url: "/reconciliation", icon: Scale },
   { title: "Cierre Mensual", url: "/monthly-close", icon: ClipboardList },
   { title: "Panel de Tarjetas", url: "/credit-cards", icon: CreditCard },
   { title: "Importar Datos", url: "/import", icon: Upload },
