@@ -1,23 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import {
-  LayoutDashboard,
-  ArrowUpDown,
-  FileText,
-  Upload,
-  Settings,
-  Tags,
-  Target,
-  BriefcaseBusiness,
-  ClipboardList,
-  CreditCard,
-  Landmark,
-  CalendarClock,
-  Inbox,
-  Database,
-  type LucideIcon,
-} from "lucide-react";
-import {
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -25,29 +8,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-
-type PaletteItem = { title: string; url: string; icon: LucideIcon; group: string };
-
-// Mismas rutas que el sidebar (App.tsx). Mantener en sync si cambian.
-const ITEMS: PaletteItem[] = [
-  { title: "Resumen", url: "/", icon: LayoutDashboard, group: "Panorama" },
-  { title: "Flujo de Caja", url: "/cash-flow", icon: ArrowUpDown, group: "Panorama" },
-  { title: "Estado de Resultados", url: "/pnl", icon: FileText, group: "Panorama" },
-  { title: "Movimientos", url: "/movements", icon: Inbox, group: "Operación mensual" },
-  { title: "Automatización", url: "/automation", icon: CalendarClock, group: "Operación mensual" },
-  { title: "Panel de Tarjetas", url: "/credit-cards", icon: CreditCard, group: "Operación mensual" },
-  { title: "Cierre Mensual", url: "/monthly-close", icon: ClipboardList, group: "Operación mensual" },
-  { title: "Importar Datos", url: "/import", icon: Upload, group: "Operación mensual" },
-  { title: "Presupuesto", url: "/budget", icon: Target, group: "Planificación" },
-  { title: "Ingresos Clientes", url: "/client-payments", icon: BriefcaseBusiness, group: "Planificación" },
-  { title: "Categorías", url: "/categories", icon: Tags, group: "Ajustes" },
-  { title: "Cuentas", url: "/accounts", icon: Landmark, group: "Ajustes" },
-  { title: "Items", url: "/items", icon: Settings, group: "Ajustes" },
-  { title: "Salud de Datos", url: "/data-health", icon: Database, group: "Ajustes" },
-  { title: "Branding", url: "/settings", icon: Settings, group: "Ajustes" },
-];
-
-const GROUPS = ["Panorama", "Operación mensual", "Planificación", "Ajustes"] as const;
+import { NAV_GROUPS } from "@/lib/navigation";
 
 /**
  * Command palette global (Cmd/Ctrl+K) — Fase 2.3.
@@ -84,9 +45,9 @@ export function CommandPalette() {
       <CommandInput placeholder="Buscar pantalla… (Cmd+K)" />
       <CommandList>
         <CommandEmpty>Sin resultados.</CommandEmpty>
-        {GROUPS.map((group) => (
-          <CommandGroup key={group} heading={group}>
-            {ITEMS.filter((item) => item.group === group).map((item) => (
+        {NAV_GROUPS.map((group) => (
+          <CommandGroup key={group.label} heading={group.label}>
+            {group.items.map((item) => (
               <CommandItem
                 key={item.url}
                 value={item.title}

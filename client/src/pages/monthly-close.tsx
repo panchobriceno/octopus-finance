@@ -116,6 +116,13 @@ function buildSummaryRow(id: string, label: string, budget: number, actual: numb
   };
 }
 
+function getDeltaTone(row: MonthlyCloseSummaryRow): "auto" | "positive" | "negative" {
+  if (row.delta === 0) return "auto";
+  const isExpenseRow = row.id === "business-expenses" || row.id === "family-expenses";
+  const isFavorable = isExpenseRow ? row.delta < 0 : row.delta > 0;
+  return isFavorable ? "positive" : "negative";
+}
+
 function getChecklistTone(status: ChecklistStatus) {
   if (status === "ready") return "text-emerald-700 dark:text-emerald-300";
   if (status === "blocked") return "text-red-700 dark:text-red-300";
@@ -678,7 +685,7 @@ export default function MonthlyClosePage() {
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(row.budget)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(row.actual)}</TableCell>
                       <TableCell className="text-right text-sm">
-                        <AmountText value={row.delta} className="text-sm" />
+                        <AmountText value={row.delta} tone={getDeltaTone(row)} className="text-sm" />
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-sm pr-5">
                         {row.deltaPercent === null ? "-" : `${Math.round(row.deltaPercent * 100)}%`}

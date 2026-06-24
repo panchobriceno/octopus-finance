@@ -19,9 +19,8 @@ const ACCENT: Record<AuditSeverity, string> = {
   low: "text-[#cdbcff] bg-[#bb9eff]/12",
 };
 
-// area -> pantalla destino (rutas actuales de App.tsx, sin cambios)
 const TARGET: Record<string, string> = {
-  reconciliation: "/movements",
+  reconciliation: "/reconciliation",
   "data-integrity": "/data-health",
 };
 

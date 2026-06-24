@@ -1,22 +1,3 @@
-// Sidebar agrupado — Fase 0. Reemplaza el archivo actual.
-// Mismas URLs, mismas clases de pill activo, mismos data-testid.
-import type { LucideIcon } from "lucide-react";
-import {
-  LayoutDashboard,
-  ArrowUpDown,
-  FileText,
-  Upload,
-  Settings,
-  Tags,
-  Target,
-  BriefcaseBusiness,
-  ClipboardList,
-  CreditCard,
-  Landmark,
-  CalendarClock,
-  Inbox,
-  Database,
-} from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import {
@@ -30,47 +11,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
 } from "@/components/ui/sidebar";
-
-type NavItem = { title: string; url: string; icon: LucideIcon; badge?: string };
-type NavGroup = { label: string; items: NavItem[] };
-
-const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "Panorama",
-    items: [
-      { title: "Resumen", url: "/", icon: LayoutDashboard },
-      { title: "Flujo de Caja", url: "/cash-flow", icon: ArrowUpDown },
-      { title: "Estado de Resultados", url: "/pnl", icon: FileText },
-    ],
-  },
-  {
-    label: "Operación mensual",
-    items: [
-      { title: "Movimientos", url: "/movements", icon: Inbox },
-      { title: "Automatización", url: "/automation", icon: CalendarClock },
-      { title: "Panel de Tarjetas", url: "/credit-cards", icon: CreditCard },
-      { title: "Cierre Mensual", url: "/monthly-close", icon: ClipboardList },
-      { title: "Importar Datos", url: "/import", icon: Upload },
-    ],
-  },
-  {
-    label: "Planificación",
-    items: [
-      { title: "Presupuesto", url: "/budget", icon: Target },
-      { title: "Ingresos Clientes", url: "/client-payments", icon: BriefcaseBusiness },
-    ],
-  },
-  {
-    label: "Ajustes",
-    items: [
-      { title: "Categorías", url: "/categories", icon: Tags },
-      { title: "Cuentas", url: "/accounts", icon: Landmark },
-      { title: "Items", url: "/items", icon: Settings },
-      { title: "Salud de Datos", url: "/data-health", icon: Database },
-      { title: "Branding", url: "/settings", icon: Settings },
-    ],
-  },
-];
+import { NAV_GROUPS } from "@/lib/navigation";
 
 // Clases idénticas a las actuales — no cambia el look del item activo.
 const ITEM_CLASS =
