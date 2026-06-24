@@ -678,7 +678,7 @@ export default function MonthlyClosePage() {
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(row.budget)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(row.actual)}</TableCell>
                       <TableCell className="text-right text-sm">
-                        <AmountText value={row.delta} showSign className="text-sm" />
+                        <AmountText value={row.delta} className="text-sm" />
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-sm pr-5">
                         {row.deltaPercent === null ? "-" : `${Math.round(row.deltaPercent * 100)}%`}

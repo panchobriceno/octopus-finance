@@ -27,7 +27,12 @@ const TARGET: Record<string, string> = {
 
 /**
  * Feed "Requiere tu atención" del Resumen.
- * Reemplaza el bloque de alertas hecho a mano en overview.tsx.
+ *
+ * Se agrega de forma ADITIVA, sin reemplazar el bloque decisionAlerts existente
+ * (que cubre decisiones de caja: deuda TC, cobros, movimientos sin cuenta). Esto
+ * surface issues del motor de auditoría (integridad de datos + conciliación), una
+ * fuente complementaria. Consolidar ambos queda como decisión de producto.
+ * Retorna null si no hay issues, así que no agrega ruido cuando está todo OK.
  */
 export function AttentionFeed({ limit = 4 }: { limit?: number }) {
   const [, navigate] = useLocation();
