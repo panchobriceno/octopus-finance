@@ -8,6 +8,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { CommitmentPaymentDialog } from "@/components/finance/commitment-payment-dialog";
 import type { CommitmentInstance, CommitmentTemplate, Transaction } from "@shared/schema";
 import {
   useAccounts,
@@ -115,6 +116,7 @@ export default function MonthlyAutomationPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
   const [form, setForm] = useState<TemplateForm>(defaultForm);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [payingInstance, setPayingInstance] = useState<CommitmentInstance | null>(null);
 
   const { data: templates = [], isLoading: templatesLoading } = useCommitmentTemplates();
   const { data: instances = [], isLoading: instancesLoading } = useCommitmentInstances();
@@ -268,6 +270,20 @@ export default function MonthlyAutomationPage() {
         paidAt: status === "paid" ? instance.paidAt ?? new Date().toISOString().slice(0, 10) : null,
       },
     });
+  };
+
+  const handleConfirmPayment = async (data: { paidAt: string; accountId: string | null }) => {
+    if (!payingInstance) return;
+    try {
+      await updateInstanceMutation.mutateAsync({
+        id: payingInstance.id,
+        data: { status: "paid", paidAt: data.paidAt, accountId: data.accountId },
+      });
+      setPayingInstance(null);
+      toast({ title: "Compromiso marcado como pagado" });
+    } catch {
+      // la mutación ya notifica el error; dejar el modal abierto
+    }
   };
 
   const isLoading = templatesLoading || instancesLoading;
@@ -537,6 +553,14 @@ export default function MonthlyAutomationPage() {
           </SheetContent>
         </Sheet>
 
+        <CommitmentPaymentDialog
+          instance={payingInstance}
+          accounts={cashAccounts}
+          isPending={updateInstanceMutation.isPending}
+          onOpenChange={(open) => { if (!open) setPayingInstance(null); }}
+          onConfirm={handleConfirmPayment}
+        />
+
         <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
           <Card>
             <CardHeader className="pb-3">
@@ -605,8 +629,9 @@ export default function MonthlyAutomationPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="size-8"
-                                  onClick={() => setInstanceStatus(instance, "paid")}
+                                  onClick={() => setPayingInstance(instance)}
                                   disabled={updateInstanceMutation.isPending}
+                                  data-testid={`button-pay-commitment-${instance.id}`}
                                 >
                                   <CheckCircle2 className="size-4 text-emerald-600" />
                                 </Button>
