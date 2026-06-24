@@ -30,6 +30,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { AttentionFeed } from "@/components/overview/attention-feed";
 import {
+  OverviewMetricCard,
+  OverviewPanel,
+  OverviewScopeToggle,
+  type OverviewScope,
+} from "@/components/overview/overview-widgets";
+import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
@@ -1224,7 +1230,7 @@ function TransactionForm({
 export default function OverviewPage() {
   const [, navigate] = useLocation();
   const [createFormMode, setCreateFormMode] = useState<"transaction" | "internal">("transaction");
-  const [overviewScope, setOverviewScope] = useState<"all" | "family" | "business">("all");
+  const [overviewScope, setOverviewScope] = useState<OverviewScope>("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isConfigMode, setIsConfigMode] = useState(false);
   const [draftCardOrder, setDraftCardOrder] = useState<DashboardCardId[]>([...DASHBOARD_CARD_IDS]);
@@ -2512,13 +2518,6 @@ export default function OverviewPage() {
     .slice(0, 4);
 
   if (!isConfigMode) {
-    const scopeButtonClass = (scope: "all" | "family" | "business") =>
-      `rounded-md px-4 py-2 transition ${
-        overviewScope === scope
-          ? "bg-[#36304a] text-[#f1e9fc]"
-          : "text-[#aea8be] hover:text-[#f1e9fc]"
-      }`;
-
     return (
       <div className="h-full overflow-y-auto bg-[#0f0c1c] text-[#f1e9fc]">
         <header className="sticky top-0 z-20 border-b border-white/7 bg-[#0b0914]/95 px-6 py-4 backdrop-blur-xl">
@@ -2528,11 +2527,7 @@ export default function OverviewPage() {
               <p className="mt-1 text-xs text-[#aea8be]">{currentMonthLabel} · vista consolidada</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-lg border border-white/10 bg-[#1a1528] p-1 text-xs font-bold text-[#aea8be]">
-                <button type="button" className={scopeButtonClass("all")} onClick={() => setOverviewScope("all")}>Ambos</button>
-                <button type="button" className={scopeButtonClass("family")} onClick={() => setOverviewScope("family")}>Personal</button>
-                <button type="button" className={scopeButtonClass("business")} onClick={() => setOverviewScope("business")}>Empresa</button>
-              </div>
+              <OverviewScopeToggle value={overviewScope} onChange={setOverviewScope} />
               <Button type="button" variant="outline" className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]">
                 {currentMonthLabel}
               </Button>
@@ -2578,45 +2573,36 @@ export default function OverviewPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl border-white/10 bg-[#11101b]">
-              <CardContent className="p-5">
-                <p className="text-sm text-[#aea8be]">Ingresos</p>
-                <p className="mt-3 font-mono text-2xl font-bold text-[#9ef0cf] tabular-nums">
-                  {formatCLP(dashboardCurrentMonthIncome)}
-                </p>
-                <p className="mt-2 text-xs text-[#aea8be]">{incomeMovementCount} movimientos</p>
-              </CardContent>
-            </Card>
-            <Card className="rounded-2xl border-white/10 bg-[#11101b]">
-              <CardContent className="p-5">
-                <p className="text-sm text-[#aea8be]">Gastos</p>
-                <p className="mt-3 font-mono text-2xl font-bold text-[#ff6f8d] tabular-nums">
-                  {formatCLP(dashboardCurrentMonthExpenses)}
-                </p>
-                <p className="mt-2 text-xs text-[#aea8be]">{expenseMovementCount} movimientos</p>
-              </CardContent>
-            </Card>
-            <Card className="rounded-2xl border-white/10 bg-[#11101b]">
-              <CardContent className="p-5">
-                <p className="text-sm text-[#aea8be]">Resultado del mes</p>
-                <p className={`mt-3 font-mono text-2xl font-bold tabular-nums ${monthResult >= 0 ? "text-[#9ef0cf]" : "text-[#ff6f8d]"}`}>
-                  {monthResult >= 0 ? "+" : ""}{formatCLP(monthResult)}
-                </p>
-                <p className="mt-2 text-xs text-[#aea8be]">margen {monthResultMargin}%</p>
-              </CardContent>
-            </Card>
+            <OverviewMetricCard
+              label="Ingresos"
+              value={formatCLP(dashboardCurrentMonthIncome)}
+              detail={`${incomeMovementCount} movimientos`}
+              tone="positive"
+            />
+            <OverviewMetricCard
+              label="Gastos"
+              value={formatCLP(dashboardCurrentMonthExpenses)}
+              detail={`${expenseMovementCount} movimientos`}
+              tone="negative"
+            />
+            <OverviewMetricCard
+              label="Resultado del mes"
+              value={`${monthResult >= 0 ? "+" : ""}${formatCLP(monthResult)}`}
+              detail={`margen ${monthResultMargin}%`}
+              tone={monthResult >= 0 ? "positive" : "negative"}
+            />
           </section>
 
           <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,1fr)]">
-            <Card className="rounded-2xl border-white/10 bg-[#11101b]">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-base font-bold">Evolución de caja</CardTitle>
+            <OverviewPanel
+              title="Evolución de caja"
+              aside={
                 <div className="flex items-center gap-4 text-xs text-[#aea8be]">
                   <span className="flex items-center gap-2"><span className="size-2 rounded-sm bg-[#9ef0cf]" />Personal</span>
                   <span className="flex items-center gap-2"><span className="size-2 rounded-sm bg-[#bb9eff]" />Empresa</span>
                 </div>
-              </CardHeader>
-              <CardContent>
+              }
+            >
                 <div className="h-[276px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={cashEvolutionData}>
@@ -2642,18 +2628,18 @@ export default function OverviewPage() {
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-              </CardContent>
-            </Card>
+            </OverviewPanel>
 
-            <Card className="rounded-2xl border-white/10 bg-[#11101b]">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="flex items-center gap-2 text-base font-bold">
+            <OverviewPanel
+              title={
+                <span className="flex items-center gap-2">
                   <span className="size-2 rounded-full bg-[#f59e0b] shadow-[0_0_18px_rgba(245,158,11,0.7)]" />
                   Requiere tu atención
-                </CardTitle>
-                <span className="text-xs font-bold text-[#aea8be]">{decisionAlerts.length}</span>
-              </CardHeader>
-              <CardContent className="space-y-1">
+                </span>
+              }
+              aside={<span className="text-xs font-bold text-[#aea8be]">{decisionAlerts.length}</span>}
+              contentClassName="space-y-1"
+            >
                 {decisionAlerts.slice(0, 4).map((alert, index) => (
                   <button
                     key={`${alert.title}-${index}`}
@@ -2680,19 +2666,19 @@ export default function OverviewPage() {
                     {alert.href ? <ChevronRight className="size-4 shrink-0 text-[#8f879e]" /> : null}
                   </button>
                 ))}
-              </CardContent>
-            </Card>
+            </OverviewPanel>
           </section>
 
           <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(330px,0.8fr)]">
-            <Card className="rounded-2xl border-white/10 bg-[#11101b]">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-base font-bold">Movimientos recientes</CardTitle>
+            <OverviewPanel
+              title="Movimientos recientes"
+              aside={
                 <Button type="button" variant="ghost" className="h-8 px-2 text-[#bb9eff]" onClick={() => navigate("/movements")}>
                   Ver todos <ChevronRight className="ml-1 size-4" />
                 </Button>
-              </CardHeader>
-              <CardContent className="px-5 pb-3">
+              }
+              contentClassName="px-5 pb-3"
+            >
                 <div className="overflow-x-auto">
                   <Table className="min-w-[680px]">
                     <TableHeader>
@@ -2740,15 +2726,13 @@ export default function OverviewPage() {
                     </TableBody>
                   </Table>
                 </div>
-              </CardContent>
-            </Card>
+            </OverviewPanel>
 
             <div className="grid gap-4">
-              <Card className="rounded-2xl border-white/10 bg-[#11101b]">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-bold">Gasto por categoría</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-4">
+              <OverviewPanel
+                title="Gasto por categoría"
+                contentClassName="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-4"
+              >
                   <div className="h-32">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -2773,17 +2757,17 @@ export default function OverviewPage() {
                       </div>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
+              </OverviewPanel>
 
-              <Card className="rounded-2xl border-white/10 bg-[#11101b]">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-base font-bold">Próximos compromisos</CardTitle>
+              <OverviewPanel
+                title="Próximos compromisos"
+                aside={
                   <Button type="button" variant="ghost" className="h-8 px-2 text-[#bb9eff]" onClick={() => navigate("/automation")}>
                     Ver
                   </Button>
-                </CardHeader>
-                <CardContent className="space-y-3">
+                }
+                contentClassName="space-y-3"
+              >
                   {upcomingCommitments.length === 0 ? (
                     <p className="text-sm text-[#aea8be]">No hay compromisos pendientes del mes.</p>
                   ) : upcomingCommitments.map((tx) => (
@@ -2795,14 +2779,9 @@ export default function OverviewPage() {
                       <span className="font-mono text-sm font-bold tabular-nums">{formatCLP(tx.amount)}</span>
                     </div>
                   ))}
-                </CardContent>
-              </Card>
+              </OverviewPanel>
 
-              <Card className="rounded-2xl border-white/10 bg-[#11101b]">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-bold">Caja por ámbito</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
+              <OverviewPanel title="Caja por ámbito" contentClassName="space-y-4">
                   {workspaceRows.map((row) => (
                     <div key={row.label} className="space-y-1.5">
                       <div className="flex items-center justify-between gap-3 text-sm">
@@ -2825,8 +2804,7 @@ export default function OverviewPage() {
                       </div>
                     </div>
                   ))}
-                </CardContent>
-              </Card>
+              </OverviewPanel>
             </div>
           </section>
         </div>
