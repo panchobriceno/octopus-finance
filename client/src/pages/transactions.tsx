@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Search, Pencil, Trash2, X } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, X, Upload } from "lucide-react";
 import type { Transaction } from "@shared/schema";
 import {
   useTransactions,
@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { buildTransactionPayload, getTransactionFormInitialValues } from "@/lib/transaction-form";
 import { TransactionForm } from "@/pages/overview";
 import { AmountText } from "@/components/finance/amount-text";
+import { ImportWizardDialog } from "@/components/finance/import-wizard-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -69,6 +70,7 @@ export default function TransactionsPage() {
   const bulkDeleteMutation = useBulkDeleteTransactions();
 
   const [showCreate, setShowCreate] = useState(false);
+  const [showImportWizard, setShowImportWizard] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [deletingTx, setDeletingTx] = useState<Transaction | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -174,10 +176,16 @@ export default function TransactionsPage() {
               Todos tus ingresos y gastos cargados. Buscá, filtrá, editá o eliminá.
             </p>
           </div>
-          <Button onClick={() => setShowCreate(true)} data-testid="button-new-transaction">
-            <Plus className="mr-2 size-4" />
-            Nuevo movimiento
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setShowImportWizard(true)} data-testid="button-open-import-wizard">
+              <Upload className="mr-2 size-4" />
+              Importar cartola
+            </Button>
+            <Button onClick={() => setShowCreate(true)} data-testid="button-new-transaction">
+              <Plus className="mr-2 size-4" />
+              Nuevo movimiento
+            </Button>
+          </div>
         </div>
 
         <Card className="border-[#bb9eff]/10 bg-card/70">
@@ -414,6 +422,8 @@ export default function TransactionsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ImportWizardDialog open={showImportWizard} onOpenChange={setShowImportWizard} />
     </div>
   );
 }

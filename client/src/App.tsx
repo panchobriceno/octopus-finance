@@ -29,19 +29,29 @@ import TransactionsPage from "@/pages/transactions";
 import { getCurrentMonthKey } from "@/lib/finance";
 import { autoCarryForwardOpeningBalance } from "@/lib/monthly-balances";
 
+// Wrappers estables: estas páginas ahora aceptan props opcionales (modo wizard),
+// lo que choca con el tipo de `component` de wouter. Un wrapper de identidad fija
+// las usa sin props en su ruta, sin remontar.
+function ImportRoute() {
+  return <ImportDataPage />;
+}
+function MovementsRoute() {
+  return <BankMovementsPage />;
+}
+
 function AppRouter() {
   return (
     <Switch>
       <Route path="/" component={OverviewPage} />
       <Route path="/cash-flow" component={CashFlowPage} />
       <Route path="/pnl" component={PnLPage} />
-      <Route path="/import" component={ImportDataPage} />
+      <Route path="/import" component={ImportRoute} />
       <Route path="/client-payments" component={ClientPaymentsPage} />
       <Route path="/budget" component={BudgetPage} />
       <Route path="/monthly-close" component={MonthlyClosePage} />
       <Route path="/automation" component={MonthlyAutomationPage} />
       <Route path="/transactions" component={TransactionsPage} />
-      <Route path="/movements" component={BankMovementsPage} />
+      <Route path="/movements" component={MovementsRoute} />
       <Route path="/reconciliation" component={ReconciliationPage} />
       <Route path="/data-health" component={DataHealthPage} />
       <Route path="/credit-cards" component={CreditCardsPanelPage} />

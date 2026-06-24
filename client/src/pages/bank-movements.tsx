@@ -140,7 +140,18 @@ function accountLabel(account: { bank?: string | null; name?: string | null } | 
   return [bank, name].filter(Boolean).join(" · ") || "Sin nombre";
 }
 
-export default function BankMovementsPage() {
+export default function BankMovementsPage({
+  embedded = false,
+  batchIdOverride,
+  onDone,
+}: {
+  /** Embebido en el wizard de importación: oculta el chrome de página. */
+  embedded?: boolean;
+  /** Acota la bandeja a un lote concreto (en vez de leerlo de la URL). */
+  batchIdOverride?: string;
+  /** Se dispara cuando se confirma la conversión del lote. */
+  onDone?: () => void;
+} = {}) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const searchString = useSearch();
@@ -178,9 +189,13 @@ export default function BankMovementsPage() {
   const closeBatchMutation = useCloseImportBatch();
 
   useEffect(() => {
+    if (batchIdOverride) {
+      setBatchFilter(batchIdOverride);
+      return;
+    }
     const batchId = new URLSearchParams(searchString).get("batch");
     setBatchFilter(batchId || "latest");
-  }, [searchString]);
+  }, [searchString, batchIdOverride]);
 
   const visibleMovements = useMemo(() => {
     const needle = normalizeImportText(search);
@@ -406,6 +421,7 @@ export default function BankMovementsPage() {
         title: "Lote cerrado",
         description: `${result.summary.converted} convertidos, ${result.summary.reconciled} conciliados y ${result.summary.discarded} omitidos. El lote quedo bloqueado para nuevas revisiones.`,
       });
+      onDone?.();
     } catch (error) {
       toast({
         title: "No se pudo cerrar el lote",
@@ -431,20 +447,24 @@ export default function BankMovementsPage() {
 
   return (
     <>
-    <div className="h-full overflow-auto bg-background">
-      <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 py-5 lg:px-6">
+    <div className={embedded ? "" : "h-full overflow-auto bg-background"}>
+      <div className={embedded ? "flex w-full flex-col gap-5" : "mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 py-5 lg:px-6"}>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Inbox className="size-4" />
-              Conciliacion bancaria
-            </div>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-              Revision de movimientos
-            </h1>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Bandeja previa para revisar cartolas, detectar duplicados y convertir movimientos aprobados en transacciones.
-            </p>
+            {!embedded && (
+              <>
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Inbox className="size-4" />
+                  Conciliacion bancaria
+                </div>
+                <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+                  Revision de movimientos
+                </h1>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                  Bandeja previa para revisar cartolas, detectar duplicados y convertir movimientos aprobados en transacciones.
+                </p>
+              </>
+            )}
             {selectedBatch ? (
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <Badge variant="outline">Lote actual</Badge>
@@ -458,22 +478,26 @@ export default function BankMovementsPage() {
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={() => navigate("/import")}
-              data-testid="button-import-bank-statement"
-            >
-              <Upload className="mr-2 size-4" />
-              Importar cartola
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleSeedDemo}
-              disabled={seedDemoMutation.isPending}
-              data-testid="button-seed-demo-movements"
-            >
-              <Database className="mr-2 size-4" />
-              Cargar demo
-            </Button>
+            {!embedded && (
+              <>
+                <Button
+                  onClick={() => navigate("/import")}
+                  data-testid="button-import-bank-statement"
+                >
+                  <Upload className="mr-2 size-4" />
+                  Importar cartola
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleSeedDemo}
+                  disabled={seedDemoMutation.isPending}
+                  data-testid="button-seed-demo-movements"
+                >
+                  <Database className="mr-2 size-4" />
+                  Cargar demo
+                </Button>
+              </>
+            )}
             <Button
               onClick={handleBulkConvert}
               disabled={!pendingHighConfidenceIds.length || bulkConvertMutation.isPending || bulkPreflightMutation.isPending || isSelectedBatchClosed}
@@ -507,13 +531,15 @@ export default function BankMovementsPage() {
           </div>
         </div>
 
-        <StepFlow
-          steps={[
-            { label: "Importar cartola", hint: "Subí el CSV o PDF", href: "/import" },
-            { label: "Revisar y clasificar", hint: "Categoría, cuenta y duplicados" },
-            { label: "Confirmar", hint: "Convertir en transacciones" },
-          ]}
-        />
+        {!embedded && (
+          <StepFlow
+            steps={[
+              { label: "Importar cartola", hint: "Subí el CSV o PDF", href: "/import" },
+              { label: "Revisar y clasificar", hint: "Categoría, cuenta y duplicados" },
+              { label: "Confirmar", hint: "Convertir en transacciones" },
+            ]}
+          />
+        )}
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <Card className="rounded-lg">
@@ -577,20 +603,22 @@ export default function BankMovementsPage() {
                 className="pl-9"
               />
             </div>
-            <Select value={batchFilter} onValueChange={setBatchFilter}>
-              <SelectTrigger className="w-full lg:w-[280px]">
-                <SelectValue placeholder="Lote" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="latest">Ultimo lote</SelectItem>
-                <SelectItem value="all">Todos los lotes</SelectItem>
-                {batches.map((batch) => (
-                  <SelectItem key={batch.id} value={batch.id}>
-                    {batch.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!embedded && (
+              <Select value={batchFilter} onValueChange={setBatchFilter}>
+                <SelectTrigger className="w-full lg:w-[280px]">
+                  <SelectValue placeholder="Lote" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="latest">Ultimo lote</SelectItem>
+                  <SelectItem value="all">Todos los lotes</SelectItem>
+                  {batches.map((batch) => (
+                    <SelectItem key={batch.id} value={batch.id}>
+                      {batch.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
               <SelectTrigger className="w-full lg:w-[210px]">
                 <SelectValue placeholder="Estado" />
