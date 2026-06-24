@@ -63,10 +63,17 @@ export function CommandPalette() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        setOpen((prev) => !prev);
-      }
+      if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey)) return;
+      // Ctrl+K es un atajo nativo de edición de texto en macOS ("borrar hasta fin
+      // de línea"). No lo secuestramos cuando el foco está en un campo editable.
+      // Cmd+K no tiene ese conflicto y sigue funcionando en todos lados.
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const editable =
+        tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable === true;
+      if (editable && event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      setOpen((prev) => !prev);
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
