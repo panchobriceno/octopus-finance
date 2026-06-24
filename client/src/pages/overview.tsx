@@ -2520,34 +2520,36 @@ export default function OverviewPage() {
   if (!isConfigMode) {
     return (
       <div className="h-full overflow-y-auto bg-[#0f0c1c] text-[#f1e9fc]">
-        <header className="sticky top-0 z-20 border-b border-white/7 bg-[#0b0914]/95 px-6 py-4 backdrop-blur-xl">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
+        <header className="sticky top-0 z-20 border-b border-white/7 bg-[#0b0914]/95 px-4 py-4 backdrop-blur-xl sm:px-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
               <h2 className="text-xl font-extrabold tracking-tight">Resumen</h2>
               <p className="mt-1 text-xs text-[#aea8be]">{currentMonthLabel} · vista consolidada</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
               <OverviewScopeToggle value={overviewScope} onChange={setOverviewScope} />
-              <Button type="button" variant="outline" className="border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]">
-                {currentMonthLabel}
-              </Button>
-              <Button type="button" className="bg-[#bb9eff] text-[#0f0c1c] hover:bg-[#a48bf6]" onClick={() => navigate("/monthly-close")}>
-                Cerrar mes
-              </Button>
-              <Button type="button" variant="outline" size="icon" className="border-white/10 bg-[#141123]" onClick={() => navigate("/settings")} title="Ajustes">
-                <Settings2 className="size-4" />
-              </Button>
+              <div className="-mx-1 flex max-w-full items-center gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <Button type="button" variant="outline" className="shrink-0 border-white/10 bg-[#141123] text-[#f1e9fc] hover:bg-[#201936]">
+                  {currentMonthLabel}
+                </Button>
+                <Button type="button" className="shrink-0 bg-[#bb9eff] text-[#0f0c1c] hover:bg-[#a48bf6]" onClick={() => navigate("/monthly-close")}>
+                  Cerrar mes
+                </Button>
+                <Button type="button" variant="outline" size="icon" className="shrink-0 border-white/10 bg-[#141123]" onClick={() => navigate("/settings")} title="Ajustes">
+                  <Settings2 className="size-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </header>
 
-        <div className="mx-auto max-w-[1440px] space-y-4 p-6">
-          <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.5fr_1fr_1fr_1fr]">
-            <Card className="overflow-hidden rounded-2xl border-[#bb9eff]/20 bg-[#1a1430] shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+        <div className="mx-auto max-w-[1440px] space-y-4 p-4 sm:p-6">
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[1.5fr_1fr_1fr_1fr]">
+            <Card className="overflow-hidden rounded-2xl border-[#bb9eff]/20 bg-[#1a1430] shadow-[0_24px_70px_rgba(0,0,0,0.28)] md:col-span-2 xl:col-span-1">
               <CardContent className="relative min-h-[132px] p-5">
                 <div className="relative z-10">
                   <p className="text-sm text-[#aea8be]">Caja {overviewScopeLabel}</p>
-                  <p className="mt-2 font-mono text-4xl font-bold tracking-tight text-[#f1e9fc] tabular-nums">
+                  <p className="mt-2 break-words font-mono text-3xl font-bold tracking-tight text-[#f1e9fc] tabular-nums sm:text-4xl">
                     {formatCLP(dashboardCash)}
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
@@ -2557,7 +2559,7 @@ export default function OverviewPage() {
                     <span className="text-[#aea8be]">vs. deuda tarjetas {formatCLP(dashboardCreditCardDebt)}</span>
                   </div>
                 </div>
-                <div className="pointer-events-none absolute bottom-0 right-0 h-14 w-[72%] opacity-65">
+                <div className="pointer-events-none absolute bottom-0 right-0 hidden h-14 w-[72%] opacity-65 sm:block">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={cashEvolutionData.slice(-14)}>
                       <defs>
@@ -2597,13 +2599,13 @@ export default function OverviewPage() {
             <OverviewPanel
               title="Evolución de caja"
               aside={
-                <div className="flex items-center gap-4 text-xs text-[#aea8be]">
+                <div className="hidden items-center gap-4 text-xs text-[#aea8be] sm:flex">
                   <span className="flex items-center gap-2"><span className="size-2 rounded-sm bg-[#9ef0cf]" />Personal</span>
                   <span className="flex items-center gap-2"><span className="size-2 rounded-sm bg-[#bb9eff]" />Empresa</span>
                 </div>
               }
             >
-                <div className="h-[276px]">
+                <div className="h-[220px] sm:h-[276px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={cashEvolutionData}>
                       <defs>
@@ -2677,7 +2679,7 @@ export default function OverviewPage() {
                   Ver todos <ChevronRight className="ml-1 size-4" />
                 </Button>
               }
-              contentClassName="px-5 pb-3"
+              contentClassName="px-3 pb-3 sm:px-5"
             >
                 <div className="overflow-x-auto">
                   <Table className="min-w-[680px]">
@@ -2731,9 +2733,9 @@ export default function OverviewPage() {
             <div className="grid gap-4">
               <OverviewPanel
                 title="Gasto por categoría"
-                contentClassName="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-4"
+                contentClassName="grid grid-cols-1 items-center gap-4 sm:grid-cols-[132px_minmax(0,1fr)]"
               >
-                  <div className="h-32">
+                  <div className="mx-auto h-32 w-32 sm:w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={categorySpendData} dataKey="amount" nameKey="name" innerRadius={38} outerRadius={60} paddingAngle={2}>
@@ -2776,7 +2778,7 @@ export default function OverviewPage() {
                         <span className="block truncate text-sm font-bold">{tx.name}</span>
                         <span className="block text-xs text-[#8f879e]">{formatDate(tx.date)} · {transactionWorkspaceLabel(tx.workspace)}</span>
                       </span>
-                      <span className="font-mono text-sm font-bold tabular-nums">{formatCLP(tx.amount)}</span>
+                      <span className="shrink-0 whitespace-nowrap font-mono text-sm font-bold tabular-nums">{formatCLP(tx.amount)}</span>
                     </div>
                   ))}
               </OverviewPanel>

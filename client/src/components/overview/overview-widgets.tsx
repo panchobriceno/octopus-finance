@@ -18,13 +18,13 @@ export function OverviewScopeToggle({
   onChange: (value: OverviewScope) => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-white/10 bg-[#1a1528] p-1 text-xs font-bold">
+    <div className="inline-flex flex-none rounded-lg border border-white/10 bg-[#1a1528] p-1 text-xs font-bold">
       {(Object.keys(SCOPE_LABELS) as OverviewScope[]).map((scope) => (
         <button
           key={scope}
           type="button"
           className={cn(
-            "rounded-md px-4 py-2 text-[#aea8be] transition hover:text-[#f1e9fc]",
+            "whitespace-nowrap rounded-md px-3 py-2 text-[#aea8be] transition hover:text-[#f1e9fc] sm:px-4",
             value === scope && "bg-[#36304a] text-[#f1e9fc]",
           )}
           onClick={() => onChange(scope)}
@@ -58,7 +58,7 @@ export function OverviewMetricCard({
     <Card className="rounded-2xl border-white/10 bg-[#11101b]">
       <CardContent className="p-5">
         <p className="text-sm text-[#aea8be]">{label}</p>
-        <p className={cn("mt-3 font-mono text-2xl font-bold tabular-nums", toneClass)}>
+        <p className={cn("mt-3 break-words font-mono text-2xl font-bold tabular-nums", toneClass)}>
           {value}
         </p>
         <p className="mt-2 text-xs text-[#aea8be]">{detail}</p>
@@ -82,9 +82,9 @@ export function OverviewPanel({
 }) {
   return (
     <Card className={cn("rounded-2xl border-white/10 bg-[#11101b]", className)}>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-base font-bold">{title}</CardTitle>
-        {aside}
+      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
+        <CardTitle className="min-w-0 text-base font-bold">{title}</CardTitle>
+        {aside ? <div className="shrink-0">{aside}</div> : null}
       </CardHeader>
       <CardContent className={contentClassName}>{children}</CardContent>
     </Card>
