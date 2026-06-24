@@ -4,6 +4,7 @@ import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type D
 import { SortableContext, arrayMove, useSortable, rectSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { formatCLP, formatDate } from "@/lib/utils";
+import { AmountText } from "@/components/finance/amount-text";
 import {
   useTransactions,
   useClientPayments,
@@ -1239,6 +1240,7 @@ export default function OverviewPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [deletingTx, setDeletingTx] = useState<Transaction | null>(null);
   const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
   const [creditCards, setCreditCards] = useState<string[]>([]);
   const [payDialog, setPayDialog] = useState<{
@@ -3372,7 +3374,7 @@ export default function OverviewPage() {
                           variant="ghost"
                           size="icon"
                           className="size-8"
-                          onClick={() => deleteMutation.mutate(tx.id)}
+                          onClick={() => setDeletingTx(tx)}
                           data-testid={`button-delete-${tx.id}`}
                         >
                           <Trash2 className="size-3.5 text-muted-foreground" />
@@ -3401,6 +3403,49 @@ export default function OverviewPage() {
       </Button>
 
       {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={!!deletingTx} onOpenChange={(open) => { if (!open) setDeletingTx(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deletingTx ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/60 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{deletingTx.name}</p>
+                <p className="text-xs text-muted-foreground">{formatDate(deletingTx.date)}</p>
+              </div>
+              <AmountText
+                value={deletingTx.type === "income" ? deletingTx.amount : -deletingTx.amount}
+                className="text-sm font-semibold"
+              />
+            </div>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (!deletingTx) return;
+                const id = deletingTx.id;
+                deleteMutation.mutate(id, {
+                  onSuccess: () => {
+                    setDeletingTx(null);
+                    toast({ title: "Movimiento eliminado" });
+                  },
+                });
+              }}
+              disabled={deleteMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Eliminando..." : "Sí, eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
