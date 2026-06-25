@@ -350,7 +350,7 @@ export function QuickExpenseCapture() {
   };
 
   const isReading = ocrPending || createTransactionMutation.isPending;
-  const quickButtonOffset = location === "/" ? "bottom-24 right-4 sm:bottom-6 sm:right-24" : "bottom-6 right-4 sm:right-6";
+  const quickButtonOffset = "bottom-6 right-6";
 
   return (
     <>
@@ -358,14 +358,13 @@ export function QuickExpenseCapture() {
         type="button"
         onClick={openCapture}
         className={cn(
-          "!fixed z-[60] hidden h-12 rounded-full bg-[#cdfa46] px-4 text-[#0a0a0f] shadow-[0_12px_35px_rgba(205,250,70,0.35)] hover:bg-[#bdf03a] active:scale-95 no-default-hover-elevate no-default-active-elevate md:inline-flex",
+          "!fixed z-[60] hidden size-14 items-center justify-center rounded-full bg-[#cdfa46] p-0 text-[#0a0a0f] shadow-[0_12px_35px_rgba(205,250,70,0.35)] hover:scale-105 hover:bg-[#bdf03a] active:scale-95 no-default-hover-elevate no-default-active-elevate md:inline-flex",
           quickButtonOffset,
         )}
-        aria-label="Registrar gasto rápido"
-        title="Registrar gasto rápido"
+        aria-label="Captura rápida de gasto (foto / OCR)"
+        title="Captura rápida de gasto (foto / OCR)"
       >
-        <ReceiptText className="size-5" />
-        <span className="font-extrabold">Gasto</span>
+        <Camera className="size-6" />
       </Button>
 
       <Dialog

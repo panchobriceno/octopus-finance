@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -41,11 +42,13 @@ export function OverviewMetricCard({
   value,
   detail,
   tone = "neutral",
+  onDetail,
 }: {
   label: string;
   value: string;
   detail: string;
   tone?: "positive" | "negative" | "neutral";
+  onDetail?: () => void;
 }) {
   const toneClass =
     tone === "positive"
@@ -55,13 +58,23 @@ export function OverviewMetricCard({
         : "text-[#f4f4f7]";
 
   return (
-    <Card className="rounded-2xl border-white/10 bg-[#0d0d12]">
-      <CardContent className="p-5">
+    <Card className="flex flex-col rounded-2xl border-white/10 bg-[#0d0d12]">
+      <CardContent className="flex flex-1 flex-col p-5">
         <p className="text-sm text-[#9a9aa6]">{label}</p>
         <p className={cn("mt-3 break-words font-mono text-2xl font-bold tabular-nums", toneClass)}>
           {value}
         </p>
         <p className="mt-2 text-xs text-[#9a9aa6]">{detail}</p>
+        {onDetail ? (
+          <button
+            type="button"
+            onClick={onDetail}
+            className="mt-4 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#15151c] px-3 py-2 text-xs font-semibold text-[#cfcfd8] transition-colors hover:bg-[#22222b]"
+          >
+            Ver detalle
+            <ChevronRight className="size-3.5 text-[#9a9aa6]" />
+          </button>
+        ) : null}
       </CardContent>
     </Card>
   );

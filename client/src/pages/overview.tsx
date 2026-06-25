@@ -69,6 +69,10 @@ import {
 import {
   AlertTriangle,
   ArrowRight,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpRight,
+  Info,
   CalendarClock,
   ChevronRight,
   DollarSign,
@@ -2553,7 +2557,6 @@ export default function OverviewPage() {
   ];
   const [currentYear, currentMonth] = currentMonthKey.split("-").map(Number);
   const currentMonthLabel = `${monthNamesLong[(currentMonth ?? 1) - 1]} ${currentYear}`;
-  const overviewScopeLabel = overviewScope === "all" ? "total" : overviewScope === "family" ? "personal" : "empresa";
   const dashboardTransactions = sortedTransactions.filter((tx) => {
     if (overviewScope === "all") return true;
     return normalizeTransaction(tx).workspace === overviewScope;
@@ -2584,9 +2587,6 @@ export default function OverviewPage() {
     : overviewScope === "business"
       ? globalBusinessMetrics.cashFlow
       : openingBalance;
-  const incomeMovementCount = dashboardCurrentMonthFinancialTransactions.filter(
-    (tx) => getTransactionIncomeImpact(tx, "all") > 0,
-  ).length;
   const expenseMovementCount = dashboardCurrentMonthFinancialTransactions.filter(
     (tx) => getTransactionExpenseImpact(tx, "all") > 0,
   ).length;
@@ -2594,6 +2594,29 @@ export default function OverviewPage() {
   const monthResultMargin = dashboardCurrentMonthIncome > 0
     ? Math.round((monthResult / dashboardCurrentMonthIncome) * 100)
     : 0;
+  // Variación de ingresos/gastos vs mes anterior (solo display; deriva de las
+  // transacciones ya cargadas, sin nuevas queries).
+  const prevMonthDate = new Date(currentYear ?? 0, (currentMonth ?? 1) - 2, 1);
+  const prevMonthKey = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, "0")}`;
+  const prevMonthLabel = `${monthNamesLong[prevMonthDate.getMonth()]} ${prevMonthDate.getFullYear()}`;
+  const previousMonthFinancialTransactions = dashboardFinancialTransactions.filter((tx) =>
+    tx.date.startsWith(prevMonthKey),
+  );
+  const previousMonthIncome = previousMonthFinancialTransactions.reduce(
+    (sum, tx) => sum + getTransactionIncomeImpact(tx, "all"),
+    0,
+  );
+  const previousMonthExpenses = previousMonthFinancialTransactions.reduce(
+    (sum, tx) => sum + getTransactionExpenseImpact(tx, "all"),
+    0,
+  );
+  const incomeVariation = dashboardCurrentMonthIncome - previousMonthIncome;
+  const incomeVariationPct = previousMonthIncome > 0
+    ? Math.round((incomeVariation / previousMonthIncome) * 1000) / 10
+    : null;
+  const expenseVariationPct = previousMonthExpenses > 0
+    ? Math.round(((dashboardCurrentMonthExpenses - previousMonthExpenses) / previousMonthExpenses) * 1000) / 10
+    : null;
   const recentDashboardTransactions = currentMonthTransactions.length > 0
     ? currentMonthTransactions.slice(0, 5)
     : visibleTransactions.slice(0, 5);
@@ -2696,53 +2719,60 @@ export default function OverviewPage() {
 
         <div className="mx-auto max-w-[1440px] space-y-4 p-4 sm:p-6">
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[1.5fr_1fr_1fr_1fr]">
-            <Card className="overflow-hidden rounded-2xl border-[#cdfa46]/20 bg-[#15151c] shadow-[0_24px_70px_rgba(0,0,0,0.28)] md:col-span-2 xl:col-span-1">
-              <CardContent className="relative min-h-[132px] p-5">
-                <div className="relative z-10">
-                  <p className="text-sm text-[#9a9aa6]">Caja {overviewScopeLabel}</p>
-                  <p className="mt-2 break-words font-mono text-3xl font-bold tracking-tight text-[#f4f4f7] tabular-nums sm:text-4xl">
-                    {formatCLP(dashboardCash)}
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="rounded-md bg-[#cdfa46]/15 px-2 py-1 font-bold text-[#cdfa46]">
-                      {dashboardCash - dashboardCreditCardDebt >= 0 ? "+" : "-"} neto TC
-                    </span>
-                    <span className="text-[#9a9aa6]">vs. deuda tarjetas {formatCLP(dashboardCreditCardDebt)}</span>
-                  </div>
+            {/* HERO — Ingresos totales, lima sólido, sin gráfico */}
+            <Card className="overflow-hidden rounded-2xl border-0 bg-[#cdfa46] shadow-[0_16px_40px_rgba(169,224,40,0.18)] md:col-span-2 xl:col-span-1">
+              <CardContent className="flex min-h-[150px] flex-col p-5">
+                <div className="flex items-start justify-between">
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-[#1d2a0c]">
+                    Ingresos totales
+                    <Info className="size-3.5 opacity-60" />
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/transactions")}
+                    className="flex size-9 items-center justify-center rounded-full bg-[#101406] text-[#cdfa46] transition-transform hover:scale-105"
+                    aria-label="Ver ingresos en detalle"
+                  >
+                    <ArrowUpRight className="size-4" />
+                  </button>
                 </div>
-                <div className="pointer-events-none absolute bottom-0 right-0 hidden h-14 w-[72%] opacity-65 sm:block">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={cashEvolutionData.slice(-14)}>
-                      <defs>
-                        <linearGradient id="cashGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#cdfa46" stopOpacity={0.75} />
-                          <stop offset="100%" stopColor="#cdfa46" stopOpacity={0.05} />
-                        </linearGradient>
-                      </defs>
-                      <Area type="monotone" dataKey="Empresa" stroke="#cdfa46" fill="url(#cashGradient)" strokeWidth={2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                <p className="mt-3 break-words font-mono text-3xl font-extrabold leading-none tracking-tight text-[#11150a] tabular-nums sm:text-[2.6rem]">
+                  {formatCLP(dashboardCurrentMonthIncome)}
+                </p>
+                <div className="mt-4 inline-flex w-fit items-center gap-1.5 rounded-full bg-[#0a0a0f]/15 px-3 py-1.5 font-mono text-sm font-semibold text-[#16200a]">
+                  {incomeVariation >= 0 ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
+                  {incomeVariation >= 0 ? "+ " : "- "}{formatCLP(Math.abs(incomeVariation))}
+                  {incomeVariationPct !== null ? (
+                    <span className="font-medium opacity-70">({incomeVariationPct.toLocaleString("es-CL")}%)</span>
+                  ) : null}
                 </div>
+                <p className="mt-2 text-xs font-medium text-[#2c3a16]">vs {prevMonthLabel}</p>
               </CardContent>
             </Card>
 
             <OverviewMetricCard
-              label="Ingresos"
-              value={formatCLP(dashboardCurrentMonthIncome)}
-              detail={`${incomeMovementCount} movimientos`}
-              tone="positive"
+              label="Caja disponible"
+              value={formatCLP(dashboardCash)}
+              detail={`Neto tras deuda tarjeta ${formatCLP(dashboardCash - dashboardCreditCardDebt)}`}
+              onDetail={() => navigate("/cash-flow")}
             />
             <OverviewMetricCard
-              label="Gastos"
+              label="Gastos del mes"
               value={formatCLP(dashboardCurrentMonthExpenses)}
-              detail={`${expenseMovementCount} movimientos`}
+              detail={
+                expenseVariationPct !== null
+                  ? `${expenseVariationPct >= 0 ? "+" : "−"}${Math.abs(expenseVariationPct).toLocaleString("es-CL")}% vs ${monthNamesLong[prevMonthDate.getMonth()]}`
+                  : `${expenseMovementCount} movimientos`
+              }
               tone="negative"
+              onDetail={() => navigate("/transactions")}
             />
             <OverviewMetricCard
               label="Resultado del mes"
               value={`${monthResult >= 0 ? "+" : ""}${formatCLP(monthResult)}`}
               detail={`margen ${monthResultMargin}%`}
               tone={monthResult >= 0 ? "positive" : "negative"}
+              onDetail={() => navigate("/pnl")}
             />
           </section>
 
@@ -2973,15 +3003,8 @@ export default function OverviewPage() {
           </section>
         </div>
 
-        <Button
-          type="button"
-          onClick={() => setShowCreateDialog(true)}
-          className="!fixed bottom-6 right-6 z-50 hidden h-14 w-14 rounded-full bg-[#cdfa46] p-0 text-[#0a0a0f] shadow-[0_12px_35px_rgba(205,250,70,0.35)] md:flex transition-transform duration-200 hover:scale-105 hover:bg-[#cdfa46] active:scale-95 no-default-hover-elevate no-default-active-elevate"
-          data-testid="button-open-create-transaction-modal"
-        >
-          <Plus className="size-6" />
-          <span className="sr-only">Agregar movimiento</span>
-        </Button>
+        {/* FAB de creación manual removido: en el dashboard queda un único FAB,
+            el de captura rápida (QuickExpenseCapture). Crear movimiento sigue en /transactions. */}
 
         <CreateMovementDialog
           open={showCreateDialog}
@@ -3501,15 +3524,7 @@ export default function OverviewPage() {
         </CardContent>
       </Card>
 
-      <Button
-        type="button"
-        onClick={() => setShowCreateDialog(true)}
-        className="!fixed bottom-6 right-6 z-50 hidden h-14 w-14 rounded-full bg-[#cdfa46] p-0 text-[#0a0a0f] shadow-[0_12px_35px_rgba(205,250,70,0.35)] transition-transform duration-200 hover:scale-105 hover:bg-[#cdfa46] active:scale-95 animate-in fade-in zoom-in-95 slide-in-from-bottom-4 no-default-hover-elevate no-default-active-elevate md:flex"
-        data-testid="button-open-create-transaction-modal"
-      >
-        <Plus className="size-6" />
-        <span className="sr-only">Agregar movimiento</span>
-      </Button>
+      {/* FAB de creación manual removido (ver nota arriba): único FAB = captura rápida. */}
 
       <DeleteTransactionsDialog
         open={deleteDialogOpen}
