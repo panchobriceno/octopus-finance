@@ -12,6 +12,7 @@ import {
   useUpdateBudget,
   useDeleteBudget,
   useCreateCategory,
+  useCreateItem,
   useGenerateBudgetCommitments,
 } from "@/lib/hooks";
 import { formatCLP } from "@/lib/utils";
@@ -130,7 +131,9 @@ export default function BudgetPage() {
   // Categoría elegida en el paso 1 de la cascada (solo UI; el valor que se guarda
   // sigue siendo newBudgetCategory: nombre de categoría o "item:<id>").
   const [pickerCategoryName, setPickerCategoryName] = useState("");
-  const [newCategoryName, setNewCategoryName] = useState("");
+  // Crear inline desde los dropdowns: "category" | "subcategory" | null.
+  const [creatingMode, setCreatingMode] = useState<"category" | "subcategory" | null>(null);
+  const [inlineCreateName, setInlineCreateName] = useState("");
   const [draftGroupMap, setDraftGroupMap] = useState<Record<string, string[]>>({});
   const [manualOrderMap, setManualOrderMap] = useState<Record<string, string[]>>({});
   const [removedGroupMap, setRemovedGroupMap] = useState<Record<string, string[]>>({});
@@ -146,6 +149,7 @@ export default function BudgetPage() {
   const updateBudgetMutation = useUpdateBudget();
   const deleteBudgetMutation = useDeleteBudget();
   const createCategoryMutation = useCreateCategory();
+  const createItemMutation = useCreateItem();
   const generateBudgetCommitmentsMutation = useGenerateBudgetCommitments();
   const [familyIncomeJaviMap, setFamilyIncomeJaviMap] = useState<Record<string, number>>({});
 
@@ -535,6 +539,73 @@ export default function BudgetPage() {
     }
   };
 
+  // Sentinels para el "➕ Crear nueva" dentro de cada dropdown. NUNCA se guardan:
+  // se interceptan acá y se transforman en abrir el mini-form inline.
+  const CREATE_CATEGORY_SENTINEL = "__create_category__";
+  const CREATE_SUBCATEGORY_SENTINEL = "__create_subcategory__";
+
+  const handleCategoryDropdownChange = (value: string) => {
+    if (value === CREATE_CATEGORY_SENTINEL) {
+      setCreatingMode("category");
+      setInlineCreateName("");
+      return;
+    }
+    setCreatingMode(null);
+    handlePickCategory(value);
+  };
+
+  const handleSubcategoryDropdownChange = (value: string) => {
+    if (value === CREATE_SUBCATEGORY_SENTINEL) {
+      setCreatingMode("subcategory");
+      setInlineCreateName("");
+      return;
+    }
+    setCreatingMode(null);
+    setNewBudgetCategory(value);
+  };
+
+  const handleInlineCreate = async () => {
+    const name = inlineCreateName.trim();
+    if (!name) return;
+    try {
+      if (creatingMode === "category") {
+        // No duplicar: si ya existe (la cascada asume nombres únicos), la seleccionamos.
+        // Buscar SOLO dentro del ámbito activo (evita falsos positivos cruzados y
+        // que se cuelgue de una categoría de otro ámbito con el mismo nombre).
+        const existing = expenseCategories.find(
+          (c) => c.name.toLowerCase() === name.toLowerCase() && matchesWorkspace(c, selectedWorkspace),
+        );
+        if (existing) {
+          handlePickCategory(existing.name);
+        } else {
+          await createCategoryMutation.mutateAsync({
+            name,
+            type: "expense",
+            color: "#64748b",
+            workspace: selectedWorkspace,
+          });
+          setPickerCategoryName(name);
+          setNewBudgetCategory(name); // categoría nueva sin subcategorías → presupuesto total
+        }
+      } else if (creatingMode === "subcategory") {
+        const parent = expenseCategories.find(
+          (c) => c.name === pickerCategoryName && matchesWorkspace(c, selectedWorkspace),
+        );
+        if (!parent) {
+          toast({ title: "Elegí primero la categoría", variant: "destructive" });
+          return;
+        }
+        const created = await createItemMutation.mutateAsync({ name, categoryId: parent.id });
+        setNewBudgetCategory(getItemBudgetKey(created.id));
+      }
+      setCreatingMode(null);
+      setInlineCreateName("");
+    } catch (error) {
+      console.error("inline create failed", error);
+      toast({ title: "No se pudo crear", variant: "destructive" });
+    }
+  };
+
   // Sync input values when period or budgets change
   useEffect(() => {
     const vals: Record<string, string> = {};
@@ -831,54 +902,6 @@ export default function BudgetPage() {
     setPickerCategoryName("");
   };
 
-  const handleCreateCategoryFromBudget = async () => {
-    const trimmedName = newCategoryName.trim();
-    if (!trimmedName) return;
-    const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, trimmedName);
-
-    const alreadyExists = expenseCategories.some(
-      (category) => category.name.toLowerCase() === trimmedName.toLowerCase(),
-    );
-
-    if (!alreadyExists) {
-      await createCategoryMutation.mutateAsync({
-        name: trimmedName,
-        type: "expense",
-        color: "#64748b",
-        workspace: selectedWorkspace,
-      });
-    }
-
-    setInputValues((current) => ({
-      ...current,
-      [stateKey]: current[stateKey] ?? "0",
-    }));
-    setRecurringValues((current) => ({
-      ...current,
-      [stateKey]: current[stateKey] ?? false,
-    }));
-    setDayOfMonthValues((current) => ({
-      ...current,
-      [stateKey]: current[stateKey] ?? "",
-    }));
-    setDraftGroupMap((current) => ({
-      ...current,
-      [selectedScopeKey]: [...(current[selectedScopeKey] ?? []), trimmedName],
-    }));
-    setManualOrderMap((current) => ({
-      ...current,
-      [selectedScopeKey]: [...orderedVisibleGroupNames, trimmedName],
-    }));
-    setRemovedGroupMap((current) => ({
-      ...current,
-      [selectedScopeKey]: (current[selectedScopeKey] ?? []).filter((name) => name !== trimmedName),
-    }));
-    setNewCategoryName("");
-    toast({
-      title: alreadyExists ? "Categoría agregada al presupuesto" : "Categoría creada",
-      description: trimmedName,
-    });
-  };
 
   const handleRemoveBudgetCategory = async (groupName: string) => {
     const stateKey = getBudgetStateKey(selectedMonthKey, selectedWorkspace, groupName);
@@ -1195,31 +1218,28 @@ export default function BudgetPage() {
             </div>
 
             <TabsContent value="plan" className="mt-0 space-y-4">
-              <div className="px-5 grid gap-3 lg:grid-cols-[minmax(0,320px)_auto_minmax(0,320px)_auto] lg:items-end">
+              <div className="px-5 grid gap-3 lg:grid-cols-[minmax(0,360px)_auto] lg:items-start">
                 <div className="w-full md:max-w-sm space-y-1.5">
                   <p className="text-xs text-muted-foreground">Agregar categoría o subcategoría al presupuesto</p>
-                  {/* Paso 1: categoría */}
-                  <Select value={pickerCategoryName} onValueChange={handlePickCategory}>
+                  {/* Paso 1: categoría (+ crear nueva) */}
+                  <Select value={pickerCategoryName} onValueChange={handleCategoryDropdownChange}>
                     <SelectTrigger data-testid="select-add-budget-category">
                       <SelectValue placeholder="Elegir categoría" />
                     </SelectTrigger>
                     <SelectContent className="max-w-[min(460px,calc(100vw-2rem))]">
-                      {pickerCategories.length === 0 ? (
-                        <div className="px-3 py-2 text-xs text-muted-foreground">
-                          No hay más opciones disponibles
-                        </div>
-                      ) : (
-                        pickerCategories.map((category) => (
-                          <SelectItem key={category.name} value={category.name}>
-                            {category.name}
-                          </SelectItem>
-                        ))
-                      )}
+                      {pickerCategories.map((category) => (
+                        <SelectItem key={category.name} value={category.name}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value={CREATE_CATEGORY_SENTINEL} className="font-medium text-[#cdfa46]">
+                        ＋ Crear categoría nueva
+                      </SelectItem>
                     </SelectContent>
                   </Select>
-                  {/* Paso 2: subcategoría — solo si la categoría tiene subcategorías disponibles */}
+                  {/* Paso 2: subcategoría — solo si la categoría tiene subcategorías */}
                   {pickerSelected?.hasItems ? (
-                    <Select value={newBudgetCategory} onValueChange={setNewBudgetCategory}>
+                    <Select value={newBudgetCategory} onValueChange={handleSubcategoryDropdownChange}>
                       <SelectTrigger data-testid="select-add-budget-subcategory">
                         <SelectValue placeholder="Elegir subcategoría" />
                       </SelectTrigger>
@@ -1239,34 +1259,57 @@ export default function BudgetPage() {
                             </span>
                           </SelectItem>
                         ))}
+                        <SelectItem value={CREATE_SUBCATEGORY_SENTINEL} className="font-medium text-[#cdfa46]">
+                          ＋ Crear subcategoría nueva
+                        </SelectItem>
                       </SelectContent>
                     </Select>
+                  ) : null}
+                  {/* Crear inline (aparece al elegir "Crear nueva" en cualquiera de los dropdowns) */}
+                  {creatingMode ? (
+                    <div className="flex items-center gap-2 pt-1">
+                      <Input
+                        value={inlineCreateName}
+                        onChange={(e) => setInlineCreateName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleInlineCreate();
+                        }}
+                        placeholder={creatingMode === "category" ? "Nombre de la categoría" : "Nombre de la subcategoría"}
+                        autoFocus
+                        data-testid="input-inline-create-name"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleInlineCreate}
+                        disabled={!inlineCreateName.trim() || createCategoryMutation.isPending || createItemMutation.isPending}
+                        className="shrink-0 bg-[#cdfa46] text-[#0a0a0f] hover:bg-[#bdf03a]"
+                      >
+                        Crear
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="shrink-0"
+                        onClick={() => {
+                          setCreatingMode(null);
+                          setInlineCreateName("");
+                        }}
+                      >
+                        ✕
+                      </Button>
+                    </div>
                   ) : null}
                 </div>
                 <Button
                   type="button"
                   variant="outline"
+                  className="lg:mt-[1.65rem]"
                   onClick={handleAddBudgetCategory}
                   disabled={!newBudgetCategory}
                 >
                   Agregar
-                </Button>
-                <div className="w-full md:max-w-sm space-y-1.5">
-                  <p className="text-xs text-muted-foreground">Crear categoría nueva</p>
-                  <Input
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder="Nombre de la categoría"
-                    data-testid="input-new-budget-category-name"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCreateCategoryFromBudget}
-                  disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
-                >
-                  {createCategoryMutation.isPending ? "Creando..." : "Crear"}
                 </Button>
               </div>
 
