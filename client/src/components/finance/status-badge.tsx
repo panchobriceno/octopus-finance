@@ -10,11 +10,11 @@ export type MovementStatus =
 // Mono: los estados van en grises etiquetados. El lima queda reservado para
 // ingreso/marca/acciones, no para estados.
 const STYLES: Record<MovementStatus, string> = {
-  pagado: "bg-[#9aa0aa]/15 text-[#9aa0aa] border-[#9aa0aa]/20",
-  pendiente: "bg-[#8a8a94]/15 text-[#8a8a94] border-[#8a8a94]/20",
-  vencido: "bg-[#e3e3ea]/15 text-[#e3e3ea] border-[#e3e3ea]/25",
-  conciliado: "bg-[#c8c8d2]/15 text-[#c8c8d2] border-[#c8c8d2]/20",
-  duplicado: "bg-[#8a8a94]/10 text-[#8a8a94] border-[#8a8a94]/20",
+  pagado: "bg-[rgba(154,160,170,0.14)] text-[#9aa0aa] border-[rgba(154,160,170,0.24)]",
+  pendiente: "bg-[rgba(138,138,148,0.14)] text-[#8a8a94] border-[rgba(138,138,148,0.24)]",
+  vencido: "bg-[rgba(227,227,234,0.12)] text-[#e3e3ea] border-[rgba(227,227,234,0.28)]",
+  conciliado: "bg-[rgba(200,200,210,0.14)] text-[#c8c8d2] border-[rgba(200,200,210,0.24)]",
+  duplicado: "bg-[rgba(138,138,148,0.1)] text-[#8a8a94] border-[rgba(138,138,148,0.2)]",
 };
 
 const LABELS: Record<MovementStatus, string> = {

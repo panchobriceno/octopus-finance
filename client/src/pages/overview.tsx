@@ -73,6 +73,8 @@ import {
   ArrowDown,
   ArrowUpRight,
   Info,
+  LineChart,
+  Camera,
   CalendarClock,
   ChevronRight,
   DollarSign,
@@ -1405,7 +1407,7 @@ function DeleteTransactionsDialog({
               <p className="text-xs font-bold uppercase tracking-wide text-[#6c6c78]">Vista previa</p>
               <div className="space-y-2">
                 {previewTransactions.map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/7 bg-[#15151c] px-3 py-2">
+                  <div key={tx.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#1e1e26] bg-[#15151c] px-3 py-2">
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold text-[#f4f4f7]">{tx.name}</span>
                       <span className="block text-xs text-[#6c6c78]">{formatDate(tx.date)} · {tx.category}</span>
@@ -2694,7 +2696,7 @@ export default function OverviewPage() {
   if (!isConfigMode) {
     return (
       <div className="h-full overflow-y-auto bg-[#0a0a0f] text-[#f4f4f7]">
-        <header className="sticky top-0 z-20 border-b border-white/7 bg-[#0a0a0f]/95 px-4 py-4 backdrop-blur-xl sm:px-6">
+        <header className="sticky top-0 z-20 border-b border-[#1e1e26] bg-[#0a0a0f]/95 px-4 py-4 backdrop-blur-xl sm:px-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <h2 className="text-xl font-extrabold tracking-tight">Resumen</h2>
@@ -2703,13 +2705,21 @@ export default function OverviewPage() {
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
               <OverviewScopeToggle value={overviewScope} onChange={setOverviewScope} />
               <div className="-mx-1 flex max-w-full items-center gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <Button type="button" variant="outline" className="shrink-0 border-white/10 bg-[#15151c] text-[#f4f4f7] hover:bg-[#22222b]">
+                <Button type="button" variant="outline" className="shrink-0 border-card-border bg-secondary text-[#f4f4f7] hover:bg-[#22222b]">
                   {currentMonthLabel}
                 </Button>
-                <Button type="button" className="shrink-0 bg-[#cdfa46] text-[#0a0a0f] hover:bg-[#cdfa46]" onClick={() => navigate("/monthly-close")}>
+                <Button
+                  type="button"
+                  className="hidden shrink-0 gap-2 bg-[#cdfa46] text-[#0a0a0f] hover:bg-[#bdf03a] md:inline-flex"
+                  onClick={() => window.dispatchEvent(new Event("octopus-quick-expense-open"))}
+                >
+                  <Camera className="size-4" />
+                  Captura rápida
+                </Button>
+                <Button type="button" variant="outline" className="shrink-0 border-card-border bg-secondary text-[#f4f4f7] hover:bg-[#22222b]" onClick={() => navigate("/monthly-close")}>
                   Cerrar mes
                 </Button>
-                <Button type="button" variant="outline" size="icon" className="shrink-0 border-white/10 bg-[#15151c]" onClick={() => navigate("/settings")} title="Ajustes">
+                <Button type="button" variant="outline" size="icon" className="shrink-0 border-card-border bg-secondary" onClick={() => navigate("/settings")} title="Ajustes">
                   <Settings2 className="size-4" />
                 </Button>
               </div>
@@ -2720,7 +2730,7 @@ export default function OverviewPage() {
         <div className="mx-auto max-w-[1440px] space-y-4 p-4 sm:p-6">
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[1.5fr_1fr_1fr_1fr]">
             {/* HERO — Ingresos totales, lima sólido, sin gráfico */}
-            <Card className="overflow-hidden rounded-2xl border-0 bg-[#cdfa46] shadow-[0_16px_40px_rgba(169,224,40,0.18)] md:col-span-2 xl:col-span-1">
+            <Card className="overflow-hidden rounded-[20px] border-0 bg-[#cdfa46] shadow-[0_16px_40px_rgba(169,224,40,0.18)] md:col-span-2 xl:col-span-1">
               <CardContent className="flex min-h-[150px] flex-col p-5">
                 <div className="flex items-start justify-between">
                   <span className="flex items-center gap-1.5 text-sm font-semibold text-[#1d2a0c]">
@@ -2753,12 +2763,14 @@ export default function OverviewPage() {
             <OverviewMetricCard
               label="Caja disponible"
               value={formatCLP(dashboardCash)}
+              icon={<Wallet className="size-4" />}
               detail={`Neto tras deuda tarjeta ${formatCLP(dashboardCash - dashboardCreditCardDebt)}`}
               onDetail={() => navigate("/cash-flow")}
             />
             <OverviewMetricCard
               label="Gastos del mes"
               value={formatCLP(dashboardCurrentMonthExpenses)}
+              icon={<ArrowDown className="size-4" />}
               detail={
                 expenseVariationPct !== null
                   ? `${expenseVariationPct >= 0 ? "+" : "−"}${Math.abs(expenseVariationPct).toLocaleString("es-CL")}% vs ${monthNamesLong[prevMonthDate.getMonth()]}`
@@ -2770,8 +2782,16 @@ export default function OverviewPage() {
             <OverviewMetricCard
               label="Resultado del mes"
               value={`${monthResult >= 0 ? "+" : ""}${formatCLP(monthResult)}`}
-              detail={`margen ${monthResultMargin}%`}
-              tone={monthResult >= 0 ? "positive" : "negative"}
+              icon={<LineChart className="size-4" />}
+              detail={
+                <>
+                  <span className="font-mono font-semibold text-[#cdfa46]">
+                    {monthResult >= 0 ? "+" : ""}{monthResultMargin}%
+                  </span>{" "}
+                  margen del mes
+                </>
+              }
+              tone="neutral"
               onDetail={() => navigate("/pnl")}
             />
           </section>
@@ -2828,7 +2848,7 @@ export default function OverviewPage() {
                     key={`${alert.title}-${index}`}
                     type="button"
                     onClick={() => alert.href && navigate(alert.href)}
-                    className="flex w-full items-center gap-3 border-b border-white/7 px-0 py-3 text-left last:border-b-0"
+                    className="flex w-full items-center gap-3 border-b border-[#1e1e26] px-0 py-3 text-left last:border-b-0"
                   >
                     <span className={`flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${
                       alert.tone === "danger"
@@ -2846,7 +2866,12 @@ export default function OverviewPage() {
                       <span className="block truncate text-sm font-bold text-[#f4f4f7]">{alert.title}</span>
                       <span className="block truncate text-xs text-[#9a9aa6]">{alert.description}</span>
                     </span>
-                    {alert.href ? <ChevronRight className="size-4 shrink-0 text-[#6c6c78]" /> : null}
+                    {alert.href ? (
+                      <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-[#cdfa46]">
+                        {alert.actionLabel ?? "Ver"}
+                        <ArrowRight className="size-3.5" />
+                      </span>
+                    ) : null}
                   </button>
                 ))}
             </OverviewPanel>
@@ -2865,7 +2890,7 @@ export default function OverviewPage() {
                 <div className="overflow-x-auto">
                   <Table className="min-w-[680px]">
                     <TableHeader>
-                      <TableRow className="border-white/7 hover:bg-transparent">
+                      <TableRow className="border-[#1e1e26] hover:bg-transparent">
                         <TableHead className="text-xs uppercase tracking-wide text-[#6c6c78]">Descripción</TableHead>
                         <TableHead className="text-xs uppercase tracking-wide text-[#6c6c78]">Categoría</TableHead>
                         <TableHead className="text-xs uppercase tracking-wide text-[#6c6c78]">Ámbito</TableHead>
@@ -2885,7 +2910,7 @@ export default function OverviewPage() {
                         return (
                           <TableRow
                             key={tx.id}
-                            className="cursor-pointer border-white/7 hover:bg-white/3"
+                            className="cursor-pointer border-[#1e1e26] hover:bg-white/3"
                             onClick={() => setEditingTx(tx)}
                             title="Editar movimiento"
                             data-testid={`row-edit-tx-${tx.id}`}
@@ -2927,16 +2952,28 @@ export default function OverviewPage() {
                 title="Gasto por categoría"
                 contentClassName="grid grid-cols-1 items-center gap-4 sm:grid-cols-[132px_minmax(0,1fr)]"
               >
-                  <div className="mx-auto h-32 w-32 sm:w-full">
+                  <div className="relative mx-auto h-32 w-32 sm:w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={categorySpendData} dataKey="amount" nameKey="name" innerRadius={38} outerRadius={60} paddingAngle={2}>
+                        <Pie data={categorySpendData} dataKey="amount" nameKey="name" innerRadius={42} outerRadius={62} paddingAngle={2}>
                           {categorySpendData.map((entry, index) => (
-                            <Cell key={entry.name} fill={categoryColors[index % categoryColors.length]} />
+                            <Cell key={entry.name} fill={categoryColors[index % categoryColors.length]} stroke="none" />
                           ))}
                         </Pie>
                       </PieChart>
                     </ResponsiveContainer>
+                    {categoryTotal > 0 ? (
+                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="font-mono text-sm font-bold tabular-nums text-[#f4f4f7]">
+                          {categoryTotal >= 1_000_000
+                            ? `$${(categoryTotal / 1_000_000).toFixed(1).replace(".", ",")}M`
+                            : categoryTotal >= 1_000
+                              ? `$${Math.round(categoryTotal / 1_000)}K`
+                              : formatCLP(categoryTotal)}
+                        </span>
+                        <span className="text-[9px] text-[#6c6c78]">total</span>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
                     {categorySpendData.length === 0 ? (
@@ -2965,7 +3002,7 @@ export default function OverviewPage() {
                   {upcomingCommitments.length === 0 ? (
                     <p className="text-sm text-[#9a9aa6]">No hay compromisos pendientes del mes.</p>
                   ) : upcomingCommitments.map((tx) => (
-                    <div key={tx.id} className="flex items-center justify-between gap-3 border-b border-white/7 pb-3 last:border-b-0 last:pb-0">
+                    <div key={tx.id} className="flex items-center justify-between gap-3 border-b border-[#1e1e26] pb-3 last:border-b-0 last:pb-0">
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold">{tx.name}</span>
                         <span className="block text-xs text-[#6c6c78]">{formatDate(tx.date)} · {transactionWorkspaceLabel(tx.workspace)}</span>
@@ -2983,16 +3020,16 @@ export default function OverviewPage() {
                           <span className="size-2 rounded-full" style={{ backgroundColor: row.color }} />
                           {row.label}
                         </span>
-                        <span className={`font-mono tabular-nums ${row.amount < 0 ? "text-[#e3e3ea]" : "text-[#cdfa46]"}`}>
+                        <span className="font-mono tabular-nums text-[#f4f4f7]">
                           {formatCLP(row.amount)}
                         </span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-white/7">
+                      <div className="h-2 overflow-hidden rounded-full bg-[#1f1f28]">
                         <div
                           className="h-full rounded-full"
                           style={{
                             width: `${Math.max(4, Math.min(100, (Math.abs(row.amount) / maxWorkspaceAbs) * 100))}%`,
-                            backgroundColor: row.amount < 0 ? "#e3e3ea" : row.color,
+                            backgroundColor: row.amount < 0 ? "#e3e3ea" : "#cdfa46",
                           }}
                         />
                       </div>
@@ -3570,7 +3607,7 @@ export default function OverviewPage() {
             description={`Aplica cambios a ${selectedIds.size} movimiento${selectedIds.size === 1 ? "" : "s"}. Los campos en "No cambiar" se mantienen igual.`}
           />
           <FinanceDialogBody className="space-y-4">
-            <div className="rounded-xl border border-white/7 bg-[#15151c] px-4 py-3">
+            <div className="rounded-xl border border-[#1e1e26] bg-[#15151c] px-4 py-3">
               <p className="text-xs font-bold uppercase tracking-wide text-[#6c6c78]">Selección actual</p>
               <p className="mt-1 text-sm text-[#f4f4f7]">
                 {selectedIds.size} movimiento{selectedIds.size === 1 ? "" : "s"} seleccionado{selectedIds.size === 1 ? "" : "s"}

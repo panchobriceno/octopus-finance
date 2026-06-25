@@ -19,14 +19,16 @@ export function OverviewScopeToggle({
   onChange: (value: OverviewScope) => void;
 }) {
   return (
-    <div className="inline-flex flex-none rounded-lg border border-white/10 bg-[#15151c] p-1 text-xs font-bold">
+    <div className="inline-flex flex-none rounded-full border border-card-border bg-[#121219] p-1 text-xs font-bold">
       {(Object.keys(SCOPE_LABELS) as OverviewScope[]).map((scope) => (
         <button
           key={scope}
           type="button"
           className={cn(
-            "whitespace-nowrap rounded-md px-3 py-2 text-[#9a9aa6] transition hover:text-[#f4f4f7] sm:px-4",
-            value === scope && "bg-[#2a2a34] text-[#f4f4f7]",
+            "whitespace-nowrap rounded-full px-3 py-1.5 transition sm:px-4",
+            value === scope
+              ? "bg-[#cdfa46] text-[#0a0a0f]"
+              : "text-[#9a9aa6] hover:text-[#f4f4f7]",
           )}
           onClick={() => onChange(scope)}
         >
@@ -42,12 +44,14 @@ export function OverviewMetricCard({
   value,
   detail,
   tone = "neutral",
+  icon,
   onDetail,
 }: {
   label: string;
   value: string;
-  detail: string;
+  detail: ReactNode;
   tone?: "positive" | "negative" | "neutral";
+  icon?: ReactNode;
   onDetail?: () => void;
 }) {
   const toneClass =
@@ -58,21 +62,24 @@ export function OverviewMetricCard({
         : "text-[#f4f4f7]";
 
   return (
-    <Card className="flex flex-col rounded-2xl border-white/10 bg-[#0d0d12]">
-      <CardContent className="flex flex-1 flex-col p-5">
-        <p className="text-sm text-[#9a9aa6]">{label}</p>
-        <p className={cn("mt-3 break-words font-mono text-2xl font-bold tabular-nums", toneClass)}>
+    <Card className="flex flex-col rounded-[20px] border-card-border bg-card">
+      <CardContent className="flex flex-1 flex-col p-[18px]">
+        <div className="flex items-center gap-2">
+          {icon ? <span className="text-[#cfcfd8]">{icon}</span> : null}
+          <p className="text-xs font-medium text-[hsl(var(--muted-foreground))]">{label}</p>
+        </div>
+        <p className={cn("mt-3 break-words font-mono text-[22px] font-bold leading-none tabular-nums", toneClass)}>
           {value}
         </p>
-        <p className="mt-2 text-xs text-[#9a9aa6]">{detail}</p>
+        <div className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{detail}</div>
         {onDetail ? (
           <button
             type="button"
             onClick={onDetail}
-            className="mt-4 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#15151c] px-3 py-2 text-xs font-semibold text-[#cfcfd8] transition-colors hover:bg-[#22222b]"
+            className="mt-auto flex items-center justify-between gap-2 rounded-lg bg-secondary px-3 py-2 pt-2 text-xs font-semibold text-[#cfcfd8] transition-colors hover:bg-[#22222b]"
           >
             Ver detalle
-            <ChevronRight className="size-3.5 text-[#9a9aa6]" />
+            <ChevronRight className="size-3.5 text-[hsl(var(--muted-foreground))]" />
           </button>
         ) : null}
       </CardContent>
@@ -94,9 +101,9 @@ export function OverviewPanel({
   aside?: ReactNode;
 }) {
   return (
-    <Card className={cn("rounded-2xl border-white/10 bg-[#0d0d12]", className)}>
+    <Card className={cn("rounded-[20px] border-card-border bg-card", className)}>
       <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
-        <CardTitle className="min-w-0 text-base font-bold">{title}</CardTitle>
+        <CardTitle className="min-w-0 text-[15px] font-bold">{title}</CardTitle>
         {aside ? <div className="shrink-0">{aside}</div> : null}
       </CardHeader>
       <CardContent className={contentClassName}>{children}</CardContent>
