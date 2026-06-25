@@ -96,29 +96,26 @@ const BATCH_STATUS_LABELS: Record<string, string> = {
 };
 
 function batchStatusTone(status: string) {
-  if (status === "closed") return "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300";
-  if (status === "completed") return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
-  if (status === "partially_converted") return "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300";
-  return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
+  if (status === "closed") return "bg-[rgba(205,250,70,0.14)] text-[#cdfa46]";
+  if (status === "completed") return "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]";
+  if (status === "partially_converted") return "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]";
+  return "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]";
 }
 
 function statusTone(status: string) {
-  if (status === "converted" || status === "reconciled") return "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300";
-  if (status === "duplicate") return "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300";
-  if (status === "discarded") return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
-  return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
+  if (status === "converted" || status === "reconciled") return "bg-[rgba(205,250,70,0.14)] text-[#cdfa46]";
+  if (status === "duplicate") return "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]";
+  if (status === "discarded") return "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]";
+  return "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]";
 }
 
 function confidenceTone(value: number) {
-  if (value >= 85) return "text-[hsl(var(--money-in))]";
-  if (value >= 70) return "text-zinc-700 dark:text-zinc-300";
-  return "text-[#e3e3ea]";
+  return value >= 85 ? "text-[#cdfa46]" : "text-[#8a8a94]";
 }
 
 function confidenceBorder(value: number) {
-  if (value >= 85) return "border-l-4 border-l-emerald-400";
-  if (value >= 70) return "border-l-4 border-l-amber-400";
-  return "border-l-4 border-l-red-400";
+  if (value >= 85) return "border-l-4 border-l-[#cdfa46]";
+  return "border-l-4 border-l-[#3a3a44]";
 }
 
 function formatShortDate(date: string) {

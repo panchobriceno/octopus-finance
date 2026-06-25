@@ -92,8 +92,8 @@ const SEVERITY_LABELS: Record<AuditSeverity, string> = {
 const SEVERITY_BADGE: Record<AuditSeverity, string> = {
   critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
   high: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
-  medium: "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300",
-  low: "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300",
+  medium: "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]",
+  low: "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]",
 };
 
 const AREA_LABELS: Record<string, string> = {

@@ -51,12 +51,12 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const STATUS_TONE: Record<ReconciliationStatus, string> = {
-  confident_match: "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300",
-  possible_match: "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300",
-  missing_transaction: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-  possible_duplicate: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
-  resolved: "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300",
-  discarded: "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300",
+  confident_match: "bg-[rgba(205,250,70,0.14)] text-[#cdfa46]",
+  possible_match: "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]",
+  missing_transaction: "bg-[rgba(227,227,234,0.12)] text-[#e3e3ea]",
+  possible_duplicate: "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]",
+  resolved: "bg-[rgba(205,250,70,0.14)] text-[#cdfa46]",
+  discarded: "bg-[rgba(138,138,148,0.1)] text-[#8a8a94]",
 };
 
 function formatDate(date: string) {
@@ -337,12 +337,12 @@ export default function ReconciliationPage() {
                   <div className="text-xs text-muted-foreground">{workspace.registeredCount} transacciones</div>
                 </CardContent>
               </Card>
-              <Card className="rounded-lg">
+              <Card className="rounded-[18px] border-[#cdfa46]/30 bg-[rgba(205,250,70,0.05)]">
                 <CardHeader className="p-4 pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Diferencia</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
-                  <div className={Math.abs(workspace.difference) <= 1 ? "text-2xl font-semibold tabular-nums text-[hsl(var(--money-in))]" : "text-2xl font-semibold tabular-nums text-zinc-700 dark:text-zinc-300"}>
+                  <div className={Math.abs(workspace.difference) <= 1 ? "font-mono text-2xl font-bold tabular-nums text-[#cdfa46]" : "font-mono text-2xl font-bold tabular-nums text-[#e3e3ea]"}>
                     {formatCLP(workspace.difference)}
                   </div>
                   <div className="mt-2 flex gap-2">
@@ -361,40 +361,40 @@ export default function ReconciliationPage() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-4">
-              <Card className="rounded-lg">
+              <Card className="rounded-[18px]">
                 <CardContent className="flex items-center justify-between p-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Confiables</p>
-                    <p className="text-xl font-semibold">{workspace.confidentMatchCount}</p>
+                    <p className="font-mono text-xl font-bold tabular-nums text-[#cdfa46]">{workspace.confidentMatchCount}</p>
                   </div>
-                  <CheckCircle2 className="size-5 text-lime-600" />
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-[rgba(205,250,70,0.12)] text-[#cdfa46]"><CheckCircle2 className="size-5" /></span>
                 </CardContent>
               </Card>
-              <Card className="rounded-lg">
+              <Card className="rounded-[18px]">
                 <CardContent className="flex items-center justify-between p-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Por revisar</p>
-                    <p className="text-xl font-semibold">{workspace.unresolvedCount}</p>
+                    <p className="font-mono text-xl font-bold tabular-nums text-[#f4f4f7]">{workspace.unresolvedCount}</p>
                   </div>
-                  <CircleAlert className="size-5 text-zinc-600" />
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-secondary text-[#9a9aa6]"><CircleAlert className="size-5" /></span>
                 </CardContent>
               </Card>
-              <Card className="rounded-lg">
+              <Card className="rounded-[18px]">
                 <CardContent className="flex items-center justify-between p-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Sin cartola</p>
-                    <p className="text-xl font-semibold">{workspace.unmatchedRegisteredCount}</p>
+                    <p className="font-mono text-xl font-bold tabular-nums text-[#f4f4f7]">{workspace.unmatchedRegisteredCount}</p>
                   </div>
-                  <FileSearch className="size-5 text-slate-600" />
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-secondary text-[#9a9aa6]"><FileSearch className="size-5" /></span>
                 </CardContent>
               </Card>
-              <Card className="rounded-lg">
+              <Card className="rounded-[18px]">
                 <CardContent className="flex items-center justify-between p-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Lotes abiertos</p>
-                    <p className="text-xl font-semibold">{workspace.openBatchCount}</p>
+                    <p className="font-mono text-xl font-bold tabular-nums text-[#f4f4f7]">{workspace.openBatchCount}</p>
                   </div>
-                  <Scale className="size-5 text-fuchsia-600" />
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-secondary text-[#9a9aa6]"><Scale className="size-5" /></span>
                 </CardContent>
               </Card>
             </div>

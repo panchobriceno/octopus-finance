@@ -128,9 +128,9 @@ function getDeltaTone(row: MonthlyCloseSummaryRow): "auto" | "positive" | "negat
 }
 
 function getChecklistTone(status: ChecklistStatus) {
-  if (status === "ready") return "text-[hsl(var(--money-in))]";
-  if (status === "blocked") return "text-[#e3e3ea]";
-  return "text-zinc-700 dark:text-zinc-300";
+  if (status === "ready") return "text-[#cdfa46]";
+  if (status === "blocked") return "text-[#ff6b8a]";
+  return "text-[#9a9aa6]";
 }
 
 // Cada ítem del checklist enlaza a la pantalla donde se resuelve (rutas existentes).
@@ -597,17 +597,27 @@ export default function MonthlyClosePage() {
                     </p>
                   </div>
                   {checklistBlockedCount > 0 && !isClosed ? (
-                    <Badge variant="destructive">Resolver bloqueos</Badge>
+                    <Badge className="border border-[#ff6b8a]/30 bg-[rgba(255,107,138,0.1)] text-[#ff6b8a] hover:bg-[rgba(255,107,138,0.1)]">Resolver bloqueos</Badge>
                   ) : null}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {displayChecklist.map((item) => (
-                    <div key={item.id} className="rounded-lg border bg-background p-3">
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "rounded-[16px] border p-3",
+                        item.status === "blocked"
+                          ? "border-[#ff6b8a]/30 bg-[rgba(255,107,138,0.1)]"
+                          : "border-card-border bg-card",
+                      )}
+                    >
                       <div className="flex items-start gap-2">
                         {item.status === "ready" ? (
-                          <CheckCircle2 className="size-4 mt-0.5 text-lime-600" />
+                          <span className="mt-0.5 flex size-6 items-center justify-center rounded-md bg-[rgba(205,250,70,0.12)] text-[#cdfa46]"><CheckCircle2 className="size-4" /></span>
+                        ) : item.status === "blocked" ? (
+                          <span className="mt-0.5 flex size-6 items-center justify-center rounded-md bg-[rgba(255,107,138,0.12)] text-[#ff6b8a]"><AlertTriangle className="size-4" /></span>
                         ) : (
-                          <AlertTriangle className={cn("size-4 mt-0.5", item.status === "blocked" ? "text-red-600" : "text-zinc-600")} />
+                          <span className="mt-0.5 flex size-6 items-center justify-center rounded-md bg-secondary text-[#d8b24a]"><AlertTriangle className="size-4" /></span>
                         )}
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">

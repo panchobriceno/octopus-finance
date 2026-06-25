@@ -126,10 +126,10 @@ function parseKeywords(value: string) {
 }
 
 function getStatusTone(instance: CommitmentInstance) {
-  if (instance.status === "paid") return "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300";
-  if (instance.status === "skipped") return "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300";
+  if (instance.status === "paid") return "bg-[rgba(205,250,70,0.14)] text-[#cdfa46]";
+  if (instance.status === "skipped") return "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]";
   if (instance.dueDate < new Date().toISOString().slice(0, 10)) return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300";
-  return "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300";
+  return "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]";
 }
 
 function transactionLabel(transaction: Transaction | null) {
