@@ -120,11 +120,14 @@ function buildSummaryRow(id: string, label: string, budget: number, actual: numb
   };
 }
 
-function getDeltaTone(row: MonthlyCloseSummaryRow): "auto" | "positive" | "negative" {
-  if (row.delta === 0) return "auto";
+// Color del delta por FAVORABILIDAD (no por signo): favorable = lima,
+// desfavorable y delta 0 = gris --muted-foreground (mismo criterio que la
+// varianza del Estado de Resultados). La lógica de favorabilidad no cambia.
+function getDeltaTone(row: MonthlyCloseSummaryRow): string {
+  if (row.delta === 0) return "text-[hsl(var(--muted-foreground))]";
   const isExpenseRow = row.id === "business-expenses" || row.id === "family-expenses";
   const isFavorable = isExpenseRow ? row.delta < 0 : row.delta > 0;
-  return isFavorable ? "positive" : "negative";
+  return isFavorable ? "text-[#cdfa46]" : "text-[hsl(var(--muted-foreground))]";
 }
 
 function getChecklistTone(status: ChecklistStatus) {
@@ -733,7 +736,7 @@ export default function MonthlyClosePage() {
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(row.budget)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{formatCLP(row.actual)}</TableCell>
                       <TableCell className="text-right text-sm">
-                        <AmountText value={row.delta} tone={getDeltaTone(row)} className="text-sm" />
+                        <AmountText value={row.delta} tone="neutral" className={cn("text-sm", getDeltaTone(row))} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-sm pr-5">
                         {row.deltaPercent === null ? "-" : `${Math.round(row.deltaPercent * 100)}%`}
