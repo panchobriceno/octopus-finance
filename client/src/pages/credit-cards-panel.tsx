@@ -66,6 +66,17 @@ type ImportBatchSummary = {
   totalAmount: number;
 };
 
+// Chip de color por banco para los tiles tipo "plástico".
+function bankChip(cardName: string): { from: string; to: string } {
+  const n = cardName.toLowerCase();
+  if (n.includes("santander")) return { from: "#e0bd5a", to: "#b8922f" };
+  if (n.includes("edwards") || n.includes("chile")) return { from: "#b9bcc6", to: "#82868f" };
+  if (n.includes("visa") || n.includes("master") || n.includes("débito") || n.includes("debito")) return { from: "#8a7df0", to: "#5b4fd0" };
+  if (n.includes("falabella") || n.includes("cmr")) return { from: "#7fd99a", to: "#3f9f5f" };
+  if (n.includes("bci")) return { from: "#7fb0ff", to: "#3f6fd0" };
+  return { from: "#9aa0aa", to: "#6c6c78" };
+}
+
 function accountDisplayName(account: { name: string; bank: string }) {
   return `${account.name} — ${account.bank}`;
 }
@@ -705,30 +716,30 @@ export default function CreditCardsPanelPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-              <div className="rounded-lg border bg-background p-4">
-                <p className="text-sm text-muted-foreground">Saldo TC calculado</p>
-                <p className={cn("text-2xl font-semibold tabular-nums mt-1", totals.debt >= 0 ? "text-zinc-700 dark:text-zinc-300" : "text-[hsl(var(--money-in))]")}>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-[18px] border border-card-border bg-gradient-to-br from-[#17171f] to-[#131319] p-4">
+                <p className="text-xs text-[#9a9aa6]">Saldo TC calculado</p>
+                <p className={cn("mt-1.5 font-mono text-2xl font-bold tabular-nums", totals.debt < 0 ? "text-[#cdfa46]" : "text-[#f4f4f7]")}>
                   {formatCLP(totals.debt)}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Histórico registrado menos pagos cargados.</p>
+                <p className="mt-1 text-xs text-[#6c6c78]">Histórico menos pagos cargados.</p>
               </div>
-              <div className="rounded-lg border bg-background p-4">
-                <p className="text-sm text-muted-foreground">Compromiso del mes</p>
-                <p className="text-2xl font-semibold tabular-nums mt-1">{formatCLP(totals.installmentsDueThisMonth)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{totals.installmentsDueThisMonthCount} cuotas en {MONTH_NAMES[selectedMonth - 1].toLowerCase()}.</p>
+              <div className="rounded-[18px] border border-card-border bg-gradient-to-br from-[#17171f] to-[#131319] p-4">
+                <p className="text-xs text-[#9a9aa6]">Compromiso del mes</p>
+                <p className="mt-1.5 font-mono text-2xl font-bold tabular-nums text-[#8a8a94]">{formatCLP(totals.installmentsDueThisMonth)}</p>
+                <p className="mt-1 text-xs text-[#6c6c78]">{totals.installmentsDueThisMonthCount} cuotas en {MONTH_NAMES[selectedMonth - 1].toLowerCase()}.</p>
               </div>
-              <div className="rounded-lg border bg-background p-4">
-                <p className="text-sm text-muted-foreground">Pagos cargados</p>
-                <p className="text-2xl font-semibold tabular-nums mt-1">{formatCLP(totals.monthlyPayments)}</p>
-                <p className="text-xs text-muted-foreground mt-1">Abonos reales importados o registrados.</p>
+              <div className="rounded-[18px] border border-card-border bg-gradient-to-br from-[#17171f] to-[#131319] p-4">
+                <p className="text-xs text-[#9a9aa6]">Pagos cargados</p>
+                <p className="mt-1.5 font-mono text-2xl font-bold tabular-nums text-[#cdfa46]">{formatCLP(totals.monthlyPayments)}</p>
+                <p className="mt-1 text-xs text-[#6c6c78]">Abonos importados o registrados.</p>
               </div>
-              <div className="rounded-lg border bg-background p-4">
-                <p className="text-sm text-muted-foreground">Balance del mes</p>
-                <p className={cn("text-2xl font-semibold tabular-nums mt-1", monthlyNet > 0 ? "text-zinc-700 dark:text-zinc-300" : "text-[hsl(var(--money-in))]")}>
+              <div className="rounded-[18px] border border-card-border bg-gradient-to-br from-[#17171f] to-[#131319] p-4">
+                <p className="text-xs text-[#9a9aa6]">Balance del mes</p>
+                <p className={cn("mt-1.5 font-mono text-2xl font-bold tabular-nums", monthlyNet < 0 ? "text-[#cdfa46]" : "text-[#f4f4f7]")}>
                   {formatCLP(monthlyNet)}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Compras menos pagos del periodo.</p>
+                <p className="mt-1 text-xs text-[#6c6c78]">Compras menos pagos del periodo.</p>
               </div>
             </div>
 
@@ -751,34 +762,46 @@ export default function CreditCardsPanelPage() {
                     {summaries.map((summary) => {
                       const isActive = selectedCard === summary.cardName;
                       const paymentLabel = paymentAccountLabelByCard.get(summary.cardName);
+                      const chip = bankChip(summary.cardName);
                       return (
                         <button
                           key={summary.cardName}
                           type="button"
                           onClick={() => setSelectedCard(summary.cardName)}
                           className={cn(
-                            "rounded-lg border bg-background p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            isActive ? "border-primary bg-primary/5" : "border-border",
+                            "rounded-[18px] border bg-gradient-to-br from-[#1c1c24] to-[#121218] p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            isActive ? "border-[#cdfa46]" : "border-card-border hover:border-[#3a3a44]",
                           )}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <span className="font-medium leading-tight">{summary.cardName}</span>
-                            {paymentLabel ? (
-                              <Badge variant="secondary" className="shrink-0">
-                                Cuenta OK
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="shrink-0 border-zinc-300 text-zinc-700 dark:text-zinc-300">
-                                Sin cuenta
-                              </Badge>
-                            )}
+                            <span className="block min-w-0 truncate font-bold leading-tight text-[#f4f4f7]">{summary.cardName}</span>
+                            <span
+                              className="h-6 w-8 shrink-0 rounded-md"
+                              style={{ background: `linear-gradient(135deg, ${chip.from}, ${chip.to})` }}
+                              aria-hidden
+                            />
                           </div>
-                          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                            <span>Saldo</span>
-                            <span className="text-right tabular-nums text-foreground">{formatCLP(summary.debt)}</span>
-                            <span>Cuotas mes</span>
-                            <span className="text-right tabular-nums text-foreground">{formatCLP(summary.installmentsDueThisMonth)}</span>
+                          <div className="mt-4 space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[#9a9aa6]">Saldo</span>
+                              <span className={cn("font-mono tabular-nums", summary.debt < 0 ? "text-[#cdfa46]" : "text-[#e3e3ea]")}>
+                                {formatCLP(summary.debt)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[#9a9aa6]">Cuotas mes</span>
+                              <span className="font-mono tabular-nums text-[#cfcfd8]">{formatCLP(summary.installmentsDueThisMonth)}</span>
+                            </div>
                           </div>
+                          {paymentLabel ? (
+                            <span className="mt-3 inline-flex items-center rounded-md bg-[rgba(205,250,70,0.12)] px-2 py-0.5 text-[10px] font-bold text-[#cdfa46]">
+                              Cuenta OK
+                            </span>
+                          ) : (
+                            <span className="mt-3 inline-flex items-center rounded-md border border-card-border px-2 py-0.5 text-[10px] font-bold text-[#8a8a94]">
+                              Sin cuenta de pago
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -786,14 +809,14 @@ export default function CreditCardsPanelPage() {
                 )}
               </div>
 
-              <div className="rounded-lg border bg-background p-4">
+              <div className="rounded-[18px] border border-card-border bg-gradient-to-br from-[#17171f] to-[#131319] p-4">
                 <div className="flex items-center gap-2">
                   {hasPaymentAccountAlert ? (
-                    <AlertTriangle className="size-4 text-zinc-600" />
+                    <AlertTriangle className="size-4 text-[#8a8a94]" />
                   ) : (
-                    <CheckCircle2 className="size-4 text-lime-600" />
+                    <CheckCircle2 className="size-4 text-[#cdfa46]" />
                   )}
-                  <h4 className="text-sm font-semibold">Estado operativo</h4>
+                  <h4 className="text-sm font-bold">Estado operativo</h4>
                 </div>
                 <div className="mt-3 space-y-3 text-sm">
                   {selectedCard === "all" ? (
@@ -824,11 +847,11 @@ export default function CreditCardsPanelPage() {
                     </p>
                   </div>
                   {totals.debt > 0 ? (
-                    <div className="rounded-md bg-zinc-50 p-3 text-zinc-900 dark:bg-zinc-950/40 dark:text-zinc-200">
-                      Hay saldo de tarjeta abierto. Revisa pagos cargados antes de cerrar el mes.
+                    <div className="rounded-lg border border-[#cdfa46]/30 bg-[rgba(205,250,70,0.07)] p-3 text-[#cfcfd8]">
+                      Hay saldo de tarjeta abierto. Revisá pagos cargados antes de cerrar el mes.
                     </div>
                   ) : (
-                    <div className="rounded-md bg-lime-50 p-3 text-lime-900 dark:bg-lime-950/40 dark:text-lime-200">
+                    <div className="rounded-lg border border-[#cdfa46]/30 bg-[rgba(205,250,70,0.07)] p-3 text-[#cfcfd8]">
                       No hay saldo abierto en el filtro actual.
                     </div>
                   )}

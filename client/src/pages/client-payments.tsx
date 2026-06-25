@@ -157,6 +157,7 @@ export default function ClientPaymentsPage() {
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [markPaidDraft, setMarkPaidDraft] = useState<MarkPaidDraft | null>(null);
   const [showCreateClientForm, setShowCreateClientForm] = useState(false);
+  const [showNewIncome, setShowNewIncome] = useState(false);
   const [newClientName, setNewClientName] = useState("");
   const [newClientRut, setNewClientRut] = useState("");
   const [newClientWorkspace, setNewClientWorkspace] = useState("business");
@@ -365,6 +366,7 @@ export default function ClientPaymentsPage() {
       onSuccess: () => {
         toast({ title: "Ingreso cliente guardado" });
         setForm(defaultForm);
+        setShowNewIncome(false);
       },
     });
   };
@@ -661,12 +663,17 @@ export default function ClientPaymentsPage() {
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <BriefcaseBusiness className="size-5 text-primary" />
-          <h2 className="text-xl font-semibold">Ingresos Clientes</h2>
+          <span className="flex size-9 items-center justify-center rounded-xl border border-card-border bg-secondary text-[#cdfa46]">
+            <BriefcaseBusiness className="size-4" />
+          </span>
+          <div>
+            <h2 className="text-xl font-extrabold tracking-tight">Ingresos clientes</h2>
+            <p className="mt-0.5 text-xs text-[#9a9aa6]">Pipeline de cobros · proyectado → por cobrar → facturado → pagado</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             onClick={() =>
@@ -702,58 +709,63 @@ export default function ClientPaymentsPage() {
               {migrateStatusesMutation.isPending ? "Migrando..." : "Migrar estados históricos"}
             </Button>
           ) : null}
+          <Button
+            variant="outline"
+            onClick={() => setShowCreateClientForm(true)}
+            data-testid="button-toggle-create-client"
+          >
+            Crear cliente
+          </Button>
+          <Button
+            className="gap-2 bg-[#cdfa46] text-[#0a0a0f] hover:bg-[#bdf03a]"
+            onClick={() => setShowNewIncome(true)}
+            data-testid="button-open-new-income"
+          >
+            <Plus className="size-4" /> Nuevo ingreso
+          </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+        <Card className="border-card-border bg-gradient-to-br from-[#17171f] to-[#131319]">
           <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Neto total</p>
-            <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(summary.totalNet)}</p>
+            <p className="text-xs text-[#9a9aa6]">Neto total</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold tabular-nums text-[#f4f4f7]">{formatCLP(summary.totalNet)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-card-border bg-gradient-to-br from-[#17171f] to-[#131319]">
           <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Pagado</p>
-            <p className="text-xl font-semibold tabular-nums mt-1 text-[hsl(var(--money-in))]">
-              {formatCLP(summary.paid)}
-            </p>
+            <p className="flex items-center gap-1.5 text-xs text-[#9a9aa6]"><span className="size-1.5 rounded-full bg-[#cdfa46]" />Pagado</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold tabular-nums text-[#cdfa46]">{formatCLP(summary.paid)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-card-border bg-gradient-to-br from-[#17171f] to-[#131319]">
           <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Facturado</p>
-            <p className="text-xl font-semibold tabular-nums mt-1 text-violet-700 dark:text-violet-300">
-              {formatCLP(summary.invoiced)}
-            </p>
+            <p className="flex items-center gap-1.5 text-xs text-[#9a9aa6]"><span className="size-1.5 rounded-full bg-[#e3e3ea]" />Facturado</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold tabular-nums text-[#e3e3ea]">{formatCLP(summary.invoiced)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-card-border bg-gradient-to-br from-[#17171f] to-[#131319]">
           <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Por cobrar</p>
-            <p className="text-xl font-semibold tabular-nums mt-1 text-zinc-700 dark:text-zinc-300">
-              {formatCLP(summary.receivable)}
-            </p>
+            <p className="flex items-center gap-1.5 text-xs text-[#9a9aa6]"><span className="size-1.5 rounded-full bg-[#8a8a94]" />Por cobrar</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold tabular-nums text-[#8a8a94]">{formatCLP(summary.receivable)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border border-dashed border-[#3a3a44] bg-gradient-to-br from-[#17171f] to-[#131319]">
           <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Proyectado</p>
-            <p className="text-xl font-semibold tabular-nums mt-1 text-slate-700 dark:text-slate-300">
-              {formatCLP(summary.projected)}
-            </p>
+            <p className="flex items-center gap-1.5 text-xs text-[#9a9aa6]"><span className="inline-block h-px w-3 border-t border-dashed border-[#8a8a94]" />Proyectado</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold tabular-nums text-[#8a8a94]">{formatCLP(summary.projected)}</p>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <Plus className="size-4" />
-            Nuevo ingreso cliente
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+      <Dialog open={showNewIncome} onOpenChange={setShowNewIncome}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nuevo ingreso cliente</DialogTitle>
+            <DialogDescription>Registrá una factura o cobro proyectado.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">Cliente</p>
             <Select value={form.clientId || undefined} onValueChange={handleClientSelection}>
@@ -857,79 +869,63 @@ export default function ClientPaymentsPage() {
             <p className="text-xs text-muted-foreground">Monto total</p>
             <Input type="number" placeholder="Monto total" value={form.totalAmount} readOnly />
           </div>
-          <div className="xl:col-span-2" />
-          <Button
-            onClick={handleCreate}
-            disabled={createMutation.isPending || createClientMutation.isPending}
-            data-testid="button-add-client-payment"
-          >
-            {createMutation.isPending || createClientMutation.isPending ? "Guardando..." : "Guardar ingreso"}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">Crear cliente nuevo</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              Si el cliente no existe en la lista, puedes crearlo rápido aquí mismo sin salir de la página.
-            </p>
-            <Button
-              variant={showCreateClientForm ? "secondary" : "outline"}
-              onClick={() => setShowCreateClientForm((current) => !current)}
-              data-testid="button-toggle-create-client"
-            >
-              {showCreateClientForm ? "Cerrar" : "Crear cliente nuevo"}
-            </Button>
           </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewIncome(false)}>Cancelar</Button>
+            <Button
+              className="gap-2 bg-[#cdfa46] text-[#0a0a0f] hover:bg-[#bdf03a]"
+              onClick={handleCreate}
+              disabled={createMutation.isPending || createClientMutation.isPending}
+              data-testid="button-add-client-payment"
+            >
+              {createMutation.isPending || createClientMutation.isPending ? "Guardando..." : "Guardar ingreso"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-          {showCreateClientForm ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Nombre</p>
-                <Input
-                  placeholder="Nombre cliente"
-                  value={newClientName}
-                  onChange={(e) => setNewClientName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">RUT</p>
-                <Input
-                  placeholder="12.345.678-9"
-                  value={newClientRut}
-                  onChange={(e) => setNewClientRut(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Ámbito</p>
-                <Select value={newClientWorkspace} onValueChange={setNewClientWorkspace}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="business">Empresa</SelectItem>
-                    <SelectItem value="family">Familia</SelectItem>
-                    <SelectItem value="dentist">Consulta Dentista</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-end">
-                <Button
-                  onClick={handleQuickCreateClient}
-                  disabled={createClientMutation.isPending}
-                  data-testid="button-create-client-inline"
-                >
-                  {createClientMutation.isPending ? "Creando..." : "Guardar cliente"}
-                </Button>
-              </div>
+      <Dialog open={showCreateClientForm} onOpenChange={setShowCreateClientForm}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Crear cliente nuevo</DialogTitle>
+            <DialogDescription>Si el cliente no existe en la lista, creálo rápido sin salir de la página.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Nombre</p>
+              <Input placeholder="Nombre cliente" value={newClientName} onChange={(e) => setNewClientName(e.target.value)} />
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">RUT</p>
+              <Input placeholder="12.345.678-9" value={newClientRut} onChange={(e) => setNewClientRut(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Ámbito</p>
+              <Select value={newClientWorkspace} onValueChange={setNewClientWorkspace}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="business">Empresa</SelectItem>
+                  <SelectItem value="family">Familia</SelectItem>
+                  <SelectItem value="dentist">Consulta Dentista</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateClientForm(false)}>Cancelar</Button>
+            <Button
+              className="bg-[#cdfa46] text-[#0a0a0f] hover:bg-[#bdf03a]"
+              onClick={handleQuickCreateClient}
+              disabled={createClientMutation.isPending}
+              data-testid="button-create-client-inline"
+            >
+              {createClientMutation.isPending ? "Creando..." : "Guardar cliente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader className="pb-3">

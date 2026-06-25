@@ -1024,50 +1024,47 @@ export default function BudgetPage() {
       </Card>
 
       {/* KPI Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-5 pb-4 px-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Card className="border-card-border bg-gradient-to-br from-[#17171f] to-[#131319]">
+          <CardContent className="px-5 pb-4 pt-5">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Presupuesto Total</p>
-                <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(totalBudget)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{selectedWorkspace === "business" ? "Empresa" : "Familia"}</p>
+                <p className="text-xs text-[#9a9aa6]">Presupuesto total</p>
+                <p className="mt-1.5 font-mono text-[22px] font-bold tabular-nums text-[#f4f4f7]">{formatCLP(totalBudget)}</p>
+                <p className="mt-1 text-xs text-[#6c6c78]">{selectedWorkspace === "business" ? "Empresa" : "Familia"}</p>
               </div>
-              <div className="p-2.5 rounded-lg" style={{ backgroundColor: "#9ea6b415" }}>
-                <Calculator className="size-5" style={{ color: "#9ea6b4" }} />
+              <div className="rounded-lg bg-secondary p-2.5">
+                <Calculator className="size-5 text-[#9a9aa6]" />
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-5 pb-4 px-5">
+        <Card className="border-card-border bg-gradient-to-br from-[#17171f] to-[#131319]">
+          <CardContent className="px-5 pb-4 pt-5">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Real Ejecutado</p>
-                <p className="text-xl font-semibold tabular-nums mt-1">{formatCLP(totalActual)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{selectedWorkspace === "business" ? "Empresa" : "Familia"}</p>
+                <p className="text-xs text-[#9a9aa6]">Real ejecutado</p>
+                <p className="mt-1.5 font-mono text-[22px] font-bold tabular-nums text-[#e3e3ea]">{formatCLP(totalActual)}</p>
+                <p className="mt-1 text-xs text-[#6c6c78]">Ejecutado + comprometido</p>
               </div>
-              <div className="p-2.5 rounded-lg" style={{ backgroundColor: "#f9731615" }}>
-                <TrendingDown className="size-5" style={{ color: "#f97316" }} />
+              <div className="rounded-lg bg-secondary p-2.5">
+                <TrendingDown className="size-5 text-[#9a9aa6]" />
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-5 pb-4 px-5">
+        <Card className="border-card-border bg-gradient-to-br from-[#17171f] to-[#131319]">
+          <CardContent className="px-5 pb-4 pt-5">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Diferencia</p>
-                <p className={`text-xl font-semibold tabular-nums mt-1 ${totalDiff >= 0 ? "text-[hsl(var(--money-in))]" : "text-[#e3e3ea]"}`}>
+                <p className="text-xs text-[#9a9aa6]">Disponible</p>
+                <p className={`mt-1.5 font-mono text-[22px] font-bold tabular-nums ${totalDiff >= 0 ? "text-[#cdfa46]" : "text-[#e3e3ea]"}`}>
                   {formatCLP(totalDiff)}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">{selectedWorkspace === "business" ? "Empresa" : "Familia"}</p>
+                <p className="mt-1 text-xs text-[#6c6c78]">Presupuesto − ejecutado</p>
               </div>
-              <div
-                className="p-2.5 rounded-lg"
-                style={{ backgroundColor: totalDiff >= 0 ? "#cdfa4615" : "#ef444415" }}
-              >
-                <TrendingUp className="size-5" style={{ color: totalDiff >= 0 ? "#cdfa46" : "#ef4444" }} />
+              <div className="rounded-lg bg-[rgba(205,250,70,0.12)] p-2.5">
+                <TrendingUp className="size-5 text-[#cdfa46]" />
               </div>
             </div>
           </CardContent>
@@ -1157,10 +1154,10 @@ export default function BudgetPage() {
         <CardContent className="px-0">
           <Tabs defaultValue="plan" className="space-y-4">
             <div className="px-5">
-              <TabsList className="grid w-full grid-cols-3 sm:w-auto">
-                <TabsTrigger value="plan">Plan</TabsTrigger>
-                <TabsTrigger value="execution">Ejecución</TabsTrigger>
-                <TabsTrigger value="recurring">Recurrentes</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-3 gap-1 rounded-full border border-card-border bg-[#121219] p-1 sm:w-auto sm:inline-grid">
+                <TabsTrigger value="plan" className="rounded-full font-semibold text-[#9a9aa6] data-[state=active]:bg-[#cdfa46] data-[state=active]:text-[#0a0a0f] data-[state=active]:shadow-none">Plan</TabsTrigger>
+                <TabsTrigger value="execution" className="rounded-full font-semibold text-[#9a9aa6] data-[state=active]:bg-[#cdfa46] data-[state=active]:text-[#0a0a0f] data-[state=active]:shadow-none">Ejecución</TabsTrigger>
+                <TabsTrigger value="recurring" className="rounded-full font-semibold text-[#9a9aa6] data-[state=active]:bg-[#cdfa46] data-[state=active]:text-[#0a0a0f] data-[state=active]:shadow-none">Recurrentes</TabsTrigger>
               </TabsList>
             </div>
 
