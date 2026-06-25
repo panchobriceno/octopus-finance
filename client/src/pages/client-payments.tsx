@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { BriefcaseBusiness, Check, Pencil, Plus, Trash2, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { BriefcaseBusiness, Check, Pencil, Plus, Save, Trash2, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
 type PaymentStatus = "projected" | "receivable" | "invoiced" | "paid" | "cancelled";
 
@@ -762,10 +762,17 @@ export default function ClientPaymentsPage() {
       <Dialog open={showNewIncome} onOpenChange={setShowNewIncome}>
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Nuevo ingreso cliente</DialogTitle>
-            <DialogDescription>Registrá una factura o cobro proyectado.</DialogDescription>
+            <div className="flex items-center gap-3 text-left">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[rgba(205,250,70,0.12)] text-[#cdfa46]">
+                <Plus className="size-4" />
+              </span>
+              <div>
+                <DialogTitle>Nuevo ingreso cliente</DialogTitle>
+                <DialogDescription>Registrá una factura o cobro proyectado.</DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">Cliente</p>
             <Select value={form.clientId || undefined} onValueChange={handleClientSelection}>
@@ -863,14 +870,14 @@ export default function ClientPaymentsPage() {
           </div>
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">IVA (19% automático)</p>
-            <Input type="number" placeholder="IVA (19% automático)" value={form.vatAmount} readOnly />
+            <Input type="number" placeholder="$0" value={form.vatAmount} readOnly className="text-[#9a9aa6]" />
           </div>
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">Monto total</p>
-            <Input type="number" placeholder="Monto total" value={form.totalAmount} readOnly />
+            <Input type="number" placeholder="$0" value={form.totalAmount} readOnly className="font-mono font-semibold text-[#f4f4f7]" />
           </div>
           </div>
-          <DialogFooter>
+          <div className="mt-3 flex items-center justify-end gap-2 border-t border-card-border pt-4">
             <Button variant="outline" onClick={() => setShowNewIncome(false)}>Cancelar</Button>
             <Button
               className="gap-2 bg-[#cdfa46] text-[#0a0a0f] hover:bg-[#bdf03a]"
@@ -878,9 +885,10 @@ export default function ClientPaymentsPage() {
               disabled={createMutation.isPending || createClientMutation.isPending}
               data-testid="button-add-client-payment"
             >
+              <Save className="size-4" />
               {createMutation.isPending || createClientMutation.isPending ? "Guardando..." : "Guardar ingreso"}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
