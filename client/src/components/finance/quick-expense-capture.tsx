@@ -24,6 +24,7 @@ import {
   inferQuickExpenseCategoryId,
   type QuickExpensePaymentMethod,
 } from "@/domain/quick-expense";
+import { categoryMatchesWorkspace } from "@/domain/categories";
 import {
   FinanceDialogBody,
   FinanceDialogContent,
@@ -136,8 +137,11 @@ export function QuickExpenseCapture() {
   );
 
   const expenseCategories = useMemo(
-    () => categories.filter((category) => category.type === "expense"),
-    [categories],
+    () =>
+      categories.filter(
+        (category) => category.type === "expense" && categoryMatchesWorkspace(category, form.workspace),
+      ),
+    [categories, form.workspace],
   );
 
   const selectedCategory = useMemo(

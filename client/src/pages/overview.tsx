@@ -113,34 +113,7 @@ import { useMonthlyBalances } from "@/lib/monthly-balances";
 import { getCreditCards } from "@/lib/credit-cards";
 import { buildTransactionPayload, getTransactionFormInitialValues } from "@/lib/transaction-form";
 import { getOperatingCashBalance, getSavingsBalance } from "@/domain/accounts";
-
-const FAMILY_CATEGORY_HINTS = [
-  "dividendo",
-  "gastos comunes",
-  "gastos basicos",
-  "auto",
-  "comida",
-  "farmacia",
-  "seguros",
-  "educacion",
-  "salud",
-  "digital",
-  "ocio",
-  "tc javi",
-  "t.c javi",
-  "tc pancho",
-  "t.c pancho",
-  "consulta javi",
-  "nana",
-];
-
-function normalizeHint(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
+import { categoryMatchesWorkspace } from "@/domain/categories";
 
 function workspaceLabel(workspace: "business" | "family" | "dentist") {
   if (workspace === "business") return "Empresa";
@@ -827,7 +800,9 @@ export function TransactionForm({
   const canKeepPaidCreditCardPurchase = mode === "edit" && defaults.status === "paid";
 
   const effectiveType = formMovementType === "income" ? "income" : "expense";
-  const filteredCategories = categories.filter((c) => c.type === effectiveType);
+  const filteredCategories = categories.filter(
+    (c) => c.type === effectiveType && categoryMatchesWorkspace(c, formWorkspace),
+  );
   const filteredItems = items.filter((i) => i.categoryId === formCategoryId);
   const categoryRequired = formMovementType === "income" || formMovementType === "expense";
   const selectableBankAccounts = useMemo(
@@ -848,17 +823,9 @@ export function TransactionForm({
     return () => window.removeEventListener("octopus-credit-cards-updated", sync);
   }, []);
 
-  useEffect(() => {
-    if (!formCategoryId || !categoryRequired) return;
-
-    const selectedCategory = categories.find((category) => category.id === formCategoryId);
-    if (!selectedCategory || selectedCategory.type !== "expense") return;
-
-    const normalizedCategoryName = normalizeHint(selectedCategory.name);
-    const isFamilyCategory = FAMILY_CATEGORY_HINTS.some((hint) => normalizedCategoryName.includes(hint));
-
-    setFormWorkspace(isFamilyCategory ? "family" : "business");
-  }, [categories, categoryRequired, formCategoryId]);
+  // (Removido) Antes, elegir una categoría pisaba el ámbito automáticamente.
+  // Ahora el ámbito lo maneja el usuario y ES el que filtra las categorías, así
+  // que ese automatismo se eliminó para que no se peleen.
 
   useEffect(() => {
     if (!isCreditCardPurchase) return;
