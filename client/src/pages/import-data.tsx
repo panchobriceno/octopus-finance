@@ -557,6 +557,12 @@ export default function ImportDataPage({
 
     if (!response.ok) {
       const errorText = await response.text();
+      // Caso típico: cartola de banco con contraseña. Mensaje claro en vez del JSON crudo.
+      if (/password|protected|encrypt/i.test(errorText)) {
+        throw new Error(
+          "El PDF tiene contraseña. Abrilo, guardá una copia sin clave (Imprimir → Guardar como PDF) y volvé a subir esa copia.",
+        );
+      }
       throw new Error(errorText || "No se pudo procesar el PDF.");
     }
 
