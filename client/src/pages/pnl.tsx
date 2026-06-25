@@ -60,7 +60,7 @@ function PnlCell({
   }
 
   return (
-    <div className="space-y-1 text-right">
+    <div className="space-y-0.5 text-right leading-tight">
       <div className="font-mono text-sm tabular-nums text-[#f4f4f7]">{formatCLP(value.real)}</div>
       <div className="font-mono text-xs tabular-nums text-[#6c6c78]">Presup. {formatCLP(value.planned)}</div>
       <div
@@ -331,24 +331,9 @@ export default function PnLPage() {
             ))}
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2 text-[11px]">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(138,138,148,0.14)] px-2.5 py-1 font-semibold text-[#8a8a94]">
-              <span className="size-1.5 rounded-full bg-[#8a8a94]" />
-              Real
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(205,250,70,0.12)] px-2.5 py-1 font-semibold text-[#cdfa46]">
-              <span className="size-1.5 rounded-full bg-[#cdfa46]" />
-              Mixto (real + proyección)
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-card-border px-2.5 py-1 font-semibold text-[#9a9aa6]">
-              <span className="size-1.5 rounded-full border border-[#9a9aa6]" />
-              Solo proyección
-            </span>
-          </div>
-
+        <CardContent>
           <div className="overflow-x-auto">
-            <Table data-testid="table-pnl">
+            <Table data-testid="table-pnl" className="[&_td]:py-2.5 [&_th]:h-auto [&_th]:py-2.5">
               <TableHeader>
                 <TableRow className="border-[#1e1e26] hover:bg-transparent">
                   <TableHead className={cn(STICKY, "min-w-[200px] pl-5 text-[10px] uppercase tracking-wide text-[#6c6c78]")}>
@@ -426,7 +411,7 @@ export default function PnLPage() {
 
                 {/* Sección Gastos (limpia) */}
                 <TableRow className="hover:bg-transparent">
-                  <TableCell className={cn(STICKY, "pl-5 pt-6 text-xs font-bold uppercase tracking-wide text-[#f4f4f7]")}>
+                  <TableCell className={cn(STICKY, "pl-5 text-xs font-bold uppercase tracking-wide text-[#f4f4f7]")}>
                     Gastos
                   </TableCell>
                   {model.monthKeys.map((monthKey) => (
