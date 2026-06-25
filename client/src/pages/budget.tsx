@@ -964,64 +964,55 @@ export default function BudgetPage() {
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Header + período */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <Target className="size-5 text-primary" />
-          <h2 className="text-xl font-semibold">Presupuesto Mensual</h2>
+          <span className="flex size-9 items-center justify-center rounded-xl bg-[rgba(205,250,70,0.12)] text-[#cdfa46]">
+            <Target className="size-4" />
+          </span>
+          <div>
+            <h2 className="text-xl font-extrabold tracking-tight">Presupuesto mensual</h2>
+            <p className="mt-0.5 text-xs text-[#9a9aa6]">
+              Plan vs ejecución por categoría · {selectedWorkspace === "business" ? "Empresa" : "Familia"} · {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={selectedWorkspace} onValueChange={(v) => setSelectedWorkspace(v as BudgetWorkspace)}>
+            <SelectTrigger className="w-[140px] border-card-border bg-secondary" data-testid="select-budget-workspace">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="business">Empresa</SelectItem>
+              <SelectItem value="family">Familia</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
+            <SelectTrigger className="w-[130px] border-card-border bg-secondary" data-testid="select-budget-month">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MONTH_NAMES.map((name, i) => (
+                <SelectItem key={i + 1} value={String(i + 1)}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(parseInt(v))}>
+            <SelectTrigger className="w-[100px] border-card-border bg-secondary" data-testid="select-budget-year">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {years.map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
-
-      {/* Period Selector */}
-      <Card>
-        <CardContent className="pt-5 pb-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm font-medium text-muted-foreground">Período:</span>
-            <Select
-              value={selectedWorkspace}
-              onValueChange={(v) => setSelectedWorkspace(v as BudgetWorkspace)}
-            >
-              <SelectTrigger className="w-40" data-testid="select-budget-workspace">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="business">Empresa</SelectItem>
-                <SelectItem value="family">Familia</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={String(selectedMonth)}
-              onValueChange={(v) => setSelectedMonth(parseInt(v))}
-            >
-              <SelectTrigger className="w-40" data-testid="select-budget-month">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MONTH_NAMES.map((name, i) => (
-                  <SelectItem key={i + 1} value={String(i + 1)}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={String(selectedYear)}
-              onValueChange={(v) => setSelectedYear(parseInt(v))}
-            >
-              <SelectTrigger className="w-28" data-testid="select-budget-year">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {years.map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* KPI Summary */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -1249,12 +1240,12 @@ export default function BudgetPage() {
                     <Table className="zebra-stripe" data-testid="table-budget-comparison">
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="pl-5">Categoría</TableHead>
-                          <TableHead className="w-44">Presupuesto</TableHead>
-                          <TableHead className="text-right">Ejecutado + comprometido</TableHead>
-                          <TableHead className="text-right">Disponible</TableHead>
-                          <TableHead className="text-right">Acción</TableHead>
-                          <TableHead className="text-right pr-5">Orden</TableHead>
+                          <TableHead className="pl-5 text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Categoría</TableHead>
+                          <TableHead className="w-44 text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Presupuesto</TableHead>
+                          <TableHead className="text-right text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Ejec. + comprom.</TableHead>
+                          <TableHead className="text-right text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Disponible</TableHead>
+                          <TableHead className="text-right text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Acción</TableHead>
+                          <TableHead className="text-right pr-5 text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Orden</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1329,9 +1320,8 @@ export default function BudgetPage() {
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-2">
                                   <Button
-                                    variant="outline"
                                     size="sm"
-                                    className="h-8 gap-1.5"
+                                    className="h-8 gap-1.5 bg-[#cdfa46] text-[#0a0a0f] hover:bg-[#bdf03a]"
                                     onClick={() => handleSave(group)}
                                     disabled={savingGroup === group}
                                     data-testid={`button-save-${group.replace(/\s+/g, "-").toLowerCase()}`}
