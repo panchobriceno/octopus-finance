@@ -1,4 +1,3 @@
-import { AmountText } from "@/components/finance/amount-text";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatCLP } from "@/lib/utils";
 
@@ -18,13 +17,12 @@ type Step =
   | { kind: "delta"; label: string; value: number; planned?: boolean };
 
 /**
- * Cascada del mes — Fase 2.2.
+ * Cascada del mes — sistema lima-mono.
  *
  * Re-visualiza EXACTAMENTE los componentes que las cards Ejecutado/Proyectado
  * ya muestran, encadenados como saldo corriente. Cierra en el
  * projectedEndingBalance que la página ya calcula (no hay número nuevo).
- * Distingue lo real (sólido) de lo esperado (atenuado) para no presentar la
- * proyección como verdad contable.
+ * Real = color pleno (lima entra / blanco sale); esperado = atenuado + punteado.
  */
 export function CashflowWaterfall({
   openingBalance,
@@ -47,36 +45,66 @@ export function CashflowWaterfall({
   ];
 
   return (
-    <Card className={className} data-testid="cashflow-waterfall">
+    <Card className={cn("rounded-[20px] border-card-border", className)} data-testid="cashflow-waterfall">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base font-semibold">Cascada del mes</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Del saldo inicial al proyectado. Lo esperado va atenuado.
-        </p>
+        <CardTitle className="text-[15px] font-bold">Cascada del mes</CardTitle>
+        <p className="text-xs text-[#9a9aa6]">Del saldo inicial al proyectado · lo esperado va atenuado.</p>
       </CardHeader>
       <CardContent className="space-y-1">
         {steps.map((step) => {
-          const isAnchor = step.kind === "subtotal" || step.kind === "final";
+          const isSubtotal = step.kind === "subtotal";
+          const isFinal = step.kind === "final";
+          const isDelta = step.kind === "delta";
+          const isPlanned = isDelta && step.planned;
+          const isIncome = isDelta && step.value >= 0;
+          const barColor = isIncome ? "#cdfa46" : "#e3e3ea";
+
+          const valueClass = isFinal
+            ? "font-extrabold text-[#cdfa46]"
+            : isSubtotal
+              ? "font-bold text-[#f4f4f7]"
+              : isDelta
+                ? isIncome
+                  ? "text-[#cdfa46]"
+                  : "text-[#e3e3ea]"
+                : "text-[#f4f4f7]";
+
           return (
             <div
               key={step.label}
               className={cn(
-                "flex items-center justify-between rounded-lg px-3 py-2 text-sm",
-                step.kind === "final" && "bg-[#cdfa46]/10 font-semibold",
-                step.kind === "subtotal" && "border-t border-border/60 font-medium",
-                step.kind === "delta" && (step.planned ? "opacity-70" : ""),
+                "flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm",
+                isSubtotal && "border border-card-border bg-secondary font-bold",
+                isFinal && "bg-[rgba(205,250,70,0.08)]",
+                isPlanned && "opacity-60",
               )}
             >
-              <span className={cn(isAnchor ? "text-foreground" : "text-muted-foreground")}>
-                {step.label}
-              </span>
-              {step.kind === "delta" ? (
-                <AmountText value={step.value} showSign className="tabular-nums" />
-              ) : (
-                <span className="font-mono tabular-nums text-foreground">
-                  {formatCLP(step.value)}
+              <span className="flex items-center gap-2.5">
+                {isDelta ? (
+                  isPlanned ? (
+                    <span className="h-4 w-0 border-l-2 border-dashed" style={{ borderColor: barColor }} />
+                  ) : (
+                    <span className="h-4 w-[3px] rounded-full" style={{ backgroundColor: barColor }} />
+                  )
+                ) : (
+                  <span className="h-4 w-[3px]" />
+                )}
+                <span
+                  className={cn(
+                    isFinal
+                      ? "font-extrabold text-[#cdfa46]"
+                      : isSubtotal
+                        ? "font-bold text-[#f4f4f7]"
+                        : "text-[#cfcfd8]",
+                  )}
+                >
+                  {step.label}
                 </span>
-              )}
+              </span>
+              <span className={cn("font-mono tabular-nums", valueClass)}>
+                {isDelta && step.value > 0 ? "+" : ""}
+                {formatCLP(step.value + 0)}
+              </span>
             </div>
           );
         })}

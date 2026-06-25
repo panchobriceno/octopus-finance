@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAccounts, useClientPayments, useTransactions } from "@/lib/hooks";
-import { formatCLP } from "@/lib/utils";
+import { cn, formatCLP, getMonthName } from "@/lib/utils";
 import {
   buildDailyProjectionData,
   buildMonthlySummaries,
@@ -17,23 +17,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CashflowWaterfall } from "@/components/finance/cashflow-waterfall";
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Calendar } from "lucide-react";
 import type { ClientPayment, Transaction } from "@shared/schema";
 
 type WeeklyCashViewMode = "current-month" | "next-4-weeks";
@@ -354,6 +353,20 @@ export default function CashFlowPage() {
     });
   };
 
+  const ambitoLabel =
+    workspace === "all" ? "Consolidado" : workspace === "business" ? "Empresa" : workspace === "family" ? "Familia" : "Consulta";
+  const monthLabel = (key: string) => {
+    const [y, m] = key.split("-");
+    return `${getMonthName(Number(m) - 1)} ${y}`;
+  };
+  // Guard presentacional: nunca mostrar "$NaN"; cae a "—".
+  const fmt = (v: number) => (Number.isFinite(v) ? formatCLP(v) : "—");
+  // Cero/NaN repetido va en gris bajo; solo los valores con dato llevan color pleno.
+  const dimIfZero = (v: number, color: string) => (!Number.isFinite(v) || v === 0 ? "text-[#3a3a44]" : color);
+  const now = new Date();
+  const asOfLabel = `al ${now.getDate()} ${getMonthName(now.getMonth()).slice(0, 3).toLowerCase()}`;
+  const todayPoint = selectedMonth === currentMonthKey ? chartData[now.getDate() - 1] : undefined;
+
   if (isLoading) {
     return (
       <div className="p-6 space-y-6">
@@ -366,123 +379,121 @@ export default function CashFlowPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto h-full">
-      <div className="flex items-center gap-3">
-        <ArrowUpDown className="size-5 text-primary" />
-        <h2 className="text-xl font-semibold">Flujo de Caja</h2>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">
-            Balance de Apertura y Vista del Mes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 lg:grid-cols-[220px_220px_1fr]">
+    <div className="h-full space-y-5 overflow-y-auto p-4 sm:p-6">
+      {/* 1 — Header + selectores */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex size-9 items-center justify-center rounded-xl border border-card-border bg-secondary text-[#cdfa46]">
+            <ArrowUpDown className="size-4" />
+          </span>
           <div>
-            <p className="text-sm text-muted-foreground mb-2">Ámbito</p>
-            <Select value={workspace} onValueChange={(value) => setWorkspace(value as WorkspaceFilter)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Consolidado</SelectItem>
-                <SelectItem value="business">Empresa</SelectItem>
-                <SelectItem value="family">Familia</SelectItem>
-                <SelectItem value="dentist">Consulta Dentista</SelectItem>
-              </SelectContent>
-            </Select>
+            <h2 className="text-xl font-extrabold tracking-tight">Flujo de Caja</h2>
+            <p className="mt-0.5 text-xs text-[#9a9aa6]">
+              {monthLabel(selectedMonth)} · {ambitoLabel} · saldo inicial{" "}
+              <span className="font-mono text-[#cfcfd8]">{fmt(selectedSummary.openingBalance)}</span>
+            </p>
           </div>
-          <div>
-            <p className="text-sm text-muted-foreground mb-2">Mes</p>
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger data-testid="select-cashflow-month">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {availableMonths.map((monthKey) => (
-                  <SelectItem key={monthKey} value={monthKey}>
-                    {monthKey}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <p className="text-sm text-muted-foreground mb-2">Saldo inicial</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={workspace} onValueChange={(value) => setWorkspace(value as WorkspaceFilter)}>
+            <SelectTrigger className="w-[150px] border-card-border bg-secondary">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Consolidado</SelectItem>
+              <SelectItem value="business">Empresa</SelectItem>
+              <SelectItem value="family">Familia</SelectItem>
+              <SelectItem value="dentist">Consulta Dentista</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-[160px] gap-2 border-card-border bg-secondary" data-testid="select-cashflow-month">
+              <Calendar className="size-3.5 text-[#9a9aa6]" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {availableMonths.map((monthKey) => (
+                <SelectItem key={monthKey} value={monthKey}>
+                  {monthLabel(monthKey)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex h-10 items-center gap-2 rounded-lg border border-card-border bg-secondary px-3">
+            <span className="whitespace-nowrap text-xs text-[#9a9aa6]">Saldo inicial</span>
             <Input
               type="number"
               value={String(openingBalance)}
               onChange={(e) => updateOpeningBalance(Number(e.target.value || 0))}
               data-testid="input-cashflow-opening-balance"
+              className="h-8 w-28 border-0 bg-transparent px-0 font-mono text-sm tabular-nums focus-visible:ring-0 focus-visible:ring-offset-0"
             />
           </div>
+        </div>
+      </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">Línea sólida: ejecutado</Badge>
-            <Badge variant="outline">Línea punteada: proyectado</Badge>
-            <Badge variant="secondary" className="bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300">
-              Saldo final real: {formatCLP(selectedSummary.realEndingBalance)}
-            </Badge>
-            <Badge variant="outline">
-              Saldo fin de mes proyectado: {formatCLP(selectedSummary.projectedEndingBalance)}
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* 2 — Ejecutado vs Proyectado */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">Ejecutado</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-2xl font-semibold tabular-nums">
-              {formatCLP(selectedSummary.realEndingBalance)}
+        <Card className="rounded-[20px] border-card-border">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-sm font-semibold text-[#9a9aa6]">
+                <span className="inline-block h-px w-4 bg-[#f4f4f7]" /> Saldo ejecutado
+              </span>
+              <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-bold text-[#9a9aa6]">{asOfLabel}</span>
+            </div>
+            <p className="mt-3 font-mono text-4xl font-extrabold tabular-nums text-[#f4f4f7]">
+              {fmt(selectedSummary.realEndingBalance)}
             </p>
-            <p className="text-sm text-muted-foreground">
-              {formatCLP(selectedSummary.openingBalance)} + {formatCLP(selectedSummary.realIncome)} - {formatCLP(selectedSummary.realExpenses)}
+            <p className="mt-2 font-mono text-xs text-[#6c6c78]">
+              {fmt(selectedSummary.openingBalance)} + {fmt(selectedSummary.realIncome)} − {fmt(selectedSummary.realExpenses)}
             </p>
-            <div className="grid grid-cols-2 gap-3 pt-2 text-sm">
-              <div className="rounded-lg bg-lime-50/60 p-3 dark:bg-lime-950/20">
-                <p className="text-muted-foreground">Ingresos reales</p>
-                <p className="font-semibold tabular-nums text-[hsl(var(--money-in))]">
-                  {formatCLP(selectedSummary.realIncome)}
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-card-border bg-[#0d0d12] p-3">
+                <p className="flex items-center gap-1.5 text-xs text-[#9a9aa6]">
+                  <ArrowUp className="size-3.5 text-[#cdfa46]" /> Ingresos reales
+                </p>
+                <p className="mt-1 font-mono text-base font-bold tabular-nums text-[#cdfa46]">
+                  +{fmt(selectedSummary.realIncome)}
                 </p>
               </div>
-              <div className="rounded-lg bg-red-50/60 p-3 dark:bg-red-950/20">
-                <p className="text-muted-foreground">Gastos reales</p>
-                <p className="font-semibold tabular-nums text-[#e3e3ea]">
-                  {formatCLP(selectedSummary.realExpenses)}
+              <div className="rounded-xl border border-card-border bg-[#0d0d12] p-3">
+                <p className="flex items-center gap-1.5 text-xs text-[#9a9aa6]">
+                  <ArrowDown className="size-3.5 text-[#e3e3ea]" /> Gastos reales
+                </p>
+                <p className="mt-1 font-mono text-base font-bold tabular-nums text-[#e3e3ea]">
+                  −{fmt(selectedSummary.realExpenses)}
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">Proyectado</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-2xl font-semibold tabular-nums text-slate-700 dark:text-slate-300">
-              {formatCLP(selectedSummary.projectedEndingBalance)}
+        <Card className="rounded-[20px] border border-dashed border-[#cdfa46]/40 bg-card">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-sm font-semibold text-[#9a9aa6]">
+                <span className="inline-block h-px w-4 border-t border-dashed border-[#cdfa46]" /> Saldo proyectado fin de mes
+              </span>
+              <span className="rounded-full bg-[rgba(205,250,70,0.12)] px-2.5 py-1 text-[10px] font-bold text-[#cdfa46]">proyección</span>
+            </div>
+            <p className="mt-3 font-mono text-4xl font-extrabold tabular-nums text-[#cdfa46]">
+              {fmt(selectedSummary.projectedEndingBalance)}
             </p>
-            <p className="text-sm text-muted-foreground">
-              {formatCLP(selectedSummary.realEndingBalance)} + {formatCLP(selectedSummary.plannedIncome)} - {formatCLP(selectedSummary.plannedExpenses)}
+            <p className="mt-2 font-mono text-xs text-[#6c6c78]">
+              {fmt(selectedSummary.realEndingBalance)} + {fmt(selectedSummary.plannedIncome)} esperados − {fmt(selectedSummary.plannedExpenses)}
             </p>
-            <div className="grid grid-cols-2 gap-3 pt-2 text-sm">
-              <div className="rounded-lg bg-lime-50/60 p-3 dark:bg-lime-950/20">
-                <p className="text-muted-foreground">Ingresos presupuestados</p>
-                <p className="font-semibold tabular-nums text-[hsl(var(--money-in))]">
-                  {formatCLP(selectedSummary.plannedIncome)}
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-card-border bg-[#0d0d12] p-3">
+                <p className="text-xs text-[#9a9aa6]">Ingresos esperados</p>
+                <p className="mt-1 font-mono text-base font-bold tabular-nums text-[#cdfa46]/70">
+                  +{fmt(selectedSummary.plannedIncome)}
                 </p>
               </div>
-              <div className="rounded-lg bg-zinc-50/60 p-3 dark:bg-zinc-950/20">
-                <p className="text-muted-foreground">Gastos presupuestados</p>
-                <p className="font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
-                  {formatCLP(selectedSummary.plannedExpenses)}
+              <div className="rounded-xl border border-card-border bg-[#0d0d12] p-3">
+                <p className="text-xs text-[#9a9aa6]">Gastos esperados</p>
+                <p className="mt-1 font-mono text-base font-bold tabular-nums text-[#8a8a94]">
+                  −{fmt(selectedSummary.plannedExpenses)}
                 </p>
               </div>
             </div>
@@ -490,166 +501,215 @@ export default function CashFlowPage() {
         </Card>
       </div>
 
-      <CashflowWaterfall
-        openingBalance={selectedSummary.openingBalance}
-        realIncome={selectedSummary.realIncome}
-        realExpenses={selectedSummary.realExpenses}
-        realEndingBalance={selectedSummary.realEndingBalance}
-        plannedIncome={selectedSummary.plannedIncome}
-        plannedExpenses={selectedSummary.plannedExpenses}
-        projectedEndingBalance={selectedSummary.projectedEndingBalance}
-      />
+      {/* 3 + 4 — Cascada del mes + strip de métricas */}
+      <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+        <CashflowWaterfall
+          className={cn("rounded-[20px] border-card-border", workspace === "family" && "xl:col-span-2")}
+          openingBalance={selectedSummary.openingBalance}
+          realIncome={selectedSummary.realIncome}
+          realExpenses={selectedSummary.realExpenses}
+          realEndingBalance={selectedSummary.realEndingBalance}
+          plannedIncome={selectedSummary.plannedIncome}
+          plannedExpenses={selectedSummary.plannedExpenses}
+          projectedEndingBalance={selectedSummary.projectedEndingBalance}
+        />
 
-      {workspace !== "family" && (
-        <Card>
-          <CardContent className="pt-5 grid gap-3 sm:grid-cols-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Deuda tarjeta</p>
-              <p className="text-lg font-semibold tabular-nums mt-1">{formatCLP(workspaceMetrics.creditCardDebt)}</p>
+        {workspace !== "family" && (
+          <div className="grid grid-cols-2 content-start gap-4">
+            <div className="rounded-[18px] border border-card-border bg-card p-4">
+              <p className="text-xs text-[#9a9aa6]">Deuda tarjeta</p>
+              <p className="mt-2 font-mono text-[22px] font-bold tabular-nums text-[#f4f4f7]">{fmt(workspaceMetrics.creditCardDebt)}</p>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Transferencias recibidas</p>
-              <p className="text-lg font-semibold tabular-nums mt-1">{formatCLP(workspaceMetrics.transfersIn)}</p>
+            <div className="rounded-[18px] border border-card-border bg-card p-4">
+              <p className="text-xs text-[#9a9aa6]">IVA proyectado · {selectedMonthVatDueDate}</p>
+              <p className="mt-2 font-mono text-[22px] font-bold tabular-nums text-[#8a8a94]">{fmt(selectedMonthPaidVat)}</p>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Transferencias enviadas</p>
-              <p className="text-lg font-semibold tabular-nums mt-1">{formatCLP(workspaceMetrics.transfersOut)}</p>
+            <div className="rounded-[18px] border border-card-border bg-card p-4">
+              <p className="flex items-center gap-1.5 text-xs text-[#9a9aa6]">
+                <ArrowUp className="size-3.5 text-[#cdfa46]" /> Transferencias recibidas
+              </p>
+              <p className="mt-2 font-mono text-[22px] font-bold tabular-nums text-[#cdfa46]">{fmt(workspaceMetrics.transfersIn)}</p>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">IVA proyectado próximo 20</p>
-              <p className="text-lg font-semibold tabular-nums mt-1 text-zinc-700 dark:text-zinc-300">{formatCLP(selectedMonthPaidVat)}</p>
-              <p className="text-xs text-muted-foreground mt-1">{selectedMonthVatDueDate}</p>
+            <div className="rounded-[18px] border border-card-border bg-card p-4">
+              <p className="flex items-center gap-1.5 text-xs text-[#9a9aa6]">
+                <ArrowDown className="size-3.5 text-[#e3e3ea]" /> Transferencias enviadas
+              </p>
+              <p className="mt-2 font-mono text-[22px] font-bold tabular-nums text-[#e3e3ea]">{fmt(workspaceMetrics.transfersOut)}</p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+      </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <CardTitle className="text-base font-semibold">Flujo de Caja Semanal</CardTitle>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={weeklyViewMode === "current-month" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setWeeklyViewMode("current-month")}
-                data-testid="button-weekly-current-month"
-              >
-                Mes actual
-              </Button>
-              <Button
-                variant={weeklyViewMode === "next-4-weeks" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setWeeklyViewMode("next-4-weeks")}
-                data-testid="button-weekly-next-4-weeks"
-              >
-                Próximas 4 semanas
-              </Button>
-            </div>
+      {/* 5 — Saldo diario · ejecutado vs proyectado */}
+      <Card className="rounded-[20px] border-card-border">
+        <CardHeader className="flex flex-col gap-1 pb-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-[15px] font-bold">Saldo diario · ejecutado vs proyectado</CardTitle>
+            <p className="mt-0.5 text-xs text-[#9a9aa6]">{monthLabel(selectedMonth)} · día a día</p>
+          </div>
+          <div className="flex items-center gap-4 text-xs font-semibold">
+            <span className="flex items-center gap-1.5 text-[#f4f4f7]">
+              <span className="inline-block h-px w-5 bg-[#f4f4f7]" />Ejecutado
+            </span>
+            <span className="flex items-center gap-1.5 text-[#cdfa46]">
+              <span className="inline-block h-px w-5 border-t border-dashed border-[#cdfa46]" />Proyectado
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80" data-testid="chart-cashflow">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="0" stroke="#1c1c24" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "#6c6c78", fontFamily: "JetBrains Mono" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#6c6c78", fontFamily: "JetBrains Mono" }}
+                  tickFormatter={(value) => `$${Math.round(value / 1000)}k`}
+                  axisLine={false}
+                  tickLine={false}
+                  width={56}
+                />
+                <Tooltip
+                  formatter={(value: number) => formatCLP(value)}
+                  contentStyle={{ backgroundColor: "#15151c", border: "1px solid #22222b", borderRadius: "10px", fontSize: "13px" }}
+                  labelStyle={{ color: "#9a9aa6" }}
+                />
+                <ReferenceLine y={0} stroke="#1c1c24" />
+                {todayPoint ? <ReferenceLine x={todayPoint.label} stroke="#2a2a34" strokeWidth={1} /> : null}
+                <Line type="monotone" dataKey="realBalance" name="Ejecutado" stroke="#f4f4f7" strokeWidth={2.5} dot={false} connectNulls={false} />
+                <Line type="monotone" dataKey="projectedBalance" name="Proyectado" stroke="#cdfa46" strokeWidth={2.5} strokeDasharray="6 6" dot={false} />
+                {todayPoint ? (
+                  <ReferenceDot x={todayPoint.label} y={todayPoint.projectedBalance ?? todayPoint.realBalance} r={4} fill="#cdfa46" stroke="#0a0a0f" strokeWidth={2} />
+                ) : null}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 6a — Flujo de Caja Semanal */}
+      <Card className="rounded-[20px] border-card-border">
+        <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-[15px] font-bold">Flujo de Caja Semanal</CardTitle>
+          <div className="inline-flex flex-none rounded-full border border-card-border bg-[#121219] p-1 text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setWeeklyViewMode("current-month")}
+              data-testid="button-weekly-current-month"
+              className={cn(
+                "rounded-full px-3 py-1.5 transition",
+                weeklyViewMode === "current-month" ? "bg-[#cdfa46] text-[#0a0a0f]" : "text-[#9a9aa6] hover:text-[#f4f4f7]",
+              )}
+            >
+              Mes actual
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeeklyViewMode("next-4-weeks")}
+              data-testid="button-weekly-next-4-weeks"
+              className={cn(
+                "rounded-full px-3 py-1.5 transition",
+                weeklyViewMode === "next-4-weeks" ? "bg-[#cdfa46] text-[#0a0a0f]" : "text-[#9a9aa6] hover:text-[#f4f4f7]",
+              )}
+            >
+              Próximas 4 semanas
+            </button>
           </div>
         </CardHeader>
         <CardContent className="px-0">
           <div className="overflow-x-auto">
-            <Table className="zebra-stripe" data-testid="table-cashflow-weekly">
+            <Table className="zebra-stripe [&_td]:py-2.5" data-testid="table-cashflow-weekly">
               <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-5 min-w-[220px]">Concepto</TableHead>
+                <TableRow className="border-[#1e1e26] hover:bg-transparent">
+                  <TableHead className="sticky left-0 z-[1] min-w-[200px] bg-card pl-5 text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Concepto</TableHead>
                   {weeklyColumns.map((column) => (
-                    <TableHead key={column.key} className="text-right min-w-[180px]">
+                    <TableHead key={column.key} className="min-w-[170px] text-right text-[10.5px] uppercase tracking-wide text-[#6c6c78]">
                       {column.label}
                     </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow>
-                  <TableCell className="pl-5 font-medium text-sm">Saldo inicial</TableCell>
+                <TableRow className="border-[#1e1e26]">
+                  <TableCell className="sticky left-0 z-[1] bg-card pl-5 text-sm font-medium">Saldo inicial</TableCell>
                   {weeklyBreakdown.map((week, index) => (
                     <TableCell key={`opening-${weeklyColumns[index]?.key}`} className="text-right">
                       <Button
                         variant="ghost"
-                        className="h-auto p-0 text-right font-medium tabular-nums"
+                        className="h-auto p-0 text-right font-mono font-medium tabular-nums text-[#f4f4f7]"
                         onClick={() => openWeeklyDetail("openingBalance", index, weeklyColumns[index].label, "Saldo inicial")}
                       >
-                        {formatCLP(week.openingBalance)}
+                        {fmt(week.openingBalance)}
                       </Button>
                     </TableCell>
                   ))}
                 </TableRow>
-                <TableRow className="bg-lime-50/40 dark:bg-lime-950/10">
-                  <TableCell className="pl-5 font-medium text-sm text-[hsl(var(--money-in))]">
+                <TableRow className="border-[#1e1e26]">
+                  <TableCell className="sticky left-0 z-[1] bg-card pl-5 text-sm font-medium text-[#cdfa46]">
                     Ingresos clientes
                   </TableCell>
                   {weeklyBreakdown.map((week, index) => (
                     <TableCell key={`income-${weeklyColumns[index]?.key}`} className="text-right">
                       <Button
                         variant="ghost"
-                        className="h-auto p-0 text-right font-medium tabular-nums text-[hsl(var(--money-in))]"
+                        className="h-auto p-0 text-right font-mono font-medium tabular-nums text-[#cdfa46]"
                         onClick={() => openWeeklyDetail("clientIncome", index, weeklyColumns[index].label, "Ingresos clientes")}
                       >
-                        {formatCLP(week.clientIncome)}
+                        {fmt(week.clientIncome)}
                       </Button>
                     </TableCell>
                   ))}
                 </TableRow>
-                <TableRow className="bg-red-50/40 dark:bg-red-950/10">
-                  <TableCell className="pl-5 font-medium text-sm text-[#e3e3ea]">
+                <TableRow className="border-[#1e1e26]">
+                  <TableCell className="sticky left-0 z-[1] bg-card pl-5 text-sm font-medium text-[#8a8a94]">
                     Gastos presupuestados
                   </TableCell>
                   {weeklyBreakdown.map((week, index) => (
                     <TableCell key={`planned-${weeklyColumns[index]?.key}`} className="text-right">
                       <Button
                         variant="ghost"
-                        className="h-auto p-0 text-right font-medium tabular-nums text-[#e3e3ea]"
+                        className="h-auto p-0 text-right font-mono font-medium tabular-nums text-[#8a8a94]"
                         onClick={() => openWeeklyDetail("plannedExpenses", index, weeklyColumns[index].label, "Gastos presupuestados")}
                       >
-                        {formatCLP(week.plannedExpenses)}
+                        {fmt(week.plannedExpenses)}
                       </Button>
                     </TableCell>
                   ))}
                 </TableRow>
-                <TableRow className="bg-red-50/40 dark:bg-red-950/10">
-                  <TableCell className="pl-5 font-medium text-sm text-[#e3e3ea]">
+                <TableRow className="border-[#1e1e26]">
+                  <TableCell className="sticky left-0 z-[1] bg-card pl-5 text-sm font-medium text-[#e3e3ea]">
                     Pagos tarjeta de crédito
                   </TableCell>
                   {weeklyBreakdown.map((week, index) => (
                     <TableCell key={`cards-${weeklyColumns[index]?.key}`} className="text-right">
                       <Button
                         variant="ghost"
-                        className="h-auto p-0 text-right font-medium tabular-nums text-[#e3e3ea]"
+                        className="h-auto p-0 text-right font-mono font-medium tabular-nums text-[#e3e3ea]"
                         onClick={() => openWeeklyDetail("pendingCreditCard", index, weeklyColumns[index].label, "Pagos tarjeta de crédito")}
                       >
-                        {formatCLP(week.pendingCreditCard)}
+                        {fmt(week.pendingCreditCard)}
                       </Button>
                     </TableCell>
                   ))}
                 </TableRow>
-                <TableRow>
-                  <TableCell className="pl-5 font-semibold text-sm">Saldo final</TableCell>
-                  {weeklyBreakdown.map((week, index) => {
-                    const isNegative = week.endingBalance < 0;
-                    const isLowWarning = !isNegative && week.openingBalance > 0 && week.endingBalance < week.openingBalance * 0.2;
-                    const cellClass = isNegative
-                      ? "text-[#e3e3ea]"
-                      : isLowWarning
-                      ? "text-zinc-700 dark:text-zinc-300"
-                      : "text-slate-700 dark:text-slate-300";
-
-                    return (
-                      <TableCell
-                        key={`ending-${weeklyColumns[index]?.key}`}
-                        className={`text-right ${isNegative ? "bg-red-50/60 dark:bg-red-950/15" : isLowWarning ? "bg-zinc-50/60 dark:bg-zinc-950/15" : ""}`}
+                <TableRow className="border-t border-card-border bg-secondary hover:bg-secondary">
+                  <TableCell className="sticky left-0 z-[1] bg-secondary pl-5 text-sm font-bold">Saldo final</TableCell>
+                  {weeklyBreakdown.map((week, index) => (
+                    <TableCell key={`ending-${weeklyColumns[index]?.key}`} className="text-right">
+                      <Button
+                        variant="ghost"
+                        className="h-auto p-0 text-right font-mono font-bold tabular-nums text-[#9aa0aa]"
+                        onClick={() => openWeeklyDetail("endingBalance", index, weeklyColumns[index].label, "Saldo final")}
                       >
-                        <Button
-                          variant="ghost"
-                          className={`h-auto p-0 text-right font-semibold tabular-nums ${cellClass}`}
-                          onClick={() => openWeeklyDetail("endingBalance", index, weeklyColumns[index].label, "Saldo final")}
-                        >
-                          {formatCLP(week.endingBalance)}
-                        </Button>
-                      </TableCell>
-                    );
-                  })}
+                        {fmt(week.endingBalance)}
+                      </Button>
+                    </TableCell>
+                  ))}
                 </TableRow>
               </TableBody>
             </Table>
@@ -657,117 +717,71 @@ export default function CashFlowPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold">
-            Saldo Diario Ejecutado vs Proyectado
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-80" data-testid="chart-cashflow">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-                />
-                <YAxis
-                  tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-                  tickFormatter={(value) => `$${Math.round(value / 1000)}k`}
-                />
-                <Tooltip
-                  formatter={(value: number) => formatCLP(value)}
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                    fontSize: "13px",
-                  }}
-                />
-                <Legend />
-                <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
-                <Line
-                  type="monotone"
-                  dataKey="realBalance"
-                  name="Saldo ejecutado"
-                  stroke="hsl(var(--chart-2))"
-                  strokeWidth={2.5}
-                  dot={false}
-                  connectNulls={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="projectedBalance"
-                  name="Saldo proyectado"
-                  stroke="hsl(var(--chart-1))"
-                  strokeWidth={2.5}
-                  strokeDasharray="6 6"
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
+      {/* 6b — Desglose Mensual */}
+      <Card className="rounded-[20px] border-card-border">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">
-            Desglose Mensual
-          </CardTitle>
+          <CardTitle className="text-[15px] font-bold">Desglose mensual</CardTitle>
+          <p className="text-xs text-[#9a9aa6]">Real vs presupuestado, mes a mes · {ambitoLabel}</p>
         </CardHeader>
         <CardContent className="px-0">
           <div className="overflow-x-auto">
-            <Table className="zebra-stripe" data-testid="table-cashflow">
+            <Table className="zebra-stripe [&_td]:py-2.5" data-testid="table-cashflow">
               <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-5">Mes</TableHead>
-                  <TableHead className="text-right">Saldo inicial</TableHead>
-                  <TableHead className="text-right">Ingresos reales</TableHead>
-                  <TableHead className="text-right">Gastos reales</TableHead>
-                  <TableHead className="text-right">Saldo real</TableHead>
-                  <TableHead className="text-right">Ingresos presup.</TableHead>
-                  <TableHead className="text-right">Gastos presup.</TableHead>
-                  <TableHead className="text-right pr-5">Saldo proyectado</TableHead>
+                <TableRow className="border-[#1e1e26] hover:bg-transparent">
+                  <TableHead className="sticky left-0 z-[1] bg-card pl-5 text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Mes</TableHead>
+                  <TableHead className="text-right text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Saldo inicial</TableHead>
+                  <TableHead className="text-right text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Ingresos reales</TableHead>
+                  <TableHead className="text-right text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Gastos reales</TableHead>
+                  <TableHead className="text-right text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Saldo real</TableHead>
+                  <TableHead className="text-right text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Ing. presup.</TableHead>
+                  <TableHead className="text-right text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Gas. presup.</TableHead>
+                  <TableHead className="pr-5 text-right text-[10.5px] uppercase tracking-wide text-[#6c6c78]">Saldo proyect.</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {monthlySummaries.map((summary) => (
-                  <TableRow key={summary.monthKey}>
-                    <TableCell className="pl-5 font-medium text-sm">
-                      <div className="flex items-center gap-2">
-                        <span>{summary.label}</span>
-                        {summary.hasPlannedData && !summary.hasRealData && (
-                          <Badge variant="outline" className="text-[10px]">
-                            Solo proyección
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">
-                      {formatCLP(summary.openingBalance)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-[hsl(var(--money-in))]">
-                      {formatCLP(summary.realIncome)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-[#e3e3ea]">
-                      {formatCLP(summary.realExpenses)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      {formatCLP(summary.realEndingBalance)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-lime-600/80 dark:text-lime-300">
-                      {formatCLP(summary.plannedIncome)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-zinc-700 dark:text-zinc-300">
-                      {formatCLP(summary.plannedExpenses)}
-                    </TableCell>
-                    <TableCell className="text-right pr-5 tabular-nums text-sm font-semibold">
-                      {formatCLP(summary.projectedEndingBalance)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {monthlySummaries.map((summary) => {
+                  const isCurrent = summary.monthKey === currentMonthKey;
+                  const inactive = !summary.hasRealData && !summary.hasPlannedData;
+                  const onlyProjection = summary.hasPlannedData && !summary.hasRealData;
+                  return (
+                    <TableRow
+                      key={summary.monthKey}
+                      className={cn("border-[#1e1e26]", isCurrent && "bg-[rgba(205,250,70,0.05)]", inactive && "opacity-45")}
+                    >
+                      <TableCell className={cn("sticky left-0 z-[1] pl-5 text-sm font-medium", isCurrent ? "bg-[#191b12]" : "bg-card")}>
+                        <div className="flex items-center gap-2">
+                          <span>{summary.label}</span>
+                          {onlyProjection && (
+                            <span className="rounded-full bg-[rgba(205,250,70,0.12)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#cdfa46]">
+                              Solo proyección
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className={cn("text-right font-mono text-sm tabular-nums", dimIfZero(summary.openingBalance, "text-[#f4f4f7]"))}>
+                        {fmt(summary.openingBalance)}
+                      </TableCell>
+                      <TableCell className={cn("text-right font-mono text-sm tabular-nums", dimIfZero(summary.realIncome, "text-[#cdfa46]"))}>
+                        {fmt(summary.realIncome)}
+                      </TableCell>
+                      <TableCell className={cn("text-right font-mono text-sm tabular-nums", dimIfZero(summary.realExpenses, "text-[#e3e3ea]"))}>
+                        {fmt(summary.realExpenses)}
+                      </TableCell>
+                      <TableCell className={cn("text-right font-mono text-sm font-semibold tabular-nums", dimIfZero(summary.realEndingBalance, "text-[#f4f4f7]"))}>
+                        {fmt(summary.realEndingBalance)}
+                      </TableCell>
+                      <TableCell className={cn("text-right font-mono text-sm tabular-nums", dimIfZero(summary.plannedIncome, "text-[#8a8a94]"))}>
+                        {fmt(summary.plannedIncome)}
+                      </TableCell>
+                      <TableCell className={cn("text-right font-mono text-sm tabular-nums", dimIfZero(summary.plannedExpenses, "text-[#8a8a94]"))}>
+                        {fmt(summary.plannedExpenses)}
+                      </TableCell>
+                      <TableCell className={cn("pr-5 text-right font-mono text-sm font-semibold tabular-nums", dimIfZero(summary.projectedEndingBalance, "text-[#8a8a94]"))}>
+                        {fmt(summary.projectedEndingBalance)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
