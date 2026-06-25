@@ -22,10 +22,7 @@ import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
-  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -130,6 +127,9 @@ export default function BudgetPage() {
   const [dayOfMonthValues, setDayOfMonthValues] = useState<Record<string, string>>({});
   const [savingGroup, setSavingGroup] = useState<string | null>(null);
   const [newBudgetCategory, setNewBudgetCategory] = useState("");
+  // Categoría elegida en el paso 1 de la cascada (solo UI; el valor que se guarda
+  // sigue siendo newBudgetCategory: nombre de categoría o "item:<id>").
+  const [pickerCategoryName, setPickerCategoryName] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [draftGroupMap, setDraftGroupMap] = useState<Record<string, string[]>>({});
   const [manualOrderMap, setManualOrderMap] = useState<Record<string, string[]>>({});
@@ -483,16 +483,57 @@ export default function BudgetPage() {
         return {
           value: getItemBudgetKey(primary.item.id),
           label: `${primary.item.name} · ${primary.parentName}`,
+          parent: primary.parentName,
           duplicateCount: matches.length,
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label, "es"));
   }, [categoryById, itemById, visibleGroupNames, workspaceBudgetItems]);
 
-  const availableCategoryOptions = useMemo(
-    () => [...categoryOptions, ...itemOptions],
-    [categoryOptions, itemOptions],
+  // Cascada del selector: paso 1 = categoría, paso 2 = subcategoría de esa categoría.
+  // pickerCategories = categorías con algo disponible (presupuesto total y/o
+  // subcategorías). hasWhole = se puede presupuestar la categoría completa.
+  const pickerCategories = useMemo(() => {
+    const map = new Map<string, { name: string; hasWhole: boolean; hasItems: boolean }>();
+    for (const option of categoryOptions) {
+      map.set(option.value, { name: option.value, hasWhole: true, hasItems: false });
+    }
+    for (const item of itemOptions) {
+      const existing = map.get(item.parent);
+      if (existing) existing.hasItems = true;
+      else map.set(item.parent, { name: item.parent, hasWhole: false, hasItems: true });
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }, [categoryOptions, itemOptions]);
+
+  const pickerSubItems = useMemo(
+    () => itemOptions.filter((option) => option.parent === pickerCategoryName),
+    [itemOptions, pickerCategoryName],
   );
+  const pickerSelected = useMemo(
+    () => pickerCategories.find((category) => category.name === pickerCategoryName) ?? null,
+    [pickerCategories, pickerCategoryName],
+  );
+
+  // Al cambiar de ámbito o de mes, limpiamos la selección en curso de la cascada.
+  useEffect(() => {
+    setNewBudgetCategory("");
+    setPickerCategoryName("");
+  }, [selectedWorkspace, selectedMonthKey]);
+
+  // Paso 1: elegir categoría. Si no tiene subcategorías disponibles y se puede
+  // presupuestar completa, se guarda el nombre directo. Si tiene subcategorías,
+  // dejamos el valor vacío hasta que se elija una en el paso 2 (corrección de Codex:
+  // no dejar que un nombre "no disponible como total" se guarde).
+  const handlePickCategory = (name: string) => {
+    setPickerCategoryName(name);
+    const category = pickerCategories.find((option) => option.name === name) ?? null;
+    if (category && !category.hasItems && category.hasWhole) {
+      setNewBudgetCategory(name);
+    } else {
+      setNewBudgetCategory("");
+    }
+  };
 
   // Sync input values when period or budgets change
   useEffect(() => {
@@ -787,6 +828,7 @@ export default function BudgetPage() {
       [selectedScopeKey]: (current[selectedScopeKey] ?? []).filter((name) => name !== newBudgetCategory),
     }));
     setNewBudgetCategory("");
+    setPickerCategoryName("");
   };
 
   const handleCreateCategoryFromBudget = async () => {
@@ -1156,56 +1198,50 @@ export default function BudgetPage() {
               <div className="px-5 grid gap-3 lg:grid-cols-[minmax(0,320px)_auto_minmax(0,320px)_auto] lg:items-end">
                 <div className="w-full md:max-w-sm space-y-1.5">
                   <p className="text-xs text-muted-foreground">Agregar categoría o subcategoría al presupuesto</p>
-                  <Select value={newBudgetCategory} onValueChange={setNewBudgetCategory}>
+                  {/* Paso 1: categoría */}
+                  <Select value={pickerCategoryName} onValueChange={handlePickCategory}>
                     <SelectTrigger data-testid="select-add-budget-category">
-                      <SelectValue placeholder="Elegir categoría o subcategoría" />
+                      <SelectValue placeholder="Elegir categoría" />
                     </SelectTrigger>
                     <SelectContent className="max-w-[min(460px,calc(100vw-2rem))]">
-                      {availableCategoryOptions.length === 0 ? (
+                      {pickerCategories.length === 0 ? (
                         <div className="px-3 py-2 text-xs text-muted-foreground">
                           No hay más opciones disponibles
                         </div>
                       ) : (
-                        <>
-                          {categoryOptions.length > 0 ? (
-                            <SelectGroup>
-                              <SelectLabel className="pl-8 text-xs text-muted-foreground">Categorías</SelectLabel>
-                              {categoryOptions.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  <span className="flex min-w-0 items-center justify-between gap-3">
-                                    <span className="truncate">{option.label}</span>
-                                    {option.duplicateCount > 1 ? (
-                                      <span className="shrink-0 text-[10px] text-muted-foreground">
-                                        {option.duplicateCount} registros
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          ) : null}
-                          {categoryOptions.length > 0 && itemOptions.length > 0 ? <SelectSeparator /> : null}
-                          {itemOptions.length > 0 ? (
-                            <SelectGroup>
-                              <SelectLabel className="pl-8 text-xs text-muted-foreground">Subcategorías</SelectLabel>
-                              {itemOptions.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  <span className="flex min-w-0 items-center justify-between gap-3">
-                                    <span className="truncate">{option.label}</span>
-                                    {option.duplicateCount > 1 ? (
-                                      <span className="shrink-0 text-[10px] text-muted-foreground">
-                                        {option.duplicateCount} registros
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          ) : null}
-                        </>
+                        pickerCategories.map((category) => (
+                          <SelectItem key={category.name} value={category.name}>
+                            {category.name}
+                          </SelectItem>
+                        ))
                       )}
                     </SelectContent>
                   </Select>
+                  {/* Paso 2: subcategoría — solo si la categoría tiene subcategorías disponibles */}
+                  {pickerSelected?.hasItems ? (
+                    <Select value={newBudgetCategory} onValueChange={setNewBudgetCategory}>
+                      <SelectTrigger data-testid="select-add-budget-subcategory">
+                        <SelectValue placeholder="Elegir subcategoría" />
+                      </SelectTrigger>
+                      <SelectContent className="max-w-[min(460px,calc(100vw-2rem))]">
+                        {pickerSelected.hasWhole ? (
+                          <SelectItem value={pickerSelected.name}>Toda la categoría</SelectItem>
+                        ) : null}
+                        {pickerSubItems.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <span className="flex min-w-0 items-center justify-between gap-3">
+                              <span className="truncate">{option.label.split(" · ")[0]}</span>
+                              {option.duplicateCount > 1 ? (
+                                <span className="shrink-0 text-[10px] text-muted-foreground">
+                                  {option.duplicateCount} registros
+                                </span>
+                              ) : null}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
                 </div>
                 <Button
                   type="button"
