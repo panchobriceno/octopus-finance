@@ -502,7 +502,7 @@ function KPICard({
   return (
     <Card
       data-testid={`kpi-${title.toLowerCase().replace(/\s/g, "-")}`}
-      className="glass glow-card overflow-hidden rounded-xl border-white/5 bg-[#15151c]/85"
+      className="glass glow-card overflow-hidden rounded-xl border-card-border bg-[#15151c]/85"
     >
       <CardContent className="px-5 pb-5 pt-5">
         <div className="flex items-start justify-between">
@@ -516,7 +516,7 @@ function KPICard({
             )}
           </div>
           <div
-            className="rounded-xl border border-white/5 p-3"
+            className="rounded-xl border border-card-border p-3"
             style={{ backgroundColor: `${color}18` }}
           >
             <Icon className="size-5" style={{ color }} />
@@ -2026,7 +2026,7 @@ export default function OverviewPage() {
           id: "kpi-ingresos" as DashboardCardId,
           className: "",
           content: (
-            <Card data-testid="kpi-ingresos" className="glass glow-card overflow-hidden rounded-xl border-white/5 bg-[#15151c]/85">
+            <Card data-testid="kpi-ingresos" className="glass glow-card overflow-hidden rounded-xl border-card-border bg-[#15151c]/85">
               <CardContent className="px-5 pb-5 pt-5">
                 <div className="flex items-start justify-between">
                   <div>
@@ -2039,7 +2039,7 @@ export default function OverviewPage() {
                     </p>
                   </div>
                   <div
-                    className="rounded-xl border border-white/5 p-3"
+                    className="rounded-xl border border-card-border p-3"
                     style={{ backgroundColor: `${"#cdfa46"}15` }}
                   >
                     <TrendingUp className="size-5" style={{ color: "#cdfa46" }} />
@@ -2081,7 +2081,7 @@ export default function OverviewPage() {
           id: "caja-empresa" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
+            <Card className="glass glow-card rounded-xl border-card-border bg-[#15151c]/85">
               <CardContent className="pt-5">
                 <p className="text-sm text-[#9a9aa6]">Empresa: caja real</p>
                 <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">{formatCLP(businessMetrics.cashFlow)}</p>
@@ -2094,7 +2094,7 @@ export default function OverviewPage() {
           id: "caja-familia" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
+            <Card className="glass glow-card rounded-xl border-card-border bg-[#15151c]/85">
               <CardContent className="pt-5">
                 <p className="text-sm text-[#9a9aa6]">Familia: caja real</p>
                 <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">{formatCLP(familyMetrics.cashFlow)}</p>
@@ -2107,7 +2107,7 @@ export default function OverviewPage() {
           id: "caja-dentista" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
+            <Card className="glass glow-card rounded-xl border-card-border bg-[#15151c]/85">
               <CardContent className="pt-5">
                 <p className="text-sm text-[#9a9aa6]">Consulta Dentista: caja real</p>
                 <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">{formatCLP(dentistMetrics.cashFlow)}</p>
@@ -2120,7 +2120,7 @@ export default function OverviewPage() {
           id: "deuda-tarjetas" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
+            <Card className="glass glow-card rounded-xl border-card-border bg-[#15151c]/85">
               <CardContent className="pt-5">
                 <div className="flex items-center gap-2">
                   <CreditCard className="size-4 text-[#e3e3ea]" />
@@ -2136,7 +2136,7 @@ export default function OverviewPage() {
           id: "ahorro" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
+            <Card className="glass glow-card rounded-xl border-card-border bg-[#15151c]/85">
               <CardContent className="pt-5">
                 <p className="text-sm text-[#9a9aa6]">Ahorro</p>
                 <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">
@@ -2153,7 +2153,7 @@ export default function OverviewPage() {
           id: "iva-cobrado" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
+            <Card className="glass glow-card rounded-xl border-card-border bg-[#15151c]/85">
               <CardContent className="pt-5">
                 <p className="text-sm text-[#9a9aa6]">IVA cobrado este mes</p>
                 <p className="mt-2 text-2xl font-bold tabular-nums text-[#cdfa46]">
@@ -2168,7 +2168,7 @@ export default function OverviewPage() {
           id: "iva-proyectado" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
+            <Card className="glass glow-card rounded-xl border-card-border bg-[#15151c]/85">
               <CardContent className="pt-5">
                 <p className="text-sm text-[#9a9aa6]">IVA proyectado próximo 20</p>
                 <p className="mt-2 text-2xl font-bold tabular-nums text-[#cdfa46]">
@@ -2183,7 +2183,7 @@ export default function OverviewPage() {
           id: "caja-sin-iva" as DashboardCardId,
           className: "",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
+            <Card className="glass glow-card rounded-xl border-card-border bg-[#15151c]/85">
               <CardContent className="pt-5">
                 <p className="text-sm text-[#9a9aa6]">Caja empresa disponible sin IVA</p>
                 <p className="glow-text-primary mt-2 text-2xl font-bold tabular-nums">
@@ -2198,14 +2198,14 @@ export default function OverviewPage() {
           id: "balance-apertura" as DashboardCardId,
           className: "md:col-span-2 xl:col-span-4",
           content: (
-            <Card className="glass glow-card rounded-xl border-white/5 bg-[#15151c]/85">
+            <Card className="glass glow-card rounded-xl border-card-border bg-[#15151c]/85">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold text-[#f4f4f7]">
                   Balance de Apertura y Proyección del Mes
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 lg:grid-cols-[240px_1fr]">
-                <div className="rounded-xl border border-white/5 bg-[#22222b]/90 p-4">
+                <div className="rounded-xl border border-card-border bg-[#22222b]/90 p-4">
                   <p className="text-sm font-medium text-[#cdfa46]">
                     Saldo inicial
                   </p>
@@ -2219,7 +2219,7 @@ export default function OverviewPage() {
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl border border-white/5 bg-[#22222b]/80 p-4">
+                  <div className="rounded-xl border border-card-border bg-[#22222b]/80 p-4">
                     <p className="text-sm text-[#9a9aa6]">Ejecutado</p>
                     <p className="mt-2 text-xl font-bold tabular-nums text-[#f4f4f7]">
                       {formatCLP(currentMonthSummary.realEndingBalance)}
@@ -2228,7 +2228,7 @@ export default function OverviewPage() {
                       {formatCLP(summaryOpeningBalance)} + {formatCLP(currentMonthSummary.realIncome)} - {formatCLP(currentMonthSummary.realExpenses)}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-white/5 bg-[#22222b]/80 p-4">
+                  <div className="rounded-xl border border-card-border bg-[#22222b]/80 p-4">
                     <p className="text-sm text-[#9a9aa6]">Ingresos presupuestados</p>
                     <p className="mt-2 text-xl font-bold tabular-nums text-[#cdfa46]">
                       {formatCLP(currentMonthSummary.plannedIncome)}
@@ -2237,7 +2237,7 @@ export default function OverviewPage() {
                       No impactan el saldo real
                     </p>
                   </div>
-                  <div className="rounded-xl border border-white/5 bg-[#22222b]/80 p-4">
+                  <div className="rounded-xl border border-card-border bg-[#22222b]/80 p-4">
                     <p className="text-sm text-[#9a9aa6]">Saldo proyectado</p>
                     <p className="mt-2 text-xl font-bold tabular-nums text-[#cdfa46]">
                       {formatCLP(currentMonthSummary.projectedEndingBalance)}

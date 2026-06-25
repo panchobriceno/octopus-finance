@@ -33,7 +33,7 @@ export function FinanceDialogContent({
   return (
     <DialogContent
       className={cn(
-        "grid max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-2xl border-white/10 bg-[#0d0d12] p-0 text-[#f4f4f7] shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:max-h-[calc(100dvh-4rem)]",
+        "grid max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-2xl border-white/10 bg-card p-0 text-[#f4f4f7] shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:max-h-[calc(100dvh-4rem)]",
         "outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-[#cdfa46]/40",
         sizeClass[size],
         className,
@@ -91,7 +91,7 @@ export function FinanceAlertDialogContent({
   return (
     <AlertDialogContent
       className={cn(
-        "max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border-white/10 bg-[#0d0d12] p-0 text-[#f4f4f7] shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:max-h-[calc(100dvh-4rem)]",
+        "max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border-white/10 bg-card p-0 text-[#f4f4f7] shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:max-h-[calc(100dvh-4rem)]",
         "outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-[#cdfa46]/40",
         sizeClass[size],
         className,

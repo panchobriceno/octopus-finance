@@ -135,7 +135,7 @@ export default function SettingsPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-7xl space-y-6 p-6">
-        <div className="rounded-3xl border border-[#cdfa46]/10 bg-gradient-to-br from-[#151223] via-[#0d0d12] to-[#0a0a0f] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+        <div className="rounded-[20px] border border-[#cdfa46]/10 bg-gradient-to-br from-[#151223] via-[#0d0d12] to-[#0a0a0f] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="space-y-2">
               <div className="flex items-center gap-3">
