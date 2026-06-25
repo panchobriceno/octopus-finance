@@ -13,6 +13,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Landmark, Plus, Pencil, Trash2, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -423,19 +434,41 @@ export default function AccountsPage() {
                           >
                             <Pencil className="size-3.5 text-muted-foreground" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7"
-                            onClick={() =>
-                              deleteMutation.mutate(account.id, {
-                                onSuccess: () => toast({ title: "Cuenta eliminada" }),
-                              })
-                            }
-                            data-testid={`button-delete-account-${account.id}`}
-                          >
-                            <Trash2 className="size-3.5 text-muted-foreground" />
-                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                data-testid={`button-delete-account-${account.id}`}
+                              >
+                                <Trash2 className="size-3.5 text-muted-foreground" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>¿Eliminar la cuenta "{account.name}"?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Se eliminará la cuenta y su saldo informado. Los movimientos
+                                  registrados en esta cuenta NO se borran, pero quedan sin cuenta
+                                  asignada. Esta acción no se puede deshacer.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  onClick={() =>
+                                    deleteMutation.mutate(account.id, {
+                                      onSuccess: () => toast({ title: "Cuenta eliminada" }),
+                                    })
+                                  }
+                                >
+                                  Eliminar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       )}
                     </TableCell>
