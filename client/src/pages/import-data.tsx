@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useAccounts, useCategories, useBulkDeleteTransactions, useCreateCategory, useCreateImportedMovementBatch, useCreditCardSettings, useImportBatches, useTransactions, useUpdateTransaction } from "@/lib/hooks";
 import type { Account, ImportBatch, Transaction } from "@shared/schema";
 import { getCreditCards } from "@/lib/credit-cards";
+import { extractPdfText, pdfPasswordErrorKind } from "@/lib/pdf-text";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -119,6 +120,10 @@ export default function ImportDataPage({
   const [previewRows, setPreviewRows] = useState<ParsedPreviewRow[]>([]);
   const [ignoredRowIds, setIgnoredRowIds] = useState<Set<string>>(new Set());
   const [fileName, setFileName] = useState("");
+  // Contraseña opcional para cartolas protegidas (ej. Banco Edwards). Si se ingresa,
+  // el PDF se descifra en el navegador y al servidor solo va el texto.
+  const [pdfPassword, setPdfPassword] = useState("");
+  const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [accountType, setAccountType] = useState<AccountType>("bank");
   const [mapping, setMapping] = useState<ColumnMapping>({ date: "", description: "", amount: "", installments: "" });
@@ -544,23 +549,41 @@ export default function ImportDataPage({
   }, [accountType]);
 
   const parsePdfWithClaude = useCallback(async (file: File) => {
-    const pdfBase64 = arrayBufferToBase64(await file.arrayBuffer());
+    // Si hay contraseña, desciframos en el navegador y mandamos solo el texto.
+    let requestBody: { pdfBase64?: string; pdfText?: string };
+    const password = pdfPassword.trim();
+    if (password) {
+      let text: string;
+      try {
+        text = await extractPdfText(file, password);
+      } catch (error) {
+        const kind = pdfPasswordErrorKind(error);
+        if (kind === "incorrect") throw new Error("La contraseña del PDF es incorrecta.");
+        if (kind === "missing") throw new Error("Este PDF necesita contraseña. Revisá la que ingresaste.");
+        throw error;
+      }
+      if (!text) {
+        throw new Error("No se pudo leer texto del PDF (¿es una imagen escaneada?).");
+      }
+      requestBody = { pdfText: text };
+    } else {
+      requestBody = { pdfBase64: arrayBufferToBase64(await file.arrayBuffer()) };
+    }
+
     const response = await fetch("/api/extract-pdf", {
       method: "POST",
       headers: {
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        pdfBase64,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      // Caso típico: cartola de banco con contraseña. Mensaje claro en vez del JSON crudo.
+      // Caso típico: cartola de banco con contraseña pero sin clave ingresada.
       if (/password|protected|encrypt/i.test(errorText)) {
         throw new Error(
-          "El PDF tiene contraseña. Abrilo, guardá una copia sin clave (Imprimir → Guardar como PDF) y volvé a subir esa copia.",
+          "El PDF tiene contraseña. Ingresala en el campo 'Contraseña del PDF' y reprocesá el archivo.",
         );
       }
       throw new Error(errorText || "No se pudo procesar el PDF.");
@@ -580,7 +603,7 @@ export default function ImportDataPage({
         installments: typeof movement?.installments === "string" ? movement.installments : "",
       })),
     };
-  }, []);
+  }, [pdfPassword]);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -593,6 +616,7 @@ export default function ImportDataPage({
       setDetectedParser(null);
 
       if (file.name.toLowerCase().endsWith(".pdf")) {
+        setPendingPdfFile(file); // guardamos el PDF para poder reprocesarlo con contraseña
         setIsPdfProcessing(true);
         try {
           const extracted = await parsePdfWithClaude(file);
@@ -975,6 +999,31 @@ export default function ImportDataPage({
               ) : null}
             </div>
           )}
+
+          {/* Contraseña para cartolas protegidas (ej. Banco Edwards). */}
+          <div className="mt-4 flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Contraseña del PDF (opcional)</label>
+              <Input
+                type="password"
+                value={pdfPassword}
+                onChange={(e) => setPdfPassword(e.target.value)}
+                placeholder="Solo si tu cartola tiene clave"
+                className="w-64"
+                data-testid="input-pdf-password"
+              />
+            </div>
+            {pendingPdfFile ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleFile(pendingPdfFile)}
+                disabled={isPdfProcessing}
+              >
+                {isPdfProcessing ? "Procesando..." : "Reprocesar PDF"}
+              </Button>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
 
