@@ -14,3 +14,5 @@ seed-recurring-clients.mjs
 backup-pre-seed-*.json
 cleanup-and-generate.mjs
 backup-pre-gen-*.json
+dedupe-categories.mjs
+backup-pre-dedupe-*.json

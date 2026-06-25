@@ -28,7 +28,8 @@ export function findCategoryName(
   return categories.find((category) =>
     category.type === "expense" &&
     category.name.toLowerCase() === name.toLowerCase() &&
-    (category.workspace ?? "business") === workspace,
+    // Sin ámbito = compartida → válida en cualquier ámbito.
+    (!category.workspace || category.workspace === workspace),
   )?.name;
 }
 

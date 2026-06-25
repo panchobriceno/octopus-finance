@@ -29,6 +29,7 @@ import {
   useSeedDemoImportedMovements,
 } from "@/lib/hooks";
 import { buildImportedMovementDashboard, normalizeImportText } from "@/domain/bank-imports";
+import { categoryMatchesWorkspace } from "@/domain/categories";
 import { openImportWizard } from "@/lib/import-wizard";
 import { formatCLP } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -274,6 +275,22 @@ export default function BankMovementsPage({
       expense: Array.from(expense).sort((left, right) => left.localeCompare(right, "es")),
     };
   }, [categories, movements]);
+
+  const categoryByName = useMemo(() => {
+    const map = new Map<string, (typeof categories)[number]>();
+    for (const category of categories) map.set(category.name, category);
+    return map;
+  }, [categories]);
+
+  // Filtra los nombres por el ámbito de la fila: deja las del ámbito + compartidas
+  // + las que no son categorías reales (sugerencias del movimiento) + la elegida.
+  const filterCategoryOptionsByWorkspace = (options: string[], workspace: string | undefined, selected: string) =>
+    options.filter((name) => {
+      if (name === selected) return true;
+      const category = categoryByName.get(name);
+      if (!category) return true;
+      return categoryMatchesWorkspace(category, workspace);
+    });
 
   const setRowOverride = (movementId: string, patch: RowOverride) => {
     setOverrides((current) => ({
@@ -727,9 +744,13 @@ export default function BankMovementsPage({
                     {visibleMovements.map((movement) => {
                       const rowOverride = overrides[movement.id] ?? {};
                       const categoryType = movementCategoryType(movement);
-                      const categoryOptions = categoryOptionsByType[categoryType];
                       const selectedCategory = rowOverride.category ?? movement.suggestedCategory;
                       const selectedWorkspace = rowOverride.workspace ?? movement.suggestedWorkspace;
+                      const categoryOptions = filterCategoryOptionsByWorkspace(
+                        categoryOptionsByType[categoryType],
+                        selectedWorkspace,
+                        selectedCategory,
+                      );
                       const selectedAccountId = rowOverride.accountId ?? movement.accountId ?? "none";
                       const canReview = !isSelectedBatchClosed && (movement.status === "pending" || movement.status === "duplicate");
                       const sourceAccount = movement.accountId ? accountById.get(movement.accountId) : null;
