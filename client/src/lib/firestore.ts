@@ -1127,6 +1127,13 @@ export async function createClient(data: Record<string, any>) {
     email: null,
     accountManager: null,
     notes: null,
+    // Recurrencia (Fase 1): defaults seguros. monthlyNetAmount null = sin configurar.
+    monthlyNetAmount: null,
+    vatApplies: true,
+    serviceItem: null,
+    billingDay: 5,
+    active: true,
+    startMonth: null,
     ...data,
   };
   const ref = await addDoc(clientsCol(), payload);

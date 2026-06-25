@@ -116,6 +116,13 @@ export interface Client {
   notes: string | null;
   workspace: string; // "business"
   createdAt: string; // YYYY-MM-DD
+  // ── Recurrencia (Fase 1) — un cargo mensual fijo por cliente ──
+  monthlyNetAmount: number | null; // null = sin configurar; >0 para recurrente activo
+  vatApplies: boolean; // IVA 19% sobre el neto
+  serviceItem: string | null; // mismo nombre que ClientPayment.serviceItem
+  billingDay: number; // día de facturación (1..28)
+  active: boolean; // recurrente activo
+  startMonth: string | null; // YYYY-MM desde cuándo factura (opcional)
 }
 
 export interface InsertClient {
@@ -129,6 +136,12 @@ export interface InsertClient {
   notes?: string | null;
   workspace?: string;
   createdAt?: string;
+  monthlyNetAmount?: number | null;
+  vatApplies?: boolean;
+  serviceItem?: string | null;
+  billingDay?: number;
+  active?: boolean;
+  startMonth?: string | null;
 }
 
 // ── Accounts ───────────────────────────────────────────────────

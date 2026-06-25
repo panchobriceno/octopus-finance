@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { RecurringClientsSection } from "@/components/finance/recurring-clients-section";
 import { BriefcaseBusiness, Check, Pencil, Plus, Save, Trash2, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
 type PaymentStatus = "projected" | "receivable" | "invoiced" | "paid" | "cancelled";
@@ -934,6 +935,8 @@ export default function ClientPaymentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RecurringClientsSection />
 
       <Card>
         <CardHeader className="pb-3">
