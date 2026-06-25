@@ -31,7 +31,7 @@ import TransactionsPage from "@/pages/transactions";
 import { getCurrentMonthKey } from "@/lib/finance";
 import { IMPORT_WIZARD_OPEN_EVENT, openImportWizard } from "@/lib/import-wizard";
 import { autoCarryForwardOpeningBalance } from "@/lib/monthly-balances";
-import { useGenerateCommitmentInstances } from "@/lib/hooks";
+import { useGenerateCommitmentInstances, useGenerateClientPaymentInstances } from "@/lib/hooks";
 import { useToast } from "@/hooks/use-toast";
 
 // Wrappers estables: estas páginas ahora aceptan props opcionales (modo wizard),
@@ -112,6 +112,48 @@ function AutoGenerateCommitments() {
   return null;
 }
 
+// Genera solos los ingresos del mes para cada cliente recurrente activo (igual que
+// los compromisos de gasto): ID determinístico + skip si ya existe, así nunca pisa
+// una fila ya facturada/pagada. localStorage throttlea por mes; useRef evita doble
+// disparo en la misma carga.
+function AutoGenerateClientPayments() {
+  const generate = useGenerateClientPaymentInstances();
+  const { toast } = useToast();
+  const startedRef = useRef(false);
+
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+
+    const monthKey = getCurrentMonthKey();
+    const flagKey = `octopus:autogen-clients:${monthKey}`;
+    if (localStorage.getItem(flagKey)) return;
+
+    generate.mutate(monthKey, {
+      onSuccess: (result) => {
+        if (result.scanned > 0) {
+          localStorage.setItem(flagKey, new Date().toISOString());
+        }
+        if (result.created > 0) {
+          toast({
+            title: "Ingresos del mes generados",
+            description: `${result.created} clientes listos para facturar.`,
+          });
+        }
+      },
+      onError: () => {
+        toast({
+          title: "No se pudieron generar los ingresos del mes",
+          description: "Lo reintento la próxima vez que abras la app.",
+          variant: "destructive",
+        });
+      },
+    });
+  }, [generate, toast]);
+
+  return null;
+}
+
 function AppRouter() {
   return (
     <Switch>
@@ -154,6 +196,7 @@ function App() {
           <CommandPalette />
           <GlobalImportWizard />
           <AutoGenerateCommitments />
+          <AutoGenerateClientPayments />
           <QuickExpenseCapture />
           <SidebarProvider style={sidebarStyle as React.CSSProperties}>
             <div className="flex h-screen w-full">

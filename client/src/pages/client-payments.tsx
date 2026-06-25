@@ -754,7 +754,7 @@ export default function ClientPaymentsPage() {
         </Card>
         <Card className="border border-dashed border-[#3a3a44] bg-gradient-to-br from-[#17171f] to-[#131319]">
           <CardContent className="pt-5">
-            <p className="flex items-center gap-1.5 text-xs text-[#9a9aa6]"><span className="inline-block h-px w-3 border-t border-dashed border-[#8a8a94]" />Proyectado</p>
+            <p className="flex items-center gap-1.5 text-xs text-[#9a9aa6]"><span className="inline-block h-px w-3 border-t border-dashed border-[#8a8a94]" />Por facturar</p>
             <p className="mt-1.5 font-mono text-2xl font-bold tabular-nums text-[#8a8a94]">{formatCLP(summary.projected)}</p>
           </CardContent>
         </Card>
@@ -841,7 +841,7 @@ export default function ClientPaymentsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="projected">Proyectado</SelectItem>
+                <SelectItem value="projected">Por facturar</SelectItem>
                 <SelectItem value="receivable">Por cobrar</SelectItem>
                 <SelectItem value="invoiced">Facturado</SelectItem>
                 <SelectItem value="paid">Pagado</SelectItem>
@@ -1094,7 +1094,7 @@ export default function ClientPaymentsPage() {
                               <SelectValue />
                             </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="projected">Proyectado</SelectItem>
+                                <SelectItem value="projected">Por facturar</SelectItem>
                                 <SelectItem value="receivable">Por cobrar</SelectItem>
                                 <SelectItem value="invoiced">Facturado</SelectItem>
                                 <SelectItem value="paid">Pagado</SelectItem>
@@ -1110,7 +1110,7 @@ export default function ClientPaymentsPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="projected">Proyectado</SelectItem>
+                              <SelectItem value="projected">Por facturar</SelectItem>
                               <SelectItem value="receivable">Por cobrar</SelectItem>
                               <SelectItem value="invoiced">Facturado</SelectItem>
                               <SelectItem value="paid">Pagado</SelectItem>
@@ -1182,7 +1182,7 @@ export default function ClientPaymentsPage() {
                                     : payment.status === "receivable"
                                       ? "Por cobrar"
                                       : payment.status === "projected"
-                                        ? "Proyectado"
+                                        ? "Por facturar"
                                         : "Anulado"}
                               </Badge>
                               <Button

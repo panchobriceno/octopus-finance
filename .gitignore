@@ -10,3 +10,7 @@ audits/
 # Limpieza histórico (local, no commitear)
 wipe-historico.mjs
 backup-octopus-*.json
+seed-recurring-clients.mjs
+backup-pre-seed-*.json
+cleanup-and-generate.mjs
+backup-pre-gen-*.json

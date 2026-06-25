@@ -335,6 +335,15 @@ export function useDeleteClientPayment() {
   });
 }
 
+export function useGenerateClientPaymentInstances() {
+  return useMutation({
+    mutationFn: (monthKey: string) => fs.generateClientPaymentInstances(monthKey),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client-payments"] });
+    },
+  });
+}
+
 export function useMigrateClientPaymentStatuses() {
   return useMutation({
     mutationFn: () => fs.migrateClientPaymentStatuses(),

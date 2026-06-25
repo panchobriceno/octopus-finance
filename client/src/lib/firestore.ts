@@ -869,6 +869,59 @@ export async function deleteClientPayment(id: string) {
   await batch.commit();
 }
 
+// Genera la fila de ingreso del mes para cada cliente recurrente activo.
+// Idempotente: ID determinístico (recurring-<clientId>-<monthKey>) + skip si ya
+// existe una fila de ese cliente para el mes → NUNCA pisa un estado ya avanzado
+// (facturado/pagado). Misma forma de IVA que calculateVatAndTotal (round(net*0.19)).
+export async function generateClientPaymentInstances(monthKey: string) {
+  const [clientsSnap, existingSnap] = await Promise.all([
+    getDocs(clientsCol()),
+    getDocs(query(clientPaymentsCol(), where("serviceMonth", "==", monthKey))),
+  ]);
+  const clients = snapToArray<Client>(clientsSnap);
+  const existing = snapToArray<ClientPayment>(existingSnap);
+
+  const existingClientIds = new Set(existing.map((p) => p.clientId).filter(Boolean));
+  const existingDocIds = new Set(existing.map((p) => p.id));
+
+  const activeRecurring = clients.filter(
+    (c) => (c as any).active !== false && typeof (c as any).monthlyNetAmount === "number" && (c as any).monthlyNetAmount > 0,
+  );
+
+  let created = 0;
+  for (const c of activeRecurring) {
+    const docId = `recurring-${c.id}-${monthKey}`;
+    // Doble guarda: por cliente+mes y por id determinístico. Si ya hay fila, salta.
+    if (existingClientIds.has(c.id) || existingDocIds.has(docId)) continue;
+
+    const net = (c as any).monthlyNetAmount as number;
+    const vat = (c as any).vatApplies !== false ? Math.round(net * 0.19) : 0;
+    const day = Math.min(28, Math.max(1, Number((c as any).billingDay) || 5));
+    const date = `${monthKey}-${String(day).padStart(2, "0")}`;
+
+    await setDoc(doc(clientPaymentsCol(), docId), {
+      clientId: c.id,
+      clientName: c.name,
+      serviceItem: (c as any).serviceItem ?? null,
+      serviceMonth: monthKey,
+      netAmount: net,
+      vatAmount: vat,
+      totalAmount: net + vat,
+      status: "projected", // = "Por facturar"
+      issueDate: date,
+      expectedDate: date,
+      dueDate: date,
+      paymentDate: null,
+      notes: null,
+      sourceClientPaymentId: null,
+      isRecurring: true,
+    });
+    created += 1;
+  }
+
+  return { created, skipped: activeRecurring.length - created, scanned: activeRecurring.length };
+}
+
 export async function migrateClientPaymentStatuses() {
   const snap = await getDocs(clientPaymentsCol());
   const legacyPayments = snapToArray<any>(snap).filter((payment) => {
