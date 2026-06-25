@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useClientPayments, useTransactions } from "@/lib/hooks";
-import { formatCLP, getMonthName } from "@/lib/utils";
+import { cn, formatCLP, getMonthName } from "@/lib/utils";
 import {
   combineFinancialTransactions,
   getTransactionExpenseImpact,
@@ -13,39 +13,123 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, TrendingDown, TrendingUp } from "lucide-react";
+import { FileText, LineChart, TrendingDown, TrendingUp } from "lucide-react";
 
 interface CellTotals {
   real: number;
   planned: number;
 }
 
-function PnlCell({ value }: { value: CellTotals }) {
+type RowType = "income" | "expense" | "neutral";
+type ViewMode = "real" | "mixto" | "planned";
+
+// lima = favorable, gris = desfavorable. En gastos, "favorable" es gastar
+// MENOS que lo presupuestado (varianza <= 0).
+function isFavorable(variance: number, type: RowType) {
+  return type === "expense" ? variance <= 0 : variance >= 0;
+}
+
+function PnlCell({
+  value,
+  type = "neutral",
+  viewMode = "mixto",
+}: {
+  value: CellTotals;
+  type?: RowType;
+  viewMode?: ViewMode;
+}) {
   const variance = value.real - value.planned;
+  const favorable = isFavorable(variance, type);
+  const hasData = value.real !== 0 || value.planned !== 0;
+
+  if (!hasData) {
+    return <div className="text-right font-mono text-xs text-[#3a3a44]">—</div>;
+  }
+
+  if (viewMode === "real") {
+    return (
+      <div className="text-right font-mono text-sm tabular-nums text-[#f4f4f7]">{formatCLP(value.real)}</div>
+    );
+  }
+
+  if (viewMode === "planned") {
+    return (
+      <div className="text-right font-mono text-sm tabular-nums text-[#9a9aa6]">{formatCLP(value.planned)}</div>
+    );
+  }
 
   return (
     <div className="space-y-1 text-right">
-      <div className="tabular-nums text-sm">{formatCLP(value.real)}</div>
-      <div className="tabular-nums text-xs text-muted-foreground">
-        Presup. {formatCLP(value.planned)}
-      </div>
+      <div className="font-mono text-sm tabular-nums text-[#f4f4f7]">{formatCLP(value.real)}</div>
+      <div className="font-mono text-xs tabular-nums text-[#6c6c78]">Presup. {formatCLP(value.planned)}</div>
       <div
-        className={`tabular-nums text-xs font-medium ${
-          variance >= 0 ? "text-[hsl(var(--money-in))]" : "text-[#e3e3ea]"
-        }`}
+        className={cn(
+          "font-mono text-xs font-medium tabular-nums",
+          favorable ? "text-[#cdfa46]" : "text-[#8a8a94]",
+        )}
       >
-        Var. {formatCLP(variance)}
+        Var. {variance >= 0 ? "+" : ""}{formatCLP(variance)}
       </div>
     </div>
   );
 }
 
+function PnlKpi({
+  icon,
+  label,
+  value,
+  planned,
+  type,
+  badge,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: number;
+  planned: number;
+  type: RowType;
+  badge?: ReactNode;
+}) {
+  const variance = value - planned;
+  const favorable = isFavorable(variance, type);
+  const valueClass = type === "income" ? "text-[#cdfa46]" : "text-[#e3e3ea]";
+
+  return (
+    <Card className="flex flex-col">
+      <CardContent className="flex flex-1 flex-col p-[18px]">
+        <div className="flex items-center gap-2">
+          <span className="text-[#cfcfd8]">{icon}</span>
+          <p className="text-xs font-medium text-[hsl(var(--muted-foreground))]">{label}</p>
+          {badge ? <span className="ml-auto">{badge}</span> : null}
+        </div>
+        <p className={cn("mt-3 font-mono text-[22px] font-bold leading-none tabular-nums", valueClass)}>
+          {formatCLP(value)}
+        </p>
+        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-4 text-xs">
+          <span className="font-mono text-[hsl(var(--muted-foreground))]">Presup. {formatCLP(planned)}</span>
+          <span
+            className={cn(
+              "inline-flex items-center rounded-full px-2 py-0.5 font-mono font-semibold",
+              favorable
+                ? "bg-[rgba(205,250,70,0.12)] text-[#cdfa46]"
+                : "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]",
+            )}
+          >
+            {variance >= 0 ? "+" : ""}{formatCLP(variance)}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const STICKY = "sticky left-0 z-[1] bg-card";
+
 export default function PnLPage() {
   const { data: transactions = [], isLoading: txLoading } = useTransactions();
   const { data: clientPayments = [] } = useClientPayments();
   const [workspace, setWorkspace] = useState<WorkspaceFilter>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("mixto");
   const financialTransactions = useMemo(
     () => combineFinancialTransactions(transactions, clientPayments),
     [transactions, clientPayments],
@@ -170,134 +254,142 @@ export default function PnLPage() {
     );
   }
 
+  const netDeficit = model.grandNet.real < 0;
+
   return (
-    <div className="p-6 space-y-6 overflow-y-auto h-full">
-      <div className="flex items-center gap-3">
-        <FileText className="size-5 text-primary" />
-        <h2 className="text-xl font-semibold">Estado de Resultados</h2>
+    <div className="h-full space-y-6 overflow-y-auto p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <FileText className="size-5 text-[#cdfa46]" />
+          <h2 className="text-xl font-extrabold tracking-tight">Estado de Resultados</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-[#9a9aa6]">Ámbito:</span>
+          <Select value={workspace} onValueChange={(value) => setWorkspace(value as WorkspaceFilter)}>
+            <SelectTrigger className="w-44 border-card-border bg-secondary">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Consolidado</SelectItem>
+              <SelectItem value="business">Empresa</SelectItem>
+              <SelectItem value="family">Familia</SelectItem>
+              <SelectItem value="dentist">Consulta Dentista</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <PnlKpi
+          icon={<TrendingUp className="size-4" />}
+          label="Ingresos"
+          value={model.grandIncome.real}
+          planned={model.grandIncome.planned}
+          type="income"
+        />
+        <PnlKpi
+          icon={<TrendingDown className="size-4" />}
+          label="Gastos"
+          value={model.grandExpense.real}
+          planned={model.grandExpense.planned}
+          type="expense"
+        />
+        <PnlKpi
+          icon={<LineChart className="size-4" />}
+          label="Resultado neto"
+          value={model.grandNet.real}
+          planned={model.grandNet.planned}
+          type="neutral"
+          badge={
+            <span className="rounded-full bg-[rgba(138,138,148,0.16)] px-2 py-0.5 text-[10px] font-bold text-[#8a8a94]">
+              {netDeficit ? "déficit" : "superávit"}
+            </span>
+          }
+        />
       </div>
 
       <Card>
-        <CardContent className="pt-5">
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">Ámbito:</span>
-            <Select value={workspace} onValueChange={(value) => setWorkspace(value as WorkspaceFilter)}>
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Consolidado</SelectItem>
-                <SelectItem value="business">Empresa</SelectItem>
-                <SelectItem value="family">Familia</SelectItem>
-                <SelectItem value="dentist">Consulta Dentista</SelectItem>
-              </SelectContent>
-            </Select>
+        <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-[15px] font-bold">Vista multi-mes</CardTitle>
+          <div className="inline-flex flex-none rounded-full border border-card-border bg-[#121219] p-1 text-xs font-bold">
+            {([
+              ["real", "Real"],
+              ["mixto", "Mixto"],
+              ["planned", "Presupuestado"],
+            ] as const).map(([mode, modeLabel]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setViewMode(mode)}
+                className={cn(
+                  "whitespace-nowrap rounded-full px-3 py-1.5 transition",
+                  viewMode === mode ? "bg-[#cdfa46] text-[#0a0a0f]" : "text-[#9a9aa6] hover:text-[#f4f4f7]",
+                )}
+              >
+                {modeLabel}
+              </button>
+            ))}
           </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-5 pb-4 px-5">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingUp className="size-4 text-lime-500" />
-              <p className="text-sm text-muted-foreground">Total Ingresos Reales</p>
-            </div>
-            <p className="text-xl font-semibold tabular-nums text-[hsl(var(--money-in))]">
-              {formatCLP(model.grandIncome.real)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Presupuestado: {formatCLP(model.grandIncome.planned)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5 pb-4 px-5">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingDown className="size-4 text-red-500" />
-              <p className="text-sm text-muted-foreground">Total Gastos Reales</p>
-            </div>
-            <p className="text-xl font-semibold tabular-nums text-[#e3e3ea]">
-              {formatCLP(model.grandExpense.real)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Presupuestado: {formatCLP(model.grandExpense.planned)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5 pb-4 px-5">
-            <div className="flex items-center gap-2 mb-1">
-              <FileText className="size-4 text-slate-500" />
-              <p className="text-sm text-muted-foreground">Resultado Neto</p>
-            </div>
-            <p
-              className={`text-xl font-semibold tabular-nums ${
-                model.grandNet.real >= 0 ? "text-[hsl(var(--money-in))]" : "text-[#e3e3ea]"
-              }`}
-            >
-              {formatCLP(model.grandNet.real)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Presupuestado: {formatCLP(model.grandNet.planned)}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">
-            Vista Multi-mes
-          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-3 text-xs">
-            <div className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-muted-foreground">
-              <span className="size-2 rounded-full bg-secondary-foreground/70" />
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(138,138,148,0.14)] px-2.5 py-1 font-semibold text-[#8a8a94]">
+              <span className="size-1.5 rounded-full bg-[#8a8a94]" />
               Real
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-muted-foreground">
-              <span className="size-2 rounded-full border border-muted-foreground" />
-              Presupuestado
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-zinc-50/60 px-3 py-1 text-zinc-700 dark:border-zinc-900/40 dark:bg-zinc-950/20 dark:text-zinc-300">
-              <span className="size-2 rounded-full bg-zinc-500" />
-              Mes con datos mixtos
-            </div>
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(205,250,70,0.12)] px-2.5 py-1 font-semibold text-[#cdfa46]">
+              <span className="size-1.5 rounded-full bg-[#cdfa46]" />
+              Mixto (real + proyección)
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-card-border px-2.5 py-1 font-semibold text-[#9a9aa6]">
+              <span className="size-1.5 rounded-full border border-[#9a9aa6]" />
+              Solo proyección
+            </span>
           </div>
 
           <div className="overflow-x-auto">
             <Table data-testid="table-pnl">
               <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-5 min-w-[220px]">Categoría</TableHead>
+                <TableRow className="border-[#1e1e26] hover:bg-transparent">
+                  <TableHead className={cn(STICKY, "min-w-[200px] pl-5 text-[10px] uppercase tracking-wide text-[#6c6c78]")}>
+                    Categoría
+                  </TableHead>
                   {model.monthKeys.map((monthKey) => {
                     const [year, month] = monthKey.split("-");
                     const label = `${getMonthName(Number(month) - 1).slice(0, 3)} ${year}`;
                     const status = model.monthStatus[monthKey];
+                    const mixed = status.real && status.planned;
+                    const onlyPlanned = !status.real && status.planned;
 
                     return (
-                      <TableHead key={monthKey} className="min-w-[160px] text-right">
+                      <TableHead key={monthKey} className="min-w-[150px] text-right">
                         <div className="flex flex-col items-end gap-1">
-                          <span>{label}</span>
-                          {status.real && !status.planned && <Badge variant="secondary" className="text-[10px]">Real</Badge>}
-                          {!status.real && status.planned && <Badge variant="outline" className="text-[10px]">Solo proyección</Badge>}
-                          {status.real && status.planned && (
-                            <Badge variant="secondary" className="text-[10px] bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300">
-                              Mixto
-                            </Badge>
-                          )}
+                          <span className="font-mono text-xs text-[#cfcfd8]">{label}</span>
+                          <span
+                            className={cn(
+                              "rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
+                              mixed
+                                ? "bg-[rgba(205,250,70,0.12)] text-[#cdfa46]"
+                                : onlyPlanned
+                                  ? "border border-card-border text-[#9a9aa6]"
+                                  : "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]",
+                            )}
+                          >
+                            {mixed ? "Mixto" : onlyPlanned ? "Proyección" : "Real"}
+                          </span>
                         </div>
                       </TableHead>
                     );
                   })}
-                  <TableHead className="min-w-[160px] text-right pr-5">Total</TableHead>
+                  <TableHead className="min-w-[150px] pr-5 text-right text-[10px] uppercase tracking-wide text-[#6c6c78]">
+                    Total
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow className="bg-lime-50/50 dark:bg-lime-950/20">
-                  <TableCell className="pl-5 font-semibold text-sm text-lime-700 dark:text-lime-400">
+                {/* Sección Ingresos (tinte lima) */}
+                <TableRow className="bg-[rgba(205,250,70,0.05)] hover:bg-[rgba(205,250,70,0.05)]">
+                  <TableCell className={cn(STICKY, "pl-5 text-xs font-bold uppercase tracking-wide text-[#cdfa46]")}>
                     Ingresos
                   </TableCell>
                   {model.monthKeys.map((monthKey) => (
@@ -307,33 +399,34 @@ export default function PnLPage() {
                 </TableRow>
 
                 {model.incomeRows.map((row) => (
-                  <TableRow key={`income-${row.category}`}>
-                    <TableCell className="pl-5 text-sm font-medium">{row.category}</TableCell>
+                  <TableRow key={`income-${row.category}`} className="border-[#1e1e26]">
+                    <TableCell className={cn(STICKY, "pl-5 text-sm font-medium")}>{row.category}</TableCell>
                     {row.values.map((value, index) => (
                       <TableCell key={`${row.category}-${model.monthKeys[index]}`} className="align-top">
-                        <PnlCell value={value} />
+                        <PnlCell value={value} type="income" viewMode={viewMode} />
                       </TableCell>
                     ))}
                     <TableCell className="pr-5 align-top">
-                      <PnlCell value={row.total} />
+                      <PnlCell value={row.total} type="income" viewMode={viewMode} />
                     </TableCell>
                   </TableRow>
                 ))}
 
-                <TableRow className="border-t border-border bg-lime-50/30 dark:bg-lime-950/10">
-                  <TableCell className="pl-5 font-semibold text-sm">Total Ingresos</TableCell>
+                <TableRow className="border-t border-card-border bg-[rgba(205,250,70,0.04)] hover:bg-[rgba(205,250,70,0.04)]">
+                  <TableCell className={cn(STICKY, "pl-5 text-sm font-bold")}>Total Ingresos</TableCell>
                   {model.incomeTotalsByMonth.map((value, index) => (
-                    <TableCell key={`income-total-${model.monthKeys[index]}`}>
-                      <PnlCell value={value} />
+                    <TableCell key={`income-total-${model.monthKeys[index]}`} className="align-top">
+                      <PnlCell value={value} type="income" viewMode={viewMode} />
                     </TableCell>
                   ))}
-                  <TableCell className="pr-5">
-                    <PnlCell value={model.grandIncome} />
+                  <TableCell className="pr-5 align-top">
+                    <PnlCell value={model.grandIncome} type="income" viewMode={viewMode} />
                   </TableCell>
                 </TableRow>
 
-                <TableRow className="bg-red-50/50 dark:bg-red-950/20">
-                  <TableCell className="pl-5 font-semibold text-sm text-[#e3e3ea]">
+                {/* Sección Gastos (limpia) */}
+                <TableRow className="hover:bg-transparent">
+                  <TableCell className={cn(STICKY, "pl-5 pt-6 text-xs font-bold uppercase tracking-wide text-[#f4f4f7]")}>
                     Gastos
                   </TableCell>
                   {model.monthKeys.map((monthKey) => (
@@ -343,40 +436,43 @@ export default function PnLPage() {
                 </TableRow>
 
                 {model.expenseRows.map((row) => (
-                  <TableRow key={`expense-${row.category}`}>
-                    <TableCell className="pl-5 text-sm font-medium">{row.category}</TableCell>
+                  <TableRow key={`expense-${row.category}`} className="border-[#1e1e26]">
+                    <TableCell className={cn(STICKY, "pl-5 text-sm font-medium")}>{row.category}</TableCell>
                     {row.values.map((value, index) => (
                       <TableCell key={`${row.category}-${model.monthKeys[index]}`} className="align-top">
-                        <PnlCell value={value} />
+                        <PnlCell value={value} type="expense" viewMode={viewMode} />
                       </TableCell>
                     ))}
                     <TableCell className="pr-5 align-top">
-                      <PnlCell value={row.total} />
+                      <PnlCell value={row.total} type="expense" viewMode={viewMode} />
                     </TableCell>
                   </TableRow>
                 ))}
 
-                <TableRow className="border-t border-border bg-red-50/30 dark:bg-red-950/10">
-                  <TableCell className="pl-5 font-semibold text-sm">Total Gastos</TableCell>
+                <TableRow className="border-t border-card-border bg-white/[0.03] hover:bg-white/[0.03]">
+                  <TableCell className={cn(STICKY, "pl-5 text-sm font-bold")}>Total Gastos</TableCell>
                   {model.expenseTotalsByMonth.map((value, index) => (
-                    <TableCell key={`expense-total-${model.monthKeys[index]}`}>
-                      <PnlCell value={value} />
+                    <TableCell key={`expense-total-${model.monthKeys[index]}`} className="align-top">
+                      <PnlCell value={value} type="expense" viewMode={viewMode} />
                     </TableCell>
                   ))}
-                  <TableCell className="pr-5">
-                    <PnlCell value={model.grandExpense} />
+                  <TableCell className="pr-5 align-top">
+                    <PnlCell value={model.grandExpense} type="expense" viewMode={viewMode} />
                   </TableCell>
                 </TableRow>
 
-                <TableRow className="border-t-2 border-border bg-muted/40">
-                  <TableCell className="pl-5 font-semibold text-sm">Resultado Neto</TableCell>
+                {/* Resultado neto */}
+                <TableRow className="border-t-2 border-card-border bg-secondary hover:bg-secondary">
+                  <TableCell className={cn("sticky left-0 z-[1] bg-secondary pl-5 text-sm font-bold")}>
+                    Resultado neto
+                  </TableCell>
                   {model.netTotalsByMonth.map((value, index) => (
-                    <TableCell key={`net-total-${model.monthKeys[index]}`}>
-                      <PnlCell value={value} />
+                    <TableCell key={`net-total-${model.monthKeys[index]}`} className="align-top">
+                      <PnlCell value={value} type="neutral" viewMode={viewMode} />
                     </TableCell>
                   ))}
-                  <TableCell className="pr-5">
-                    <PnlCell value={model.grandNet} />
+                  <TableCell className="pr-5 align-top">
+                    <PnlCell value={model.grandNet} type="neutral" viewMode={viewMode} />
                   </TableCell>
                 </TableRow>
               </TableBody>
