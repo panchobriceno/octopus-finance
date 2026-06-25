@@ -6,3 +6,7 @@ vite.config.ts.*
 *.tar.gz
 .env.local
 audits/
+
+# Limpieza histórico (local, no commitear)
+wipe-historico.mjs
+backup-octopus-*.json

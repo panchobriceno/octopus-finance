@@ -67,6 +67,11 @@ import {
   Legend,
 } from "recharts";
 import {
+  Tooltip as InfoTooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
+import {
   AlertTriangle,
   ArrowRight,
   ArrowUp,
@@ -2735,7 +2740,22 @@ export default function OverviewPage() {
                 <div className="flex items-start justify-between">
                   <span className="flex items-center gap-1.5 text-sm font-semibold text-[#1d2a0c]">
                     Ingresos totales
-                    <Info className="size-3.5 opacity-60" />
+                    <InfoTooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label="Qué incluye Ingresos totales"
+                          className="flex items-center text-[#1d2a0c] opacity-60 transition-opacity hover:opacity-100"
+                        >
+                          <Info className="size-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-[260px] text-xs leading-relaxed">
+                        Ingresos del mes en curso: suma lo cobrado, lo facturado y lo por cobrar,
+                        según la fecha esperada de pago. No es solo lo que ya entró a la cuenta —
+                        para ver el detalle por estado, abrí Ingresos Clientes.
+                      </TooltipContent>
+                    </InfoTooltip>
                   </span>
                   <button
                     type="button"
