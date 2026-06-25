@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Switch, Route, Router, useLocation } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
@@ -31,6 +31,8 @@ import TransactionsPage from "@/pages/transactions";
 import { getCurrentMonthKey } from "@/lib/finance";
 import { IMPORT_WIZARD_OPEN_EVENT, openImportWizard } from "@/lib/import-wizard";
 import { autoCarryForwardOpeningBalance } from "@/lib/monthly-balances";
+import { useGenerateCommitmentInstances } from "@/lib/hooks";
+import { useToast } from "@/hooks/use-toast";
 
 // Wrappers estables: estas páginas ahora aceptan props opcionales (modo wizard),
 // lo que choca con el tipo de `component` de wouter. Un wrapper de identidad fija
@@ -59,6 +61,55 @@ function GlobalImportWizard() {
   }, []);
 
   return <ImportWizardDialog open={open} onOpenChange={setOpen} />;
+}
+
+// Genera solos los compromisos recurrentes del mes al abrir la app, sin que el
+// usuario apriete "Generar mes". La generación es idempotente y los documentos
+// usan ID determinístico (plantilla+mes), así que repetir o correr en paralelo
+// (otra pestaña, otro dispositivo) no duplica. El flag de localStorage es solo un
+// throttle para no re-intentar ni mostrar el aviso en cada carga; el useRef evita
+// re-disparos por re-render dentro de la misma carga.
+function AutoGenerateCommitments() {
+  const generate = useGenerateCommitmentInstances();
+  const { toast } = useToast();
+  const startedRef = useRef(false);
+
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+
+    const monthKey = getCurrentMonthKey();
+    const flagKey = `octopus:autogen:${monthKey}`;
+    if (localStorage.getItem(flagKey)) return;
+
+    generate.mutate(monthKey, {
+      onSuccess: (result) => {
+        // Marcamos el mes como "ya corrido" solo si ya existen plantillas (haya
+        // creado algo o no). Si todavía no hay ninguna, no seteamos el flag para
+        // que reintente cuando el usuario cree la primera plantilla del mes.
+        if (result.templatesScanned > 0) {
+          localStorage.setItem(flagKey, new Date().toISOString());
+        }
+        if (result.created > 0) {
+          toast({
+            title: "Compromisos del mes generados",
+            description: `${result.created} creados automáticamente.`,
+          });
+        }
+      },
+      onError: () => {
+        // No marcamos el flag: reintenta en la próxima apertura. Avisamos para no
+        // dejar al usuario creyendo que el mes quedó generado cuando no fue así.
+        toast({
+          title: "No se pudieron generar los compromisos",
+          description: "Lo reintento la próxima vez que abras la app.",
+          variant: "destructive",
+        });
+      },
+    });
+  }, [generate, toast]);
+
+  return null;
 }
 
 function AppRouter() {
@@ -102,6 +153,7 @@ function App() {
         <Router hook={useHashLocation}>
           <CommandPalette />
           <GlobalImportWizard />
+          <AutoGenerateCommitments />
           <QuickExpenseCapture />
           <SidebarProvider style={sidebarStyle as React.CSSProperties}>
             <div className="flex h-screen w-full">

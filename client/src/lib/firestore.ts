@@ -56,6 +56,7 @@ import {
   buildTransactionFromCommitmentPayment,
   buildMissingCommitmentInstances,
   findCommitmentMatches,
+  getCommitmentIdentity,
 } from "@/domain/commitments";
 import {
   buildBrokenReferencesPlan,
@@ -1401,7 +1402,10 @@ export async function generateCommitmentInstances(monthKey: string) {
   for (let index = 0; index < missingInstances.length; index += 450) {
     const batch = writeBatch(db);
     for (const instance of missingInstances.slice(index, index + 450)) {
-      const ref = doc(commitmentInstancesCol());
+      // ID determinístico (plantilla + mes): si dos cargas generan a la vez,
+      // escriben el mismo documento en vez de duplicarlo. Misma identidad que
+      // usa buildMissingCommitmentInstances para deduplicar.
+      const ref = doc(commitmentInstancesCol(), getCommitmentIdentity(instance.templateId, instance.monthKey));
       batch.set(ref, instance);
     }
     await batch.commit();
@@ -1410,6 +1414,7 @@ export async function generateCommitmentInstances(monthKey: string) {
   return {
     created: missingInstances.length,
     skipped: templates.filter((template) => template.isActive !== false).length - missingInstances.length,
+    templatesScanned: templates.length,
   };
 }
 
