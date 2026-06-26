@@ -30,7 +30,7 @@ import {
 } from "@/lib/hooks";
 import { buildImportedMovementDashboard, normalizeImportText } from "@/domain/bank-imports";
 import { categoryMatchesWorkspace } from "@/domain/categories";
-import { openImportWizard } from "@/lib/import-wizard";
+import { openImportWizard, closeImportWizard } from "@/lib/import-wizard";
 import { formatCLP } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -686,7 +686,12 @@ export default function BankMovementsPage({
                       </p>
                     </div>
                     <div className="flex flex-wrap justify-center gap-2">
-                      <Button onClick={() => navigate("/transactions")}>
+                      <Button
+                        onClick={() => {
+                          closeImportWizard(); // cierra el modal del wizard si está abierto
+                          navigate("/transactions");
+                        }}
+                      >
                         Ver transacciones
                         <ArrowRight className="ml-2 size-4" />
                       </Button>

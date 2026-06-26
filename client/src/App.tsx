@@ -29,7 +29,7 @@ import DataHealthPage from "@/pages/data-health";
 import ReconciliationPage from "@/pages/reconciliation";
 import TransactionsPage from "@/pages/transactions";
 import { getCurrentMonthKey } from "@/lib/finance";
-import { IMPORT_WIZARD_OPEN_EVENT, openImportWizard } from "@/lib/import-wizard";
+import { IMPORT_WIZARD_OPEN_EVENT, IMPORT_WIZARD_CLOSE_EVENT, openImportWizard } from "@/lib/import-wizard";
 import { autoCarryForwardOpeningBalance } from "@/lib/monthly-balances";
 import { useGenerateCommitmentInstances, useGenerateClientPaymentInstances } from "@/lib/hooks";
 import { useToast } from "@/hooks/use-toast";
@@ -56,8 +56,13 @@ function GlobalImportWizard() {
 
   useEffect(() => {
     const openWizard = () => setOpen(true);
+    const closeWizard = () => setOpen(false);
     window.addEventListener(IMPORT_WIZARD_OPEN_EVENT, openWizard);
-    return () => window.removeEventListener(IMPORT_WIZARD_OPEN_EVENT, openWizard);
+    window.addEventListener(IMPORT_WIZARD_CLOSE_EVENT, closeWizard);
+    return () => {
+      window.removeEventListener(IMPORT_WIZARD_OPEN_EVENT, openWizard);
+      window.removeEventListener(IMPORT_WIZARD_CLOSE_EVENT, closeWizard);
+    };
   }, []);
 
   return <ImportWizardDialog open={open} onOpenChange={setOpen} />;
