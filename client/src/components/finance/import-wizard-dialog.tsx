@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Check } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import ImportDataPage from "@/pages/import-data";
 import BankMovementsPage from "@/pages/bank-movements";
 import { cn } from "@/lib/utils";
@@ -93,11 +94,25 @@ export function ImportWizardDialog({
               }}
             />
           ) : batchId ? (
-            <BankMovementsPage
-              embedded
-              batchIdOverride={batchId}
-              onDone={() => handleOpenChange(false)}
-            />
+            <div className="space-y-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-muted-foreground"
+                onClick={() => {
+                  setBatchId(null);
+                  setStep("import");
+                }}
+              >
+                <ArrowLeft className="size-4" />
+                Volver a subir cartola
+              </Button>
+              <BankMovementsPage
+                embedded
+                batchIdOverride={batchId}
+                onDone={() => handleOpenChange(false)}
+              />
+            </div>
           ) : null}
         </div>
       </DialogContent>

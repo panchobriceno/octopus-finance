@@ -60,7 +60,9 @@ function explicitOrFallback<T>(value: T | undefined, fallback: T) {
 }
 
 export function getCurrentMonthKey() {
-  return new Date().toISOString().slice(0, 7);
+  // Fecha LOCAL (no UTC): evita saltar de mes de noche el último día (Chile UTC-4).
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export function buildCommitmentDueDate(monthKey: string, dayOfMonth: number) {

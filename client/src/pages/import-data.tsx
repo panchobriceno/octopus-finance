@@ -3,7 +3,8 @@ import { useLocation } from "wouter";
 import { useAccounts, useCategories, useBulkDeleteTransactions, useCreateCategory, useCreateImportedMovementBatch, useCreditCardSettings, useImportBatches, useTransactions, useUpdateTransaction } from "@/lib/hooks";
 import type { Account, ImportBatch, Transaction } from "@shared/schema";
 import { getCreditCards } from "@/lib/credit-cards";
-import { extractPdfText, pdfPasswordErrorKind } from "@/lib/pdf-text";
+// pdfjs (~1.4MB) se carga on-demand solo cuando hay que descifrar un PDF con
+// contraseña (import dinámico abajo), para no pesar en el bundle de toda la app.
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -553,6 +554,7 @@ export default function ImportDataPage({
     let requestBody: { pdfBase64?: string; pdfText?: string };
     const password = pdfPassword.trim();
     if (password) {
+      const { extractPdfText, pdfPasswordErrorKind } = await import("@/lib/pdf-text");
       let text: string;
       try {
         text = await extractPdfText(file, password);

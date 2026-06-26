@@ -94,13 +94,17 @@ export function getMonthLabel(monthKey: string) {
 }
 
 export function getCurrentMonthKey() {
-  return new Date().toISOString().slice(0, 7);
+  // Fecha LOCAL (no UTC): así, de noche el último día del mes en Chile (UTC-4),
+  // no se salta al mes siguiente.
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export function getNextMonthKey(monthKey: string) {
   const [year, month] = monthKey.split("-").map(Number);
-  const next = new Date(year, month, 1);
-  return next.toISOString().slice(0, 7);
+  const next = new Date(year, month, 1); // month es 0-based del mes siguiente
+  // Fecha local (no UTC) para no saltar de mes en zonas con offset.
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export function getClientPaymentReferenceDate(payment: ClientPayment) {
