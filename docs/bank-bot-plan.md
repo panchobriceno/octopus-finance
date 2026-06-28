@@ -60,7 +60,24 @@ mecanismo que la app), pero conviene revisar las reglas / auth por separado en a
 5. Activar correo.
 6. Programar diario.
 
+## Estado validado 2026-06-28 (noche)
+- DATOS CARGADOS en prod (app real my-cash-flow-bcb24): Edwards cuenta corriente (10) +
+  Edwards tarjeta (12, convertidos por Pancho) + Santander tarjeta (9) + Santander cuenta
+  corriente (36). 3 duplicados detectados y limpiados (aramco/sociedad bravo/bravo sport,
+  se dejaron las versiones pre-existentes de Pancho).
+- LOGIN AUTOMATICO VALIDADO con Playwright (scripts/bank-bot/edwards-scrape.ts): perfil
+  nuevo, RUT+clave del Keychain, SIN 2FA, SIN verificacion de dispositivo, llega al home solo.
+- HEADLESS NO sirve (403); debe ser headed (visible).
+- SCRAPING post-login FLAKY: `page.goto` a una ruta hash recarga y rebota al login; hay que
+  navegar DENTRO del SPA (click por la UI, o cambiar location.hash sin recargar) y el redirect
+  post-login varia (a veces /home SPA, a veces .../rest/.../perfilamiento/home). Falta afinar
+  esperas/navegacion. Pendiente: hacerlo con Pancho presente (no abrir sesiones de banco de noche).
+
 ## Pendientes (mejoras detectadas)
+- **Dedup contra TRANSACCIONES por monto+fecha (no por nombre):** el banco describe distinto
+  a como Pancho tiene la transaccion ("Pago:aramco" vs "Combustibles Lauquen-Antu"). El cargador
+  debe marcar "posible duplicado" en la bandeja si coincide monto + fecha (+-5 dias) con una
+  transaccion existente. (scripts/bank-bot/find-dupes.ts ya hace esta deteccion).
 - **Auto-categorizacion (alta prioridad):** el cargador NO aplica las MovementRules del usuario,
   por eso todo cae como "Sin categoria". Fix: en load-edwards.ts, cargar `movementRules` y correr
   `findBestMovementRule` + `applyMovementRule` (puros, en domain/bank-imports.ts) sobre cada

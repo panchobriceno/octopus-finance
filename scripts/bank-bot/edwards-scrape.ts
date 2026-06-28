@@ -45,12 +45,17 @@ async function main() {
     await page.waitForURL(/portalpersonas\.bancochile\.cl/, { timeout: 90000 });
     console.log("✅ LOGIN AUTOMATICO OK — llego al home sin intervencion.");
 
-    // Leer tarjeta no facturados (ruta directa)
-    await page.goto(
-      "https://portalpersonas.bancochile.cl/mibancochile-web/front/personaBEC/index.html#/tarjeta-credito/consultar/saldos",
-      { waitUntil: "domcontentloaded", timeout: 60000 },
-    );
-    await page.waitForTimeout(6000);
+    // Navegar DENTRO del SPA (sin recargar, para no perder la sesion)
+    await page.waitForTimeout(3000);
+    await page.evaluate(() => { window.location.hash = "#/tarjeta-credito/consultar/saldos"; }).catch(() => {});
+    await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
+    // esperar a que el SPA pinte la tabla
+    try {
+      await page.waitForFunction(() => document.querySelectorAll("table tr").length > 1, { timeout: 25000 });
+    } catch {
+      console.log("(no aparecio tabla en 25s; sigo con lo que haya)");
+    }
+    await page.waitForTimeout(3000);
 
     const rows = await page.$$eval("table tr", (trs) =>
       trs
@@ -59,8 +64,17 @@ async function main() {
         .slice(0, 20),
     );
 
-    console.log(`\n✅ SCRAPING OK — ${rows.length} filas leidas de la tarjeta (no facturados):`);
+    console.log(`\n✅ SCRAPING — ${rows.length} filas leidas de la tarjeta (no facturados):`);
     rows.forEach((r) => console.log("  " + r));
+
+    if (rows.length === 0) {
+      console.log("\n--- DIAGNOSTICO (0 filas) ---");
+      console.log("URL:", page.url());
+      const txt = await page.evaluate(() => document.body.innerText.replace(/\n+/g, " / ").slice(0, 600));
+      console.log("Texto:", txt);
+      await page.screenshot({ path: "/tmp/edwards-card.png" });
+      console.log("Captura: /tmp/edwards-card.png");
+    }
   } catch (err) {
     console.error("\n❌ FALLO:", (err as Error).message);
     try {
