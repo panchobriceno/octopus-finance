@@ -22,11 +22,20 @@ import type { SeedNoBatch } from "./parse-edwards";
 const DRY = process.argv.includes("--dry");
 const NOW = "2026-06-28T00:00:00.000Z";
 
-// Tarjeta Santander Visa Empresa ****6101 - Nacional (CLP) - compras del periodo
+// Tarjeta Santander Visa Empresa ****6101 - Nacional (CLP) - cargos del periodo.
+// El gasto internacional (Facebook/Google en USD) entra en pesos como el TRASPASO A
+// DEUDA NACIONAL (segun la propia cartola Santander), asi no hace falta tipo de cambio.
+// Se omite MONTO CANCELADO (-$5.000) por ser un pago/abono, no un gasto.
 const SANTANDER_CARD: { date: string; desc: string; amount: number }[] = [
   { date: "2026-05-30", desc: "ADOBE COMPRAS P.A.T.", amount: 32368 },
   { date: "2026-06-06", desc: "LINKEDIN LINKEDIN", amount: 22999 },
   { date: "2026-06-14", desc: "DL*GOOGLE YOUTUBE", amount: 11000 },
+  { date: "2026-06-09", desc: "TRASPASO A DEUDA NACIONAL (cargos internac. Facebook/Google en USD)", amount: 178082 },
+  { date: "2026-06-23", desc: "INTERESES", amount: 9984 },
+  { date: "2026-06-23", desc: "IMPUESTOS", amount: 285 },
+  { date: "2026-06-23", desc: "IVA USO INTERNACIONAL", amount: 886 },
+  { date: "2026-06-23", desc: "SERVICIO USO INTERNACIONAL", amount: 4665 },
+  { date: "2026-06-23", desc: "COMISION DE MANTENCION", amount: 2856 },
 ];
 
 function loadEnvFile(fp: string) {
