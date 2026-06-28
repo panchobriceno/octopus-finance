@@ -60,6 +60,15 @@ mecanismo que la app), pero conviene revisar las reglas / auth por separado en a
 5. Activar correo.
 6. Programar diario.
 
+## Pendientes (mejoras detectadas)
+- **Auto-categorizacion (alta prioridad):** el cargador NO aplica las MovementRules del usuario,
+  por eso todo cae como "Sin categoria". Fix: en load-edwards.ts, cargar `movementRules` y correr
+  `findBestMovementRule` + `applyMovementRule` (puros, en domain/bank-imports.ts) sobre cada
+  movimiento antes de escribir, igual que hace `createImportedMovementBatch`. Asi llega con
+  categoria/ambito sugeridos (ej. Uber Eats -> Familia/Comida) como en la importacion manual.
+  Verificado por Pancho 2026-06-28: la carga funciona y se ve en la app, pero sin categorias.
+- **Cuota: confirmar mapeo de columnas Cargos/Abono en cuenta corriente** con el scraper real.
+
 ## Validar en la primera corrida real antes de confiar diario
 - Que el dedupe no duplique ni pierda.
 - Que no cree lotes vacíos.
