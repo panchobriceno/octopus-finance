@@ -50,12 +50,14 @@ async function main() {
   const batchId = batchRef.id;
 
   let dupTx = 0, dupMov = 0, fresh = 0;
+  const seenInRun = new Set<string>();
   const rows = seeds.map((s) => {
     let m = buildImportedMovement({ ...s!, batchId });
     const rule = findBestMovementRule(m as unknown as ImportedMovement, rules);
     if (rule) m = applyMovementRule(m as unknown as ImportedMovement, rule);
-    const alreadyMov = existingKeys.has(m.dedupeKey);
-    const matchTx = txs.find((t) => Number(t.amount) === m.amount && t.type === m.movementType && daysBetween(t.date, m.date) <= 5);
+    const alreadyMov = existingKeys.has(m.dedupeKey) || seenInRun.has(m.dedupeKey);
+    seenInRun.add(m.dedupeKey);
+    const matchTx = txs.find((t) => Number(t.amount) === m.amount && t.type === m.direction && daysBetween(t.date, m.date) <= 5);
     let status: ImportedMovement["status"] = "pending";
     if (alreadyMov) { status = "duplicate"; dupMov++; }
     else if (matchTx) { status = "duplicate"; dupTx++; }
@@ -75,7 +77,7 @@ async function main() {
   const batchPayload: Omit<ImportBatch, "id"> = {
     label: `Edwards Tarjeta (email) — ${new Date().toLocaleDateString("es-CL")}`,
     source: "email", sourceName: "Edwards Tarjeta (correos)", sourceType: "credit_card",
-    bankName: "Banco Edwards", accountId: null, creditCardName: "Edwards Visa ****7232", workspace: "business",
+    bankName: "Banco Edwards", accountId: null, creditCardName: "T.C Edwards Pancho", workspace: "family",
     periodStart: start, periodEnd: end, rowCount: freshRows.length,
     totalIncome: 0, totalExpense: freshRows.reduce((s, r) => s + r.data.amount, 0),
     duplicateCount: 0, status: "reviewing", isDemo: false,

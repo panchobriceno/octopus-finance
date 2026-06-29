@@ -1,16 +1,24 @@
 /**
- * Genera MovementRules a partir del historial categorizado de Pancho.
- * Toma comercios que se repiten (>=2 transacciones) con categoria mayoritaria clara
- * y crea una regla por comercio. Las reglas quedan editables en la app y las usa
- * tanto la importacion manual como el bot.
+ * Genera MovementRules desde el historial categorizado de Pancho (v2).
  *
- * Correr:  npx tsx scripts/bank-bot/generate-rules.ts --dry   (muestra)
- *          npx tsx scripts/bank-bot/generate-rules.ts         (crea en la app)
+ * Por que v2 (cambios tras revision de Codex + Paso 1 de identidad de fuente):
+ * - applyMovementRule SIEMPRE pisa suggestedWorkspace/movementType/paymentMethod con los de la
+ *   regla. Por eso cada regla debe traer esos campos CONSISTENTES con la fuente del comercio,
+ *   o pisaria el ambito/metodo que fija la identidad de fuente. Emitimos regla solo cuando la
+ *   tupla (categoria, workspace, paymentMethod, movementType) es dominante y consistente.
+ * - priority 5 -> ruleConfidence = 76 + 1*4 + 5 = 85 (umbral para "confiables"). 1 keyword por
+ *   regla a proposito: la confianza usa el total de keywords (no las que matchean), 1 evita inflarla.
+ * - Excluimos "Otros"/"Sin categoria": la conversion las bloquea igual, una regla asi no sirve.
+ * - accountId/creditCardName quedan null en la regla: applyMovementRule solo los pisa si la regla
+ *   los trae, asi respeta los que fijo la identidad de fuente (cuenta OM / tarjeta real).
+ *
+ * Correr:  npx tsx scripts/bank-bot/generate-rules.ts --dry   (muestra, no escribe)
+ *          npx tsx scripts/bank-bot/generate-rules.ts         (regenera reglas bot en la app)
  */
 import fs from "node:fs";
 import path from "node:path";
 import { initializeApp } from "firebase/app";
-import { addDoc, collection, getDocs, getFirestore } from "firebase/firestore/lite";
+import { addDoc, collection, deleteDoc, doc, getDocs, getFirestore } from "firebase/firestore/lite";
 import type { Transaction, MovementRule } from "../../shared/schema";
 
 const DRY = process.argv.includes("--dry");
@@ -24,43 +32,57 @@ const STOP = new Set(["pago", "pagos", "compra", "compras", "comp", "nacional", 
 const norm = (s: string) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 const toks = (s: string) => norm(s).split(" ").filter((w) => w.length >= 4 && !STOP.has(w) && !/^\d+$/.test(w));
 
+// Categorias que NO sirven para autoconversion (la conversion las manda a revision igual).
+const isRealCategory = (c: string) => {
+  const n = norm(c);
+  return n !== "" && n !== "otros" && n !== "sin categoria";
+};
+const pmOf = (t: Transaction) => (t as any).paymentMethod ?? (t.creditCardName ? "credit_card" : "bank_account");
+const mtOf = (t: Transaction) => (t as any).movementType ?? (t.type === "income" ? "income" : "expense");
+
 async function main() {
   const txs = (await getDocs(collection(db, "transactions"))).docs.map((d) => d.data() as Transaction)
-    .filter((t) => t.category && t.category !== "Sin categoría" && t.category !== "Sin categoria");
-  const existing = (await getDocs(collection(db, "movementRules"))).docs.map((d) => d.data() as MovementRule);
-  const existingKw = new Set(existing.flatMap((r) => (r.keywords || []).map((k) => k.toLowerCase())));
+    .filter((t) => isRealCategory(t.category) && (t.status ?? "paid") !== "cancelled");
+  const existing = (await getDocs(collection(db, "movementRules"))).docs.map((d) => ({ id: d.id, ...(d.data() as MovementRule) }));
+  // Reglas creadas por el bot (regenerables). Las del usuario (otra nota) NO se tocan.
+  const botRules = existing.filter((r) => /bank-bot|desde historial/i.test(r.notes ?? ""));
+  const userKw = new Set(existing.filter((r) => !/bank-bot|desde historial/i.test(r.notes ?? "")).flatMap((r) => (r.keywords || []).map((k) => k.toLowerCase())));
 
-  // token -> lista de {category, workspace, movementType}
-  const map = new Map<string, { category: string; workspace: string; movementType: string }[]>();
+  // token -> tuplas (cat|ws|pm|mt) con conteo
+  const map = new Map<string, Map<string, number>>();
+  const keyOf = (cat: string, ws: string, pm: string, mt: string) => `${cat}|||${ws}|||${pm}|||${mt}`;
   for (const t of txs) {
-    const mt = t.movementType ?? (t.type === "income" ? "income" : "expense");
+    const tuple = keyOf(t.category, t.workspace ?? "family", pmOf(t), mtOf(t));
     for (const w of new Set(toks(t.name))) {
-      if (!map.has(w)) map.set(w, []);
-      map.get(w)!.push({ category: t.category, workspace: t.workspace ?? "family", movementType: mt });
+      if (userKw.has(w)) continue; // no pisar reglas del usuario
+      if (!map.has(w)) map.set(w, new Map());
+      map.get(w)!.set(tuple, (map.get(w)!.get(tuple) || 0) + 1);
     }
   }
 
-  type Rule = { keyword: string; category: string; workspace: string; movementType: string; n: number };
+  type Rule = { keyword: string; category: string; workspace: string; paymentMethod: string; movementType: string; n: number; share: number };
   const rules: Rule[] = [];
-  for (const [kw, list] of map) {
-    if (list.length < 2) continue;            // solo comercios recurrentes
-    if (existingKw.has(kw)) continue;          // no duplicar reglas existentes
-    // categoria mayoritaria
-    const tally = new Map<string, number>();
-    for (const e of list) tally.set(e.category, (tally.get(e.category) || 0) + 1);
-    const sorted = [...tally.entries()].sort((a, b) => b[1] - a[1]);
-    if (sorted.length > 1 && sorted[0][1] === sorted[1][1]) continue; // empate -> ambiguo, skip
-    const cat = sorted[0][0];
-    const sample = list.find((e) => e.category === cat)!;
-    rules.push({ keyword: kw, category: cat, workspace: sample.workspace, movementType: sample.movementType, n: list.length });
+  for (const [kw, tuples] of map) {
+    const total = [...tuples.values()].reduce((a, b) => a + b, 0);
+    if (total < 2) continue; // solo comercios recurrentes
+    const sorted = [...tuples.entries()].sort((a, b) => b[1] - a[1]);
+    const [topTuple, topN] = sorted[0];
+    if (sorted.length > 1 && sorted[1][1] === topN) continue; // empate de tupla -> ambiguo
+    const share = topN / total;
+    if (share < 0.6) continue; // tupla no dominante -> comercio cruza fuente/categoria, riesgoso
+    const [category, workspace, paymentMethod, movementType] = topTuple.split("|||");
+    rules.push({ keyword: kw, category, workspace, paymentMethod, movementType, n: total, share });
   }
   rules.sort((a, b) => b.n - a.n || a.keyword.localeCompare(b.keyword));
 
-  console.log(`\n${DRY ? "[DRY] " : ""}Reglas a crear: ${rules.length} (de ${txs.length} transacciones, ${map.size} comercios)\n`);
-  for (const r of rules) console.log(`  "${r.keyword}" (x${r.n}) -> ${r.category} / ${r.workspace} / ${r.movementType}`);
+  console.log(`\n${DRY ? "[DRY] " : ""}Reglas bot existentes a reemplazar: ${botRules.length}`);
+  console.log(`Reglas nuevas a crear: ${rules.length} (de ${txs.length} tx con categoria real, ${map.size} comercios)\n`);
+  for (const r of rules) console.log(`  "${r.keyword}" (x${r.n}, ${Math.round(r.share * 100)}%) -> ${r.category} / ${r.workspace} / ${r.paymentMethod} / ${r.movementType}`);
 
-  if (DRY) { console.log("\n(no se creo nada — saca --dry para guardar)"); return; }
+  if (DRY) { console.log("\n(no se escribio nada — saca --dry para regenerar)"); return; }
 
+  // Borrar reglas bot viejas y recrear (las del usuario quedan intactas).
+  for (const r of botRules) await deleteDoc(doc(db, "movementRules", r.id));
   const now = new Date().toISOString();
   for (const r of rules) {
     await addDoc(collection(db, "movementRules"), {
@@ -69,17 +91,17 @@ async function main() {
       category: r.category,
       workspace: r.workspace,
       movementType: r.movementType,
-      paymentMethod: "bank_account",
+      paymentMethod: r.paymentMethod,
       accountId: null,
       creditCardName: null,
       amountDirection: "any",
-      priority: 0,
+      priority: 5, // -> confianza 85 (umbral "confiables")
       isActive: true,
-      notes: "Generada desde historial por bank-bot",
+      notes: "Generada desde historial por bank-bot v2",
       createdAt: now,
       updatedAt: now,
     });
   }
-  console.log(`\nCreadas ${rules.length} reglas en la app (editables en la seccion de reglas).`);
+  console.log(`\nBorradas ${botRules.length} reglas bot viejas, creadas ${rules.length} nuevas (editables en la app).`);
 }
 main().catch((e) => { console.error("ERROR:", e?.message ?? e); process.exit(1); });

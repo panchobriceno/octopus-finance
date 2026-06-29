@@ -80,7 +80,7 @@ async function main() {
   const batchPayload: Omit<ImportBatch, "id"> = {
     label: `Santander Cuenta Corriente (email) — ${new Date().toLocaleDateString("es-CL")}`,
     source: "email", sourceName: "Santander Cuenta Corriente (correos)", sourceType: "bank_account",
-    bankName: "Banco Santander", accountId: null, creditCardName: null, workspace: "business",
+    bankName: "Banco Santander", accountId: "asIrUoWJkN1jH2zzJhT0", creditCardName: null, workspace: "business",
     periodStart: start, periodEnd: end, rowCount: freshRows.length,
     totalIncome: income, totalExpense: expense,
     duplicateCount: 0, status: "reviewing", isDemo: false,

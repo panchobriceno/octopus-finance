@@ -17,6 +17,61 @@ function dmyToIso(d: string): string | null {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
 }
 
+/**
+ * IDENTIDAD DE FUENTE (config unica). OJO: creditCardName y accountId NO son metadata
+ * cosmetica — son parte del dedupeKey (ver buildMovementDedupeKey en bank-imports.ts) y de
+ * las claves de match de transacciones. Por eso se fijan ACA, en un solo lugar, y se aplican
+ * ANTES de construir el movimiento. Cambiar estos valores cambia la identidad de duplicados.
+ */
+type SourceIdentity = {
+  sourceName: string;
+  sourceType: "credit_card" | "bank_account";
+  bankName: string;
+  creditCardName: string | null;
+  accountId: string | null;
+  workspace: string;
+  paymentMethod: "credit_card" | "bank_account";
+};
+
+// Tarjetas Edwards por ultimos-4 del numero que viene en el correo.
+const EDWARDS_CARDS: Record<string, SourceIdentity> = {
+  "7232": {
+    sourceName: "Edwards Tarjeta ****7232",
+    sourceType: "credit_card",
+    bankName: "Banco Edwards",
+    creditCardName: "T.C Edwards Pancho", // nombre real de la cuenta-tarjeta en la app
+    accountId: null,
+    workspace: "family", // la tarjeta Edwards de Pancho es personal
+    paymentMethod: "credit_card",
+  },
+};
+
+function edwardsCardIdentity(last4: string): SourceIdentity {
+  const known = EDWARDS_CARDS[last4];
+  if (known) return known;
+  // Tarjeta desconocida: NO adivinar el nombre real (rompe identidad/dedup). Queda con un
+  // nombre descriptivo distinto -> caera en revision manual en la app, que es lo seguro.
+  return {
+    sourceName: `Edwards Tarjeta ****${last4}`,
+    sourceType: "credit_card",
+    bankName: "Banco Edwards",
+    creditCardName: `Edwards ****${last4} (revisar)`,
+    accountId: null,
+    workspace: "family",
+    paymentMethod: "credit_card",
+  };
+}
+
+const SANTANDER_CHECKING: SourceIdentity = {
+  sourceName: "Santander Cuenta Corriente 0-000-7387399-1",
+  sourceType: "bank_account",
+  bankName: "Banco Santander",
+  creditCardName: null,
+  accountId: "asIrUoWJkN1jH2zzJhT0", // cuenta "Cuenta Corriente OM" en la app
+  workspace: "business",
+  paymentMethod: "bank_account",
+};
+
 /** Edwards: "compra por $320.000 con Tarjeta de Credito ****7232 en MP *DECATHLON el 24/06/2026 22:18" */
 export function parseEdwardsCardPurchase(raw: string): SeedNoBatch | null {
   const text = String(raw).replace(/\s+/g, " ");
@@ -31,18 +86,13 @@ export function parseEdwardsCardPurchase(raw: string): SeedNoBatch | null {
   if (!date || amount <= 0) return null;
   return {
     source: "email",
-    sourceName: `Edwards Tarjeta ****${card}`,
-    sourceType: "credit_card",
-    creditCardName: `Edwards Visa ****${card}`,
-    bankName: "Banco Edwards",
+    ...edwardsCardIdentity(card),
     date,
     description: merchant,
     amount,
     direction: "expense",
     category: "Sin categoría",
-    workspace: "business",
     movementType: "expense",
-    paymentMethod: "credit_card",
     createdAt: NOW,
   };
 }
@@ -78,17 +128,13 @@ export function parseSantanderTransfer(raw: string): SeedNoBatch | null {
 
   return {
     source: "email",
-    sourceName: "Santander Cuenta Corriente 0-000-7387399-1",
-    sourceType: "bank_account",
-    bankName: "Banco Santander",
+    ...SANTANDER_CHECKING,
     date,
     description: desc,
     amount,
     direction: isIn ? "income" : "expense",
     category: "Sin categoría",
-    workspace: "business",
     movementType: isIn ? "income" : "expense",
-    paymentMethod: "bank_account",
     createdAt: NOW,
   };
 }
@@ -109,17 +155,13 @@ export function parseSantanderPayment(raw: string): SeedNoBatch | null {
   const desc = /^pago\b/i.test(servicio) ? servicio : `Pago ${servicio}`;
   return {
     source: "email",
-    sourceName: "Santander Cuenta Corriente 0-000-7387399-1",
-    sourceType: "bank_account",
-    bankName: "Banco Santander",
+    ...SANTANDER_CHECKING,
     date,
     description: desc,
     amount,
     direction: "expense",
     category: "Sin categoría",
-    workspace: "business",
     movementType: "expense",
-    paymentMethod: "bank_account",
     createdAt: NOW,
   };
 }
