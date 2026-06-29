@@ -506,7 +506,7 @@ export async function registerRoutes(
         const errorText = await response.text();
         return res.status(502).json({ error: errorText || "Claude no pudo generar recomendaciones." });
       }
-      const responseText = await readClaudeTextResponse(response);
+      const { text: responseText } = await readClaudeTextResponse(response);
       if (!responseText) {
         return res.status(502).json({ error: "Claude no devolvió contenido legible." });
       }
