@@ -21,8 +21,15 @@ fi
   echo "=== $(date) bank-bot run ==="
   echo "--- Edwards email (compras tarjeta) ---"
   npx tsx scripts/bank-bot/load-email-edwards.ts 3
-  RC=$?
-  echo "exit edwards-email: $RC"
-  if [ "$RC" = "0" ]; then touch "$STAMP"; fi
+  RC_EDW=$?
+  echo "exit edwards-email: $RC_EDW"
+
+  echo "--- Santander email (cuenta corriente: transferencias + pagos) ---"
+  npx tsx scripts/bank-bot/load-email-santander.ts 3
+  RC_SAN=$?
+  echo "exit santander-email: $RC_SAN"
+
+  # Solo marcamos el dia como exitoso si ambos corrieron sin error
+  if [ "$RC_EDW" = "0" ] && [ "$RC_SAN" = "0" ]; then touch "$STAMP"; fi
   echo "=== fin $(date) ==="
 } >> "$LOG" 2>&1
