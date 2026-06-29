@@ -67,21 +67,24 @@ async function main() {
   for (const r of rows) console.log(`  [${r.data.status}] ${r.data.date} $${r.data.amount.toLocaleString("es-CL")} ${r.data.description} -> ${r.data.suggestedCategory}`);
 
   if (DRY) { console.log("\n[DRY] no se escribio nada."); return; }
-  if (fresh === 0 && dupTx === 0 && dupMov === 0) return;
+
+  // Solo cargamos compras NUEVAS (las duplicadas ya estan en el sistema).
+  const freshRows = rows.filter((r) => r.data.status === "pending");
+  if (freshRows.length === 0) { console.log("\nSin compras nuevas; no se crea lote."); return; }
 
   const batchPayload: Omit<ImportBatch, "id"> = {
     label: `Edwards Tarjeta (email) — ${new Date().toLocaleDateString("es-CL")}`,
     source: "email", sourceName: "Edwards Tarjeta (correos)", sourceType: "credit_card",
     bankName: "Banco Edwards", accountId: null, creditCardName: "Edwards Visa ****7232", workspace: "business",
-    periodStart: start, periodEnd: end, rowCount: rows.length,
-    totalIncome: 0, totalExpense: rows.reduce((s, r) => s + r.data.amount, 0),
-    duplicateCount: dupTx + dupMov, status: "reviewing", isDemo: false,
+    periodStart: start, periodEnd: end, rowCount: freshRows.length,
+    totalIncome: 0, totalExpense: freshRows.reduce((s, r) => s + r.data.amount, 0),
+    duplicateCount: 0, status: "reviewing", isDemo: false,
     notes: "Cargado por bank-bot (Edwards email)", createdAt: NOW, updatedAt: NOW,
   };
   const batch = writeBatch(db);
   batch.set(batchRef, batchPayload);
-  for (const r of rows) batch.set(doc(db, "importedMovements", r.id), r.data);
+  for (const r of freshRows) batch.set(doc(db, "importedMovements", r.id), r.data);
   await batch.commit();
-  console.log(`\nCargado lote con ${rows.length} movimientos (${fresh} nuevos, ${dupTx + dupMov} marcados duplicados).`);
+  console.log(`\nCargado lote con ${freshRows.length} compras nuevas.`);
 }
 main().catch((e) => { console.error("ERROR:", e?.message ?? e); process.exit(1); });
