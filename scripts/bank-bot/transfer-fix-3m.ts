@@ -40,7 +40,7 @@ async function main() {
   const expenseTx = txs.filter((t) => Number(t.amount) === AMOUNT && t.date === DATE && t.type === "expense");
   // 3) categoria Transferencias
   const cats = (await getDocs(collection(db, "categories"))).docs.map((d) => d.data() as Category);
-  const hasTransferCat = cats.some((c) => norm(c.name) === "transferencias" && c.type === "expense");
+  const hasTransferCat = cats.some((c) => norm(c.name) === "transferencias" && c.type === "expense" && (c.workspace ?? "") === "business");
 
   console.log("== Plan ==");
   console.log(`Descartar movimiento(s) ingreso $3M pendiente: ${incomeDup.length}`);
