@@ -67,3 +67,11 @@ Transactions and categories are scoped to a **workspace** field: `business`, `fa
 
 - `@/` → `client/src/`
 - `@shared/` → `shared/`
+
+## Referencia detallada
+
+Para el detalle profundo de **cómo funciona cada cosa** (glosario de campos y enums, lógica de negocio fina
+de `finance.ts` / `domain/`, las 15 colecciones, los ~75 hooks, qué hace cada una de las 17 páginas, casos de
+flujo y gotchas), ver **`ARCHITECTURE.md`**. Es el "manual de la casa" técnico, pensado para responder dudas
+sin releer el código. Tiene un gemelo en lenguaje de negocio para el dueño en `docs/MANUAL_OCTOPUS_FINANCE.md`
+(y en Google Drive). **Si cambiás comportamiento de negocio, actualizá los tres.**

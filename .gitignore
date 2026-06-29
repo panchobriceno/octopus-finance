@@ -16,3 +16,4 @@ cleanup-and-generate.mjs
 backup-pre-gen-*.json
 dedupe-categories.mjs
 backup-pre-dedupe-*.json
+.gstack/

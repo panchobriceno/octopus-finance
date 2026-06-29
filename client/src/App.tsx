@@ -13,6 +13,7 @@ import { ImportWizardDialog } from "@/components/finance/import-wizard-dialog";
 import { QuickExpenseCapture } from "@/components/finance/quick-expense-capture";
 import NotFound from "@/pages/not-found";
 import OverviewPage from "@/pages/overview";
+import AdvisorPage from "@/pages/advisor";
 import CashFlowPage from "@/pages/cash-flow";
 import PnLPage from "@/pages/pnl";
 import CategoriesPage from "@/pages/categories";
@@ -163,6 +164,7 @@ function AppRouter() {
   return (
     <Switch>
       <Route path="/" component={OverviewPage} />
+      <Route path="/advisor" component={AdvisorPage} />
       <Route path="/cash-flow" component={CashFlowPage} />
       <Route path="/pnl" component={PnLPage} />
       <Route path="/import" component={ImportRoute} />

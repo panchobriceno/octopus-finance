@@ -41,6 +41,23 @@ Reglas:
 - Prioriza total final sobre subtotal, IVA, vuelto, propina o descuentos.
 - categoryHint debe ser corta, por ejemplo Comida, Auto, Salud, Digital, Hogar, Supermercado, Transporte o Servicios.`;
 
+const ADVISOR_PROMPT = `Eres un asesor financiero personal para una app de finanzas chilena. Recibes HECHOS ya calculados (cada uno con su "id") sobre las finanzas del usuario: saldos, obligaciones con fecha y monto, ingresos esperados, documentos faltantes, movimientos por revisar y cambios de gasto. Tu trabajo es PRIORIZAR, EXPLICAR y ALERTAR. NO inventas datos.
+
+REGLAS ESTRICTAS:
+- NO inventes montos ni fechas. Usa SOLO los hechos provistos, referenciando su "id" en "sourceId".
+- En "pagar" devuelve las obligaciones en orden de prioridad (lo mas urgente/cercano primero), cada una con su sourceId y una razon corta. NO repitas el monto ni la fecha (la app los muestra desde los datos reales).
+- "alertas": riesgos de flujo de caja (ej: si la caja proyectada queda negativa), pagos que vencen pronto, o cosas urgentes. Texto claro y breve.
+- "revisar": cosas que el usuario debe atender: documentos faltantes (ej: falta subir un estado de cuenta), movimientos sin revisar, cambios de gasto raros. Si corresponde a un hecho, incluye su sourceId.
+- Español de Chile, tono directo y util, sin markdown.
+
+Devuelve UNICAMENTE este JSON, sin texto adicional:
+{
+  "resumen": "1-2 frases del estado financiero actual",
+  "alertas": [{"texto": "...", "severidad": "alta|media|baja"}],
+  "pagar": [{"sourceId": "<id de una obligacion>", "prioridad": "alta|media|baja", "razon": "..."}],
+  "revisar": [{"texto": "...", "sourceId": "<id opcional>"}]
+}`;
+
 type ClaudePdfMovement = {
   date: string;
   description: string;
@@ -450,6 +467,62 @@ export async function registerRoutes(
       console.error("Receipt extraction failed:", error);
       return res.status(500).json({
         error: error instanceof Error ? error.message : "No se pudo extraer información del voucher.",
+      });
+    }
+  });
+
+  // === ASESOR IA (solo sugiere; read-only, no escribe datos) ===
+  app.post("/api/advisor", async (req, res) => {
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicApiKey) {
+      return res.status(500).json({ error: "ANTHROPIC_API_KEY no está configurada en el servidor." });
+    }
+    const facts = req.body?.facts;
+    if (!facts || typeof facts !== "object") {
+      return res.status(400).json({ error: "Expected facts object" });
+    }
+    const factsJson = JSON.stringify(facts);
+    if (factsJson.length > 200_000) {
+      return res.status(413).json({ error: "Resumen financiero demasiado grande." });
+    }
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": anthropicApiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 4000,
+          temperature: 0.2,
+          messages: [{ role: "user", content: `${ADVISOR_PROMPT}\n\nHECHOS:\n${factsJson}` }],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return res.status(502).json({ error: errorText || "Claude no pudo generar recomendaciones." });
+      }
+      const responseText = await readClaudeTextResponse(response);
+      if (!responseText) {
+        return res.status(502).json({ error: "Claude no devolvió contenido legible." });
+      }
+
+      const parsed = parseJsonOnly(responseText) as Record<string, any>;
+      const arr = (v: unknown) => (Array.isArray(v) ? v : []);
+      return res.json({
+        resumen: typeof parsed.resumen === "string" ? parsed.resumen : "",
+        alertas: arr(parsed.alertas),
+        pagar: arr(parsed.pagar),
+        revisar: arr(parsed.revisar),
+      });
+    } catch (error) {
+      console.error("Advisor failed:", error);
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "No se pudieron generar recomendaciones.",
       });
     }
   });

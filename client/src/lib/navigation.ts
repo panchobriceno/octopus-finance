@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Scale,
   Settings,
+  Sparkles,
   Tags,
   Target,
   Wallet,
@@ -40,6 +41,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Panorama",
     items: [
       { title: "Resumen", url: "/", icon: LayoutDashboard },
+      { title: "Tu asesor", url: "/advisor", icon: Sparkles },
       { title: "Flujo de Caja", url: "/cash-flow", icon: ArrowUpDown },
       { title: "Estado de Resultados", url: "/pnl", icon: FileText },
     ],
