@@ -15,6 +15,7 @@ import { collection, doc, getDocs, getFirestore, query, where, writeBatch } from
 import type { ImportBatch, ImportedMovement, MovementRule, Transaction } from "../../shared/schema";
 import { buildImportedMovement, findBestMovementRule, applyMovementRule } from "../../client/src/domain/bank-imports";
 import { parseEdwardsCardPurchase } from "./parse-email";
+import { rulesForDirection, findTxDuplicate } from "./bot-helpers";
 
 const DRY = process.argv.includes("--dry");
 const DAYS = process.argv.find((a) => /^\d+$/.test(a)) ?? "7";
@@ -53,16 +54,17 @@ async function main() {
   const seenInRun = new Set<string>();
   const rows = seeds.map((s) => {
     let m = buildImportedMovement({ ...s!, batchId });
-    const rule = findBestMovementRule(m as unknown as ImportedMovement, rules);
+    // Solo reglas compatibles con la direccion del movimiento (evita voltear gasto<->ingreso).
+    const rule = findBestMovementRule(m as unknown as ImportedMovement, rulesForDirection(rules, m.direction));
     if (rule) m = applyMovementRule(m as unknown as ImportedMovement, rule);
     const alreadyMov = existingKeys.has(m.dedupeKey) || seenInRun.has(m.dedupeKey);
     seenInRun.add(m.dedupeKey);
-    const matchTx = txs.find((t) => Number(t.amount) === m.amount && t.type === m.direction && daysBetween(t.date, m.date) <= 5);
+    const matchTx = findTxDuplicate(txs, m);
     let status: ImportedMovement["status"] = "pending";
     if (alreadyMov) { status = "duplicate"; dupMov++; }
     else if (matchTx) { status = "duplicate"; dupTx++; }
     else fresh++;
-    return { id: detId(m.dedupeKey), data: { ...m, status } };
+    return { id: detId(m.dedupeKey), data: { ...m, status }, alreadyMov };
   });
 
   console.log(`Nuevos: ${fresh} | duplicado-de-movimiento: ${dupMov} | duplicado-de-transaccion: ${dupTx}`);
@@ -70,23 +72,26 @@ async function main() {
 
   if (DRY) { console.log("\n[DRY] no se escribio nada."); return; }
 
-  // Solo cargamos compras NUEVAS (las duplicadas ya estan en el sistema).
-  const freshRows = rows.filter((r) => r.data.status === "pending");
-  if (freshRows.length === 0) { console.log("\nSin compras nuevas; no se crea lote."); return; }
+  // Cargamos pending + duplicados-de-transaccion (estos van VISIBLES como "duplicate" para que
+  // vos decidas; nunca se descartan en silencio). Saltamos solo los duplicados de movimiento
+  // (misma huella ya en la bandeja).
+  const toLoad = rows.filter((r) => !r.alreadyMov);
+  if (toLoad.length === 0) { console.log("\nNada nuevo que cargar (todo ya estaba en la bandeja)."); return; }
 
+  const pending = toLoad.filter((r) => r.data.status === "pending");
   const batchPayload: Omit<ImportBatch, "id"> = {
     label: `Edwards Tarjeta (email) — ${new Date().toLocaleDateString("es-CL")}`,
     source: "email", sourceName: "Edwards Tarjeta (correos)", sourceType: "credit_card",
     bankName: "Banco Edwards", accountId: null, creditCardName: "T.C Edwards Pancho", workspace: "family",
-    periodStart: start, periodEnd: end, rowCount: freshRows.length,
-    totalIncome: 0, totalExpense: freshRows.reduce((s, r) => s + r.data.amount, 0),
-    duplicateCount: 0, status: "reviewing", isDemo: false,
+    periodStart: start, periodEnd: end, rowCount: toLoad.length,
+    totalIncome: 0, totalExpense: pending.reduce((s, r) => s + r.data.amount, 0),
+    duplicateCount: toLoad.filter((r) => r.data.status === "duplicate").length, status: "reviewing", isDemo: false,
     notes: "Cargado por bank-bot (Edwards email)", createdAt: NOW, updatedAt: NOW,
   };
   const batch = writeBatch(db);
   batch.set(batchRef, batchPayload);
-  for (const r of freshRows) batch.set(doc(db, "importedMovements", r.id), r.data);
+  for (const r of toLoad) batch.set(doc(db, "importedMovements", r.id), r.data);
   await batch.commit();
-  console.log(`\nCargado lote con ${freshRows.length} compras nuevas.`);
+  console.log(`\nCargado lote: ${pending.length} nuevos + ${toLoad.length - pending.length} posibles duplicados (visibles para revisar).`);
 }
 main().catch((e) => { console.error("ERROR:", e?.message ?? e); process.exit(1); });

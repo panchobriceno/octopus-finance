@@ -44,9 +44,12 @@ async function main() {
   const txs = (await getDocs(collection(db, "transactions"))).docs.map((d) => d.data() as Transaction)
     .filter((t) => isRealCategory(t.category) && (t.status ?? "paid") !== "cancelled");
   const existing = (await getDocs(collection(db, "movementRules"))).docs.map((d) => ({ id: d.id, ...(d.data() as MovementRule) }));
-  // Reglas creadas por el bot (regenerables). Las del usuario (otra nota) NO se tocan.
-  const botRules = existing.filter((r) => /bank-bot|desde historial/i.test(r.notes ?? ""));
-  const userKw = new Set(existing.filter((r) => !/bank-bot|desde historial/i.test(r.notes ?? "")).flatMap((r) => (r.keywords || []).map((k) => k.toLowerCase())));
+  // Reglas creadas por el bot (regenerables), identificadas por NOTA EXACTA (no regex laxo,
+  // que podria borrar una regla del usuario que mencione "bank-bot"). Las del usuario NO se tocan.
+  const BOT_NOTES = new Set(["Generada desde historial por bank-bot", "Generada desde historial por bank-bot v2"]);
+  const isBot = (r: { notes?: string | null }) => BOT_NOTES.has((r.notes ?? "").trim());
+  const botRules = existing.filter(isBot);
+  const userKw = new Set(existing.filter((r) => !isBot(r)).flatMap((r) => (r.keywords || []).map((k) => k.toLowerCase())));
 
   // token -> tuplas (cat|ws|pm|mt) con conteo
   const map = new Map<string, Map<string, number>>();
@@ -60,7 +63,7 @@ async function main() {
     }
   }
 
-  type Rule = { keyword: string; category: string; workspace: string; paymentMethod: string; movementType: string; n: number; share: number };
+  type Rule = { keyword: string; category: string; workspace: string; paymentMethod: string; movementType: string; amountDirection: string; n: number; share: number; priority: number };
   const rules: Rule[] = [];
   for (const [kw, tuples] of map) {
     const total = [...tuples.values()].reduce((a, b) => a + b, 0);
@@ -71,13 +74,19 @@ async function main() {
     const share = topN / total;
     if (share < 0.6) continue; // tupla no dominante -> comercio cruza fuente/categoria, riesgoso
     const [category, workspace, paymentMethod, movementType] = topTuple.split("|||");
-    rules.push({ keyword: kw, category, workspace, paymentMethod, movementType, n: total, share });
+    // Direccion explicita: evita que la regla matchee un movimiento de la direccion opuesta
+    // (los loaders filtran reglas por amountDirection antes de aplicarlas).
+    const amountDirection = movementType === "income" ? "income" : "expense";
+    // Senal fuerte (n>=3) -> priority 5 -> confianza 85 -> entra al clic "confiables".
+    // Senal debil (n==2) -> priority 0 -> confianza 80 -> SOLO sugiere, no autoconvierte.
+    const priority = total >= 3 ? 5 : 0;
+    rules.push({ keyword: kw, category, workspace, paymentMethod, movementType, amountDirection, n: total, share, priority });
   }
   rules.sort((a, b) => b.n - a.n || a.keyword.localeCompare(b.keyword));
 
   console.log(`\n${DRY ? "[DRY] " : ""}Reglas bot existentes a reemplazar: ${botRules.length}`);
   console.log(`Reglas nuevas a crear: ${rules.length} (de ${txs.length} tx con categoria real, ${map.size} comercios)\n`);
-  for (const r of rules) console.log(`  "${r.keyword}" (x${r.n}, ${Math.round(r.share * 100)}%) -> ${r.category} / ${r.workspace} / ${r.paymentMethod} / ${r.movementType}`);
+  for (const r of rules) console.log(`  "${r.keyword}" (x${r.n}, ${Math.round(r.share * 100)}%) [conf ${r.priority === 5 ? 85 : 80}] -> ${r.category} / ${r.workspace} / ${r.paymentMethod} / ${r.amountDirection}`);
 
   if (DRY) { console.log("\n(no se escribio nada — saca --dry para regenerar)"); return; }
 
@@ -94,8 +103,8 @@ async function main() {
       paymentMethod: r.paymentMethod,
       accountId: null,
       creditCardName: null,
-      amountDirection: "any",
-      priority: 5, // -> confianza 85 (umbral "confiables")
+      amountDirection: r.amountDirection,
+      priority: r.priority, // 5 (n>=3) -> conf 85 (confiables) | 0 (n==2) -> conf 80 (solo sugiere)
       isActive: true,
       notes: "Generada desde historial por bank-bot v2",
       createdAt: now,

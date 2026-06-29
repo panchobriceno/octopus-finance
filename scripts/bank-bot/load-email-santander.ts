@@ -15,6 +15,7 @@ import { collection, doc, getDocs, getFirestore, query, where, writeBatch } from
 import type { ImportBatch, ImportedMovement, MovementRule, Transaction } from "../../shared/schema";
 import { buildImportedMovement, findBestMovementRule, applyMovementRule } from "../../client/src/domain/bank-imports";
 import { parseSantanderTransfer, parseSantanderPayment } from "./parse-email";
+import { rulesForDirection, findTxDuplicate } from "./bot-helpers";
 
 const DRY = process.argv.includes("--dry");
 const DAYS = process.argv.find((a) => /^\d+$/.test(a)) ?? "7";
@@ -57,16 +58,18 @@ async function main() {
   const seenInRun = new Set<string>();
   const rows = seeds.map((s) => {
     let m = buildImportedMovement({ ...s, batchId });
-    const rule = findBestMovementRule(m as unknown as ImportedMovement, rules);
+    // Solo reglas compatibles con la direccion (evita voltear gasto<->ingreso, ej. tu apellido
+    // "Aguayo" aparece en transferencias salientes y matchearia la regla de ingreso).
+    const rule = findBestMovementRule(m as unknown as ImportedMovement, rulesForDirection(rules, m.direction));
     if (rule) m = applyMovementRule(m as unknown as ImportedMovement, rule);
     const alreadyMov = existingKeys.has(m.dedupeKey) || seenInRun.has(m.dedupeKey);
     seenInRun.add(m.dedupeKey);
-    const matchTx = txs.find((t) => Number(t.amount) === m.amount && t.type === m.direction && daysBetween(t.date, m.date) <= 5);
+    const matchTx = findTxDuplicate(txs, m);
     let status: ImportedMovement["status"] = "pending";
     if (alreadyMov) { status = "duplicate"; dupMov++; }
     else if (matchTx) { status = "duplicate"; dupTx++; }
     else { fresh++; if (m.direction === "income") income += m.amount; else expense += m.amount; }
-    return { id: detId(m.dedupeKey), data: { ...m, status } };
+    return { id: detId(m.dedupeKey), data: { ...m, status }, alreadyMov };
   });
 
   console.log(`Nuevos: ${fresh} | duplicado-de-movimiento: ${dupMov} | duplicado-de-transaccion: ${dupTx}`);
@@ -74,22 +77,24 @@ async function main() {
 
   if (DRY) { console.log("\n[DRY] no se escribio nada."); return; }
 
-  const freshRows = rows.filter((r) => r.data.status === "pending");
-  if (freshRows.length === 0) { console.log("\nSin movimientos nuevos; no se crea lote."); return; }
+  // Cargamos pending + duplicados-de-transaccion (VISIBLES como "duplicate" para que vos
+  // decidas; nunca se descartan en silencio). Saltamos solo duplicados de movimiento.
+  const toLoad = rows.filter((r) => !r.alreadyMov);
+  if (toLoad.length === 0) { console.log("\nNada nuevo que cargar (todo ya estaba en la bandeja)."); return; }
 
   const batchPayload: Omit<ImportBatch, "id"> = {
     label: `Santander Cuenta Corriente (email) — ${new Date().toLocaleDateString("es-CL")}`,
     source: "email", sourceName: "Santander Cuenta Corriente (correos)", sourceType: "bank_account",
     bankName: "Banco Santander", accountId: "asIrUoWJkN1jH2zzJhT0", creditCardName: null, workspace: "business",
-    periodStart: start, periodEnd: end, rowCount: freshRows.length,
+    periodStart: start, periodEnd: end, rowCount: toLoad.length,
     totalIncome: income, totalExpense: expense,
-    duplicateCount: 0, status: "reviewing", isDemo: false,
+    duplicateCount: toLoad.filter((r) => r.data.status === "duplicate").length, status: "reviewing", isDemo: false,
     notes: "Cargado por bank-bot (Santander email)", createdAt: NOW, updatedAt: NOW,
   };
   const batch = writeBatch(db);
   batch.set(batchRef, batchPayload);
-  for (const r of freshRows) batch.set(doc(db, "importedMovements", r.id), r.data);
+  for (const r of toLoad) batch.set(doc(db, "importedMovements", r.id), r.data);
   await batch.commit();
-  console.log(`\nCargado lote con ${freshRows.length} movimientos nuevos.`);
+  console.log(`\nCargado lote: ${fresh} nuevos + ${toLoad.length - fresh} posibles duplicados (visibles para revisar).`);
 }
 main().catch((e) => { console.error("ERROR:", e?.message ?? e); process.exit(1); });

@@ -49,13 +49,14 @@ const EDWARDS_CARDS: Record<string, SourceIdentity> = {
 function edwardsCardIdentity(last4: string): SourceIdentity {
   const known = EDWARDS_CARDS[last4];
   if (known) return known;
-  // Tarjeta desconocida: NO adivinar el nombre real (rompe identidad/dedup). Queda con un
-  // nombre descriptivo distinto -> caera en revision manual en la app, que es lo seguro.
+  // Tarjeta desconocida: creditCardName NULL a proposito. La conversion bloquea
+  // "credit_card sin creditCardName" -> cae en revision manual (lo seguro). No adivinar
+  // un nombre: ademas de romper identidad/dedup, dejaria que se autoconvierta con tarjeta falsa.
   return {
     sourceName: `Edwards Tarjeta ****${last4}`,
     sourceType: "credit_card",
     bankName: "Banco Edwards",
-    creditCardName: `Edwards ****${last4} (revisar)`,
+    creditCardName: null,
     accountId: null,
     workspace: "family",
     paymentMethod: "credit_card",
