@@ -29,7 +29,12 @@ fi
   RC_SAN=$?
   echo "exit santander-email: $RC_SAN"
 
-  # Solo marcamos el dia como exitoso si ambos corrieron sin error
+  # Categorizacion IA de lo que quedo sin categoria (best-effort, siempre exit 0, no bloquea).
+  echo "--- Categorizacion IA (claude -p, best-effort) ---"
+  npx tsx scripts/bank-bot/categorize-ai.ts
+  echo "exit categorize-ai: $?"
+
+  # Solo marcamos el dia como exitoso si ambos loaders corrieron sin error
   if [ "$RC_EDW" = "0" ] && [ "$RC_SAN" = "0" ]; then touch "$STAMP"; fi
   echo "=== fin $(date) ==="
 } >> "$LOG" 2>&1

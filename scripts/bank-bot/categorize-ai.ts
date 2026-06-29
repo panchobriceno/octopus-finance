@@ -4,15 +4,17 @@
  * mismo patron que el agente de blog bajo launchd). La IA elige SOLO de la lista real de
  * categorias del usuario; si nada calza, deja "Sin categoria" (no inventa).
  *
- * Seguridad (best-effort, fail-closed):
- *  - Si claude falla / timeout / no devuelve JSON valido -> no toca nada (el movimiento queda
- *    "Sin categoria" y la importacion sigue). NUNCA bloquea.
+ * Seguridad (best-effort, fail-closed) — tras review de Codex:
+ *  - Cualquier error (env, firestore, claude, JSON) -> exit 0, no bloquea el orquestador.
+ *  - Si la IA no responde una fila (omision/truncado/parseo fallido) -> NO se marca -> se
+ *    reintenta otro dia. Solo se marca "vista" la fila que la IA realmente respondio.
+ *  - Marca con campo dedicado `aiCategorizedAt` (no pisa notes del usuario).
  *  - Solo manda descripcion + monto + lista de categorias. NADA de RUTs/saldos/cuentas.
- *  - Valida cada categoria contra la lista y contra el tipo (gasto/ingreso). Descarta invalidas.
- *  - Sugerencias quedan en confianza 80 (<85) -> FUERA del clic masivo "confiables". Vos las aceptas.
- *  - Marca notes "[IA]..." para no re-preguntar lo mismo cada dia.
+ *  - Valida categoria contra la lista y el tipo (gasto/ingreso). Descarta invalidas.
+ *  - Sugerencias a confianza 80 (<85) -> FUERA del clic masivo "confiables". Vos las aceptas.
+ *  - Escritura en chunks de 400 (limite de writeBatch = 500).
  *
- * Correr:  npx tsx scripts/bank-bot/categorize-ai.ts --dry   (llama a la IA, muestra, no escribe)
+ * Correr:  npx tsx scripts/bank-bot/categorize-ai.ts --dry
  *          npx tsx scripts/bank-bot/categorize-ai.ts
  */
 import os from "node:os";
@@ -20,21 +22,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { initializeApp } from "firebase/app";
-import { collection, doc, getDocs, getFirestore, writeBatch } from "firebase/firestore/lite";
+import { collection, doc, getDocs, getFirestore, writeBatch, type Firestore } from "firebase/firestore/lite";
 import type { ImportedMovement } from "../../shared/schema";
 
 const DRY = process.argv.includes("--dry");
 const NOW = new Date().toISOString();
 const CLAUDE_BIN = path.join(os.homedir(), ".npm-global/bin/claude");
 const AI_CONFIDENCE = 80; // <85 a proposito: la IA sugiere, no autoconvierte
-const AI_MARK = "[IA]";
-const SIN_CAT = "Sin categoría";
+const CHUNK = 400; // < 500 (limite writeBatch)
 const isSinCat = (c: unknown) => { const n = String(c ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim(); return n === "" || n === "sin categoria"; };
 
 function loadEnv(fp: string) { if (!fs.existsSync(fp)) return; for (const l of fs.readFileSync(fp, "utf8").split(/\r?\n/)) { const t = l.trim(); if (!t || t.startsWith("#")) continue; const s = t.indexOf("="); if (s === -1) continue; const k = t.slice(0, s).trim(); const v = t.slice(s + 1).trim().replace(/^['"]|['"]$/g, ""); if (k && process.env[k] === undefined) process.env[k] = v; } }
 function req(n: string) { const v = process.env[n]; if (!v) throw new Error(`Falta ${n}`); return v; }
-loadEnv(path.join(process.cwd(), ".env.local")); loadEnv(path.join(process.cwd(), "client", ".env.local"));
-const db = getFirestore(initializeApp({ apiKey: req("VITE_FIREBASE_API_KEY"), authDomain: req("VITE_FIREBASE_AUTH_DOMAIN"), projectId: req("VITE_FIREBASE_PROJECT_ID"), storageBucket: req("VITE_FIREBASE_STORAGE_BUCKET"), messagingSenderId: req("VITE_FIREBASE_MESSAGING_SENDER_ID"), appId: req("VITE_FIREBASE_APP_ID") }));
 
 /** Llama a claude -p (stdin), sobre JSON estable. Devuelve el texto del modelo o null si falla. */
 function callClaude(prompt: string): string | null {
@@ -63,16 +62,28 @@ function parseJsonArray(text: string): any[] | null {
   return null;
 }
 
+async function commitChunked(db: Firestore, updates: { id: string; patch: Record<string, unknown> }[]) {
+  for (let off = 0; off < updates.length; off += CHUNK) {
+    const batch = writeBatch(db);
+    for (const u of updates.slice(off, off + CHUNK)) batch.update(doc(db, "importedMovements", u.id), u.patch);
+    await batch.commit();
+  }
+}
+
 async function main() {
-  // Categorias reales por tipo
+  loadEnv(path.join(process.cwd(), ".env.local"));
+  loadEnv(path.join(process.cwd(), "client", ".env.local"));
+  const db = getFirestore(initializeApp({ apiKey: req("VITE_FIREBASE_API_KEY"), authDomain: req("VITE_FIREBASE_AUTH_DOMAIN"), projectId: req("VITE_FIREBASE_PROJECT_ID"), storageBucket: req("VITE_FIREBASE_STORAGE_BUCKET"), messagingSenderId: req("VITE_FIREBASE_MESSAGING_SENDER_ID"), appId: req("VITE_FIREBASE_APP_ID") }));
+
+  // Categorias reales por tipo (la lista blanca es la coleccion categories)
   const cats = (await getDocs(collection(db, "categories"))).docs.map((d) => d.data() as { name: string; type: string });
   const byType: Record<string, Set<string>> = { income: new Set(), expense: new Set() };
   for (const c of cats) { const t = c.type === "income" ? "income" : "expense"; if (c.name && !isSinCat(c.name)) byType[t].add(c.name); }
   const validFor = (dir: string) => byType[dir === "income" ? "income" : "expense"];
 
-  // Movimientos pendientes sin categoria y que la IA aun no vio
+  // Pendientes sin categoria que la IA aun no proceso (campo dedicado aiCategorizedAt)
   const movs = (await getDocs(collection(db, "importedMovements"))).docs.map((d) => ({ id: d.id, ...(d.data() as ImportedMovement) }));
-  const todo = movs.filter((m) => m.status === "pending" && isSinCat(m.suggestedCategory) && !String(m.notes ?? "").includes(AI_MARK));
+  const todo = movs.filter((m) => m.status === "pending" && isSinCat(m.suggestedCategory) && !(m as any).aiCategorizedAt);
   console.log(`Movimientos sin categoria para la IA: ${todo.length}`);
   if (todo.length === 0) { console.log("Nada para categorizar."); return; }
 
@@ -88,46 +99,38 @@ async function main() {
     "Movimientos:",
     ...lines,
     "",
-    "Responde SOLO con un array JSON, sin texto adicional, con esta forma exacta:",
+    "Responde para CADA movimiento (no omitas ninguno). SOLO un array JSON, sin texto adicional:",
     '[{"i":0,"category":"<categoria exacta de la lista o Sin categoria>"}, ...]',
   ].join("\n");
 
   console.log(`Llamando a la IA (claude -p) para ${todo.length} movimientos...`);
   const raw = callClaude(prompt);
-  if (!raw) { console.log("Sin respuesta de la IA; no se toca nada (todo queda Sin categoria)."); return; }
+  if (!raw) { console.log("Sin respuesta de la IA; no se toca nada (se reintenta otro dia)."); return; }
   const arr = parseJsonArray(raw);
-  if (!arr) { console.log("La IA no devolvio JSON valido; no se toca nada."); return; }
+  if (!arr || arr.length === 0) { console.log("La IA no devolvio JSON usable; no se toca nada (se reintenta)."); return; }
 
-  const valid = new Map<number, string>();
+  // Solo consideramos filas que la IA REALMENTE respondio (las omitidas se reintentan).
+  const answered = new Map<number, string>();
   for (const item of arr) {
     const i = Number(item?.i);
-    const cat = String(item?.category ?? "").trim();
-    if (!Number.isInteger(i) || i < 0 || i >= todo.length) continue;
-    if (isSinCat(cat)) continue; // sin sugerencia -> no aplicar
-    if (!validFor(todo[i].direction).has(cat)) continue; // categoria fuera de lista o tipo equivocado -> descartar
-    valid.set(i, cat);
+    if (Number.isInteger(i) && i >= 0 && i < todo.length && typeof item?.category === "string") answered.set(i, item.category.trim());
   }
 
-  console.log(`\nSugerencias validas: ${valid.size}/${todo.length}`);
+  const updates: { id: string; patch: Record<string, unknown> }[] = [];
+  let applied = 0, noFit = 0;
   for (let i = 0; i < todo.length; i++) {
+    if (!answered.has(i)) continue; // la IA no la respondio -> reintentar otro dia
     const m = todo[i];
-    console.log(`  [${i}] ${m.direction} $${Number(m.amount).toLocaleString("es-CL")} ${String(m.description).slice(0, 40)} -> ${valid.get(i) ?? "(sin sugerencia)"}`);
+    const cat = answered.get(i)!;
+    const ok = !isSinCat(cat) && validFor(m.direction).has(cat);
+    if (ok) { updates.push({ id: m.id, patch: { suggestedCategory: cat, confidence: AI_CONFIDENCE, matchedRuleId: null, aiCategorizedAt: NOW, updatedAt: NOW } }); applied++; }
+    else { updates.push({ id: m.id, patch: { aiCategorizedAt: NOW, updatedAt: NOW } }); noFit++; } // vista, sin sugerencia -> no re-preguntar
+    console.log(`  [${i}] ${m.direction} $${Number(m.amount).toLocaleString("es-CL")} ${String(m.description).slice(0, 40)} -> ${ok ? cat : "(sin sugerencia)"}`);
   }
+  console.log(`\nRespondidas ${answered.size}/${todo.length} | con categoria: ${applied} | sin sugerencia: ${noFit} | omitidas (reintento): ${todo.length - answered.size}`);
 
   if (DRY) { console.log("\n[DRY] no se escribio nada."); return; }
-
-  const batch = writeBatch(db);
-  let applied = 0;
-  for (let i = 0; i < todo.length; i++) {
-    const m = todo[i];
-    const cat = valid.get(i);
-    const patch: Record<string, unknown> = cat
-      ? { suggestedCategory: cat, confidence: AI_CONFIDENCE, notes: `${AI_MARK} sugerido: ${cat}`, updatedAt: NOW }
-      : { notes: `${AI_MARK} sin sugerencia`, updatedAt: NOW }; // marca para no re-preguntar
-    batch.update(doc(db, "importedMovements", m.id), patch);
-    if (cat) applied++;
-  }
-  await batch.commit();
-  console.log(`\nIA aplico ${applied} categorias (confianza ${AI_CONFIDENCE}, fuera del clic masivo). El resto quedo marcado sin sugerencia.`);
+  await commitChunked(db, updates);
+  console.log(`\nIA aplico ${applied} categorias (confianza ${AI_CONFIDENCE}, fuera del clic masivo).`);
 }
 main().catch((e) => { console.error("ERROR (best-effort, no bloquea):", e?.message ?? e); process.exit(0); });
