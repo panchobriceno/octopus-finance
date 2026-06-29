@@ -31,11 +31,13 @@ const db = getFirestore(initializeApp({ apiKey: req("VITE_FIREBASE_API_KEY"), au
 const CATS = [
   { name: "Previred", type: "expense", workspace: "business" },
   { name: "Gastos Básicos", type: "expense", workspace: "family" },
+  { name: "Facebook Ads", type: "expense", workspace: "business" }, // mayor gasto internacional, sin categoria antes
 ];
 // Reglas a asegurar (1 keyword c/u, source-consistente, amountDirection explicito)
 const RULES = [
   { keyword: "previred", category: "Previred", workspace: "business", movementType: "expense", paymentMethod: "bank_account", amountDirection: "expense", priority: 5 },
   { keyword: "servipag", category: "Gastos Básicos", workspace: "family", movementType: "expense", paymentMethod: "bank_account", amountDirection: "expense", priority: 5 },
+  { keyword: "facebk", category: "Facebook Ads", workspace: "business", movementType: "expense", paymentMethod: "credit_card", amountDirection: "expense", priority: 5 }, // cargos "FACEBK *..." en la tarjeta
 ];
 
 async function main() {
