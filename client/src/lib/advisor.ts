@@ -22,6 +22,8 @@ export type Obligation = { id: string; label: string; amount: number; dueDate: s
 export type IncomeFact = { id: string; label: string; amount: number; expectedDate: string };
 export type MissingDoc = { id: string; texto: string };
 export type CategoryDelta = { categoria: string; mesActual: number; mesAnterior: number; delta: number };
+export type DupTx = { id: string; date: string; name: string; amount: number; category: string; source: string };
+export type DuplicatePair = { a: DupTx; b: DupTx };
 
 export type AdvisorFacts = {
   asOf: string;
@@ -30,6 +32,7 @@ export type AdvisorFacts = {
   review: { pendingMovements: number; oldestPendingDate: string | null };
   missingDocs: MissingDoc[];
   categoryDeltas: CategoryDelta[];
+  duplicates: DuplicatePair[];
 };
 
 export type AdvisorReport = {
@@ -71,14 +74,17 @@ export function buildAdvisorFacts(input: {
     .filter((i) => i.expectedDate && i.amount > 0 && daysBetween(i.expectedDate, now) >= -7 && daysBetween(i.expectedDate, now) <= 60)
     .sort((a, b) => a.expectedDate.localeCompare(b.expectedDate));
 
-  // Documentos faltantes: por cada tarjeta activa, ¿hay un EECC reciente (≤35 días)?
+  // Documentos faltantes: SOLO marcamos tarjetas que YA tuvieron un EECC antes (así sabemos que
+  // reciben estado de cuenta) y cuyo último EECC está atrasado (>35 días). "Nunca tuvo EECC" NO
+  // se marca: muchas entradas son cuentas corrientes o tarjetas de terceros sin EECC mensual.
   const missingDocs: MissingDoc[] = [];
   const eeccBatches = input.importBatches.filter(isEeccBatch);
   for (const card of input.creditCards.filter((c) => c.isActive !== false)) {
     const forCard = eeccBatches.filter((b) => (b.creditCardName ?? "") === card.cardName);
+    if (forCard.length === 0) continue; // sin historial de EECC -> no asumimos que falta
     const latest = forCard.map((b) => b.periodEnd || b.createdAt).filter(Boolean).sort().slice(-1)[0];
-    if (!latest || daysBetween(now, latest) > 35) {
-      missingDocs.push({ id: `missingdoc:eecc:${card.cardName}`, texto: latest ? `Falta el estado de cuenta (EECC) reciente de ${card.cardName} (el último es del ${latest}).` : `Nunca se cargó un estado de cuenta (EECC) de ${card.cardName}.` });
+    if (latest && daysBetween(now, latest) > 35) {
+      missingDocs.push({ id: `missingdoc:eecc:${card.cardName}`, texto: `Falta el estado de cuenta (EECC) reciente de ${card.cardName} (el último es del ${latest}).` });
     }
   }
 
@@ -101,8 +107,42 @@ export function buildAdvisorFacts(input: {
     .sort((a, b) => b.delta - a.delta)
     .slice(0, 5);
 
-  return { asOf: now, obligations, upcomingIncome, review, missingDocs, categoryDeltas };
+  // Posibles duplicados de TRANSACCIONES (alta confianza, para acción de borrar): mismo monto +
+  // mismo tipo + fechas ≤5 días + MISMA categoría + token de nombre significativo compartido.
+  // Estricto a propósito (es destructivo): no sugerir borrar un gasto recurrente legítimo.
+  const normTxt = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+  const GENERIC = new Set(["pago", "pagos", "linea", "transferencia", "transf", "compra", "compras", "web", "online", "nacional", "automatico", "automatica", "cuenta", "banco", "abono", "cargo", "servicio", "mensual", "transf."]);
+  const nameTokens = (s: string) => normTxt(s).replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length >= 4 && !GENERIC.has(w));
+  const liteTx = (t: Transaction): DupTx => ({ id: t.id, date: t.date, name: (t as any).name ?? "", amount: cap(t.amount), category: t.category || "Sin categoría", source: (t as any).importBatchLabel ?? t.creditCardName ?? t.accountId ?? "manual" });
+  const groups = new Map<string, Transaction[]>();
+  for (const t of input.transactions) {
+    if ((t.status ?? "paid") === "cancelled") continue;
+    if ((t.movementType ?? "") === "transfer") continue; // traspasos no son duplicados de gasto/ingreso
+    const k = `${Math.round(cap(t.amount))}|${t.type ?? "expense"}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(t);
+  }
+  const duplicates: DuplicatePair[] = [];
+  for (const list of Array.from(groups.values())) {
+    if (list.length < 2) continue;
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i], b = list[j];
+        if (Math.abs(daysBetween(a.date, b.date)) > 5) continue;
+        if (normTxt(a.category) !== normTxt(b.category)) continue;
+        const ta = new Set(nameTokens((a as any).name ?? ""));
+        if (!nameTokens((b as any).name ?? "").some((w) => ta.has(w))) continue;
+        duplicates.push({ a: liteTx(a), b: liteTx(b) });
+      }
+    }
+  }
+
+  return { asOf: now, obligations, upcomingIncome, review, missingDocs, categoryDeltas, duplicates: duplicates.slice(0, 8) };
 }
+
+/** Resuelve un duplicado: borra la transacción elegida y descarta su movimiento de origen.
+ *  (la mutación real vive en lib/firestore.ts; acá solo el tipo del resultado). */
+export type ResolveDuplicateResult = { deletedTransactionId: string; revertedMovementId: string | null };
 
 export async function fetchAdvisor(facts: AdvisorFacts): Promise<AdvisorReport> {
   const res = await fetch("/api/advisor", {

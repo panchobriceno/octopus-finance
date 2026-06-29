@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Sparkles, RefreshCw, AlertTriangle, CalendarClock, FileWarning, Inbox, TrendingUp } from "lucide-react";
+import { Sparkles, RefreshCw, AlertTriangle, CalendarClock, FileWarning, Inbox, TrendingUp, Copy } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCommitmentInstances,
@@ -10,8 +11,9 @@ import {
   useCreditCardSettings,
   useImportedMovements,
   useTransactions,
+  useResolveDuplicateTransaction,
 } from "@/lib/hooks";
-import { buildAdvisorFacts, fetchAdvisor, type AdvisorFacts, type AdvisorReport, type Obligation } from "@/lib/advisor";
+import { buildAdvisorFacts, fetchAdvisor, type AdvisorFacts, type AdvisorReport, type DupTx, type Obligation } from "@/lib/advisor";
 
 const CACHE_KEY = "octopus_advisor_report";
 const clp = (n: number) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CL");
@@ -35,6 +37,8 @@ export default function AdvisorPage() {
 
   const [report, setReport] = useState<AdvisorReport | null>(null);
   const [loading, setLoading] = useState(false);
+  const resolveDup = useResolveDuplicateTransaction();
+  const [pendingDel, setPendingDel] = useState<{ tx: DupTx; keep: DupTx } | null>(null);
 
   useEffect(() => { try { const c = localStorage.getItem(CACHE_KEY); if (c) setReport(JSON.parse(c)); } catch { /* ignore */ } }, []);
 
@@ -155,9 +159,59 @@ export default function AdvisorPage() {
         </Card>
       )}
 
+      {/* Posibles duplicados (código, alta confianza) — acción de borrar con confirmación */}
+      {(facts?.duplicates?.length ?? 0) > 0 && (
+        <Card className="mb-5 border-red-500/20 bg-[#1a1430]">
+          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Copy className="size-4 text-red-300" /> Posibles duplicados</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-[#aea8be]">Mismo monto, misma categoría y fechas cercanas. Revisá y borrá el que sobra; se conserva el otro.</p>
+            {facts!.duplicates.map((pair, i) => (
+              <div key={i} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                {[pair.a, pair.b].map((t, idx) => (
+                  <div key={t.id} className="flex items-center justify-between gap-3 py-1.5">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm text-[#f1e9fc]">{t.name}</div>
+                      <div className="text-xs text-[#aea8be]">{t.date} · {t.category} · {t.source}</div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className="tabular-nums text-sm text-[#f1e9fc]">{clp(t.amount)}</span>
+                      <Button size="sm" variant="outline" className="h-7 border-red-500/40 text-red-300 hover:bg-red-500/10" onClick={() => setPendingDel({ tx: t, keep: idx === 0 ? pair.b : pair.a })}>Borrar este</Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {!report && (
         <p className="mt-2 text-center text-sm text-[#aea8be]">{loadingData ? "Cargando tus datos…" : "Apretá “Generar recomendaciones” para que la IA priorice y te avise qué hacer."}</p>
       )}
+
+      <AlertDialog open={!!pendingDel} onOpenChange={(o) => { if (!o) setPendingDel(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Borrar transacción duplicada</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDel && (<>Se va a <b>BORRAR</b>: {pendingDel.tx.name} — {pendingDel.tx.date}, {clp(pendingDel.tx.amount)}.<br />Se conserva: {pendingDel.keep.name} ({pendingDel.keep.date}). Esto no se puede deshacer.</>)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={() => {
+                const t = pendingDel?.tx; if (!t) return;
+                resolveDup.mutateAsync(t.id)
+                  .then(() => toast({ title: "Duplicado borrado", description: `${t.name} (${clp(t.amount)})` }))
+                  .catch((e) => toast({ title: "No se pudo borrar", description: e instanceof Error ? e.message : String(e), variant: "destructive" }))
+                  .finally(() => setPendingDel(null));
+              }}
+            >Borrar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

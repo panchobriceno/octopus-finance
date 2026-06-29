@@ -437,6 +437,34 @@ export async function deleteTransaction(id: string) {
   await deleteDoc(doc(db, "transactions", id));
 }
 
+/**
+ * Resuelve un duplicado desde el asesor: borra la transacción elegida y, si vino de un movimiento
+ * importado (matchedTransactionId === id), lo deja "discarded" para no dejar un "converted" colgando
+ * apuntando a una transacción borrada. No es bulk: una a la vez, con confirmación en la UI.
+ */
+export async function resolveDuplicateTransaction(
+  txId: string,
+): Promise<{ deletedTransactionId: string; revertedMovementId: string | null }> {
+  let revertedMovementId: string | null = null;
+  try {
+    const snap = await getDocs(query(collection(db, "importedMovements"), where("matchedTransactionId", "==", txId)));
+    for (const d of snap.docs) {
+      await updateDoc(doc(db, "importedMovements", d.id), {
+        status: "discarded",
+        matchedTransactionId: null,
+        notes: "Duplicado resuelto desde el asesor",
+        updatedAt: nowIso(),
+      });
+      revertedMovementId = d.id;
+    }
+  } catch (e) {
+    // si falla la reversión del movimiento, igual borramos la transacción duplicada
+    console.error("resolveDuplicateTransaction: no se pudo revertir el movimiento de origen:", e);
+  }
+  await deleteDoc(doc(db, "transactions", txId));
+  return { deletedTransactionId: txId, revertedMovementId };
+}
+
 export async function bulkDeleteTransactions(ids: string[]) {
   const batch = writeBatch(db);
   for (const id of ids) {

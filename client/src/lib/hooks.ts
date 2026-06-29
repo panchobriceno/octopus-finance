@@ -61,6 +61,16 @@ export function useDeleteTransaction() {
   });
 }
 
+export function useResolveDuplicateTransaction() {
+  return useMutation({
+    mutationFn: (txId: string) => fs.resolveDuplicateTransaction(txId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
+    },
+  });
+}
+
 export function useBulkDeleteTransactions() {
   return useMutation({
     mutationFn: (ids: string[]) => fs.bulkDeleteTransactions(ids),
