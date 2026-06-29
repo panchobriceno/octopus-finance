@@ -43,8 +43,15 @@ async function main() {
   if (pdfs.length === 0) { console.log("Sin PDFs para procesar."); return; }
   console.log(`PDFs a procesar: ${pdfs.length}`);
 
-  const seeds = pdfs.flatMap((p) => { try { return parseSantanderEeccPdf(p); } catch (e: any) { console.error(`No se pudo leer ${p}:`, e?.message ?? e); return []; } });
-  console.log(`Movimientos parseados: ${seeds.length}`);
+  // Parsear por PDF: solo moveremos a procesados/ los que dieron movimientos (los que fallan o
+  // dan 0 quedan para inspeccion -> no se pierden ni se marcan como hechos).
+  const parsed = pdfs.map((p) => {
+    try { const s = parseSantanderEeccPdf(p); if (!s.length) console.error(`AVISO: ${path.basename(p)} no dio movimientos (revisar layout) -> no se mueve.`); return { p, seeds: s }; }
+    catch (e: any) { console.error(`No se pudo parsear ${path.basename(p)} (queda sin procesar):`, e?.message ?? e); return { p, seeds: null as any }; }
+  });
+  const okPdfs = parsed.filter((x) => x.seeds && x.seeds.length > 0);
+  const seeds = okPdfs.flatMap((x) => x.seeds);
+  console.log(`Movimientos parseados: ${seeds.length} (de ${okPdfs.length}/${pdfs.length} PDFs)`);
   if (seeds.length === 0) { console.log("Nada que cargar."); return; }
 
   const rules = (await getDocs(collection(db, "movementRules"))).docs.map((d) => ({ id: d.id, ...(d.data() as MovementRule) }));
@@ -98,11 +105,13 @@ async function main() {
     console.log("\nNada nuevo que cargar (todo ya estaba en la bandeja).");
   }
 
-  // mover PDFs procesados (solo si vinieron de la carpeta)
+  // mover SOLO los PDFs que se parsearon OK (los fallidos quedan para inspeccion). Nombre unico
+  // (timestamp) para no pisar si ya existe uno con el mismo nombre en procesados/.
   if (fromFolder) {
     fs.mkdirSync(DONE, { recursive: true });
-    for (const p of pdfs) { try { fs.renameSync(p, path.join(DONE, path.basename(p))); } catch (e: any) { console.error("mover:", e?.message); } }
-    console.log(`Movidos ${pdfs.length} PDF a ${DONE}`);
+    const ts = NOW.replace(/[:.]/g, "-");
+    for (const x of okPdfs) { try { fs.renameSync(x.p, path.join(DONE, `${ts}__${path.basename(x.p)}`)); } catch (e: any) { console.error("mover:", e?.message); } }
+    console.log(`Movidos ${okPdfs.length} PDF a ${DONE}`);
   }
 }
 main().catch((e) => { console.error("ERROR:", e?.message ?? e); process.exit(1); });

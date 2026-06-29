@@ -77,15 +77,20 @@ export function parseInternacional(text: string): SeedNoBatch[] {
     const date = ddmyyToIso(dm[1]); if (!date) continue;
     rows.push({ date, desc, origen, usd });
   }
-  // tasa CLP/USD derivada de los items facturados en CLP (origen != usd), ignorando micro-montos
-  const rates = rows.filter((r) => r.usd >= 1 && Math.abs(r.origen - r.usd) > 0.01).map((r) => r.origen / r.usd).sort((a, b) => a - b);
-  const rate = rates.length ? rates[Math.floor(rates.length / 2)] : 0;
+  // ratio origen/usd: ~1 => facturado en USD ; ~900 => origen ya es CLP. Banda CLP/USD plausible 600-1300.
+  const ratio = (r: { origen: number; usd: number }) => (r.usd > 0 ? r.origen / r.usd : Infinity);
+  const isClpBilled = (r: { origen: number; usd: number }) => ratio(r) >= 50; // 50 separa ~1 (USD) de ~900 (CLP)
+  const rateRows = rows.filter((r) => r.usd >= 1 && ratio(r) >= 600 && ratio(r) <= 1300).map(ratio).sort((a, b) => a - b);
+  const rate = rateRows.length ? rateRows[Math.floor(rateRows.length / 2)] : 0;
   const out: SeedNoBatch[] = [];
   for (const r of rows) {
-    const billedUsd = Math.abs(r.origen - r.usd) < 0.01;          // origen == usd -> facturado en USD
     let clp: number;
-    if (billedUsd) { if (!rate) continue; clp = Math.round(r.usd * rate); } // sin tasa derivable -> skip (raro)
-    else clp = Math.round(r.origen);                               // origen ya es CLP
+    if (isClpBilled(r)) {
+      clp = Math.round(r.origen);                                  // origen ya es CLP
+    } else {                                                       // facturado en USD -> convertir
+      if (!rate) throw new Error(`EECC internacional con cargos en USD pero sin tasa CLP/USD derivable (no hay items CLP en el estado). Revisar a mano: "${r.desc}" US$${r.usd}`);
+      clp = Math.round(r.usd * rate);
+    }
     if (clp <= 0) continue;
     out.push({ ...SANTANDER_CARD, date: r.date, description: r.desc, amount: clp, direction: "expense", category: "Sin categoría", movementType: "expense", createdAt: NOW });
   }
