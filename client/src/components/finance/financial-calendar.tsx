@@ -91,6 +91,40 @@ function StatusPill({ s, className = "", style = {} }: { s: Resolved; className?
   );
 }
 
+/** Saldo inicial editable de la proyección. Estado PROPIO (no compartido) para que el foco
+ *  funcione cuando se monta a la vez en desktop y mobile. Al guardar persiste en openingBalances. */
+function StartBalanceControl({ value, onSave }: { value: number; onSave: (v: number) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const save = () => {
+    // Normaliza el minus tipográfico (−/–/—) a ASCII antes de parsear; no guarda si quedó vacío.
+    const norm = draft.replace(/[−–—]/g, "-").replace(/[^\d-]/g, "");
+    if (norm === "" || norm === "-") { setEditing(false); return; }
+    onSave(Number(norm) || 0);
+    setEditing(false);
+  };
+  if (editing)
+    return (
+      <span className="inline-flex items-center gap-1">
+        <input
+          autoFocus
+          value={draft}
+          onChange={(ev) => setDraft(ev.target.value)}
+          onKeyDown={(ev) => { if (ev.key === "Enter") save(); if (ev.key === "Escape") setEditing(false); }}
+          className="w-[110px] rounded-[6px] border border-[#2c2c38] bg-[#101016] px-2 py-0.5 font-mono text-[11px] text-[#f4f4f7] outline-none focus:border-[#cdfa46]"
+        />
+        <button onClick={save} title="Guardar"><Check className="size-[14px]" style={{ color: LIME }} strokeWidth={2.4} /></button>
+        <button onClick={() => setEditing(false)} title="Cancelar"><X className="size-[14px] text-[#9a9aa6]" strokeWidth={2.4} /></button>
+      </span>
+    );
+  return (
+    <button onClick={() => { setDraft(String(Math.round(value))); setEditing(true); }} className="inline-flex items-center gap-1 rounded-[6px] px-1 hover-elevate" title="Editar saldo inicial">
+      <span className="font-mono" style={{ color: value < 0 ? LIME : GRAY }}>{formatCLP(value)}</span>
+      <Pencil className="size-3 text-[#6c6c78]" strokeWidth={2} />
+    </button>
+  );
+}
+
 export function FinancialCalendar({ className = "" }: { className?: string }) {
   const commitments = useCommitmentInstances();
   const clientPayments = useClientPayments();
@@ -104,8 +138,6 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
-  const [editingStart, setEditingStart] = useState(false);
-  const [startDraft, setStartDraft] = useState("");
   const [filters, setFilters] = useState<{ ambito: "all" | Ambito; tipo: "all" | "in" | "out"; estado: "all" | "pend" | "paid" | "venc" }>({
     ambito: "all",
     tipo: "all",
@@ -335,31 +367,9 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
 
   const loading = !commitments.data || !clientPayments.data || !transactions.data || !accounts.data;
 
-  // Saldo inicial editable: de dónde sale + cómo se ajusta a mano (persiste en openingBalances).
+  // Saldo inicial editable: de dónde sale (cuentas vs ajuste manual). El control vive en
+  // <StartBalanceControl/> (estado propio) para no romper el foco al montarse en desktop+mobile.
   const startSource = monthKey in (openingMap ?? {}) ? "ajustado a mano" : "saldo de tus cuentas";
-  const saveStart = () => {
-    const v = Number(startDraft.replace(/[^\d-]/g, "")) || 0;
-    void updateOpening(monthKey, v);
-    setEditingStart(false);
-  };
-  const startControl = editingStart ? (
-    <span className="inline-flex items-center gap-1">
-      <input
-        autoFocus
-        value={startDraft}
-        onChange={(ev) => setStartDraft(ev.target.value)}
-        onKeyDown={(ev) => { if (ev.key === "Enter") saveStart(); if (ev.key === "Escape") setEditingStart(false); }}
-        className="w-[110px] rounded-[6px] border border-[#2c2c38] bg-[#101016] px-2 py-0.5 font-mono text-[11px] text-[#f4f4f7] outline-none focus:border-[#cdfa46]"
-      />
-      <button onClick={saveStart} title="Guardar"><Check className="size-[14px]" style={{ color: LIME }} strokeWidth={2.4} /></button>
-      <button onClick={() => setEditingStart(false)} title="Cancelar"><X className="size-[14px] text-[#9a9aa6]" strokeWidth={2.4} /></button>
-    </span>
-  ) : (
-    <button onClick={() => { setStartDraft(String(Math.round(startBalance))); setEditingStart(true); }} className="inline-flex items-center gap-1 rounded-[6px] px-1 hover-elevate" title="Editar saldo inicial">
-      <span className="font-mono" style={{ color: startBalance < 0 ? LIME : GRAY }}>{formatCLP(startBalance)}</span>
-      <Pencil className="size-3 text-[#6c6c78]" strokeWidth={2} />
-    </button>
-  );
 
   /* ---------- sub-render: chip de evento (celda) ---------- */
   const EventChip = ({ e }: { e: CalEvent }) => {
@@ -474,7 +484,7 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
       <div className="mt-[14px] rounded-[14px] border border-[#1e1e26] bg-[#0d0d12] px-4 pb-[10px] pt-[14px]">
         <div className="mb-[10px] flex items-center justify-between">
           <div className="text-[12px] font-bold" style={{ color: GRAY }}>Saldo proyectado por día</div>
-          <div className="flex items-center gap-1 text-[11px] font-medium text-[#7a7a86]">arranca en {startControl}<span className="text-[#5a5a66]">({startSource})</span> · cierra en <span className="font-mono" style={{ color: (bal[daysInMonth] ?? 0) < 0 ? LIME : GRAY }}>{formatCLP(bal[daysInMonth] ?? 0)}</span></div>
+          <div className="flex items-center gap-1 text-[11px] font-medium text-[#7a7a86]">arranca en <StartBalanceControl value={startBalance} onSave={(v) => updateOpening(monthKey, v)} /><span className="text-[#5a5a66]">({startSource})</span> · cierra en <span className="font-mono" style={{ color: (bal[daysInMonth] ?? 0) < 0 ? LIME : GRAY }}>{formatCLP(bal[daysInMonth] ?? 0)}</span></div>
         </div>
         <div className="relative flex h-[88px] items-stretch gap-[2px]">
           <div className="absolute left-0 right-0 top-[54px] border-t border-dashed border-[#3a3a44]" />
@@ -744,7 +754,7 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
               <div className="text-[12px] font-semibold text-[#f4f4f7]">Caja en rojo el <b style={{ color: LIME }}>{firstNegDay} {MESES[month].slice(0, 3)}</b> ({fmtShort(bal[firstNegDay] ?? 0)}).</div>
             </div>
           )}
-          <div className="mt-3 flex items-center gap-1 px-0.5 text-[11px] font-medium text-[#7a7a86]">Arranca en {startControl}<span className="text-[#5a5a66]">({startSource})</span></div>
+          <div className="mt-3 flex items-center gap-1 px-0.5 text-[11px] font-medium text-[#7a7a86]">Arranca en <StartBalanceControl value={startBalance} onSave={(v) => updateOpening(monthKey, v)} /><span className="text-[#5a5a66]">({startSource})</span></div>
           <div className="mt-2">{miniMonth}</div>
         </div>
         <div className="px-4 pb-2">{loading ? <div className="py-10 text-center text-[12.5px] text-[#6c6c78]">Cargando…</div> : mobileAgenda}</div>
