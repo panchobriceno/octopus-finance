@@ -3038,7 +3038,19 @@ export default function OverviewPage() {
           </section>
         </div>
 
-        {/* Diálogo de crear movimiento (con tab "Transferencia / Pago TC") — único render al final del componente. */}
+        {/* Diálogo de crear movimiento (con tab "Transferencia / Pago TC") — rama dashboard. */}
+        <CreateMovementDialog
+          open={showCreateDialog}
+          onOpenChange={setShowCreateDialog}
+          createFormMode={createFormMode}
+          onCreateFormModeChange={setCreateFormMode}
+          categories={categories}
+          items={items}
+          accounts={accounts}
+          isPending={createMutation.isPending}
+          onCreate={handleCreate}
+          onCreateInternalMovement={handleCreateInternalMovement}
+        />
 
         <EditMovementDialog
           transaction={editingTx}
