@@ -59,7 +59,7 @@ type CalEvent = {
   creditCardName?: string | null;
 };
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const pad2 = (n: number) => String(n).padStart(2, "0");
 const dayOf = (s: string) => Number((s || "").slice(8, 10)) || 0;
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
 
@@ -98,6 +98,7 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
   const [view, setView] = useState<"cal" | "list" | "time">("cal");
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [payingId, setPayingId] = useState<string | null>(null);
   const [filters, setFilters] = useState<{ ambito: "all" | Ambito; tipo: "all" | "in" | "out"; estado: "all" | "pend" | "paid" | "venc" }>({
     ambito: "all",
     tipo: "all",
@@ -112,7 +113,8 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
   const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const lead = (new Date(year, month, 1).getDay() + 6) % 7; // lunes-first
-  const today = todayISO();
+  // "Hoy" desde componentes LOCALES (no UTC) para no correr el día cerca de medianoche.
+  const today = `${base.getFullYear()}-${pad2(base.getMonth() + 1)}-${pad2(base.getDate())}`;
   const isCurrentMonth = year === base.getFullYear() && month === base.getMonth();
   const todayDay = isCurrentMonth ? base.getDate() : -1;
 
@@ -193,22 +195,29 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allEvents, filters, today]);
 
+  // Proyección de SOLVENCIA: responde solo al filtro de ámbito (p.ej. "la caja de Empresa"),
+  // nunca a tipo/estado — esconder ingresos NO debe fingir que la caja queda en rojo.
+  const projectionEvents = useMemo(
+    () => allEvents.filter((e) => filters.ambito === "all" || e.ambito === filters.ambito),
+    [allEvents, filters.ambito],
+  );
+
   // Saldo proyectado acumulado por día (1..daysInMonth).
   const bal = useMemo(() => {
     const b: number[] = [];
     let run = startBalance;
     for (let d = 1; d <= daysInMonth; d++) {
-      for (const e of events) if (e.day === d) run += e.kind === "in" ? e.amount : -e.amount;
+      for (const e of projectionEvents) if (e.day === d) run += e.kind === "in" ? e.amount : -e.amount;
       b[d] = run;
     }
     return b;
-  }, [events, startBalance, daysInMonth]);
+  }, [projectionEvents, startBalance, daysInMonth]);
 
   const firstNegDay = useMemo(() => {
     for (let d = 1; d <= daysInMonth; d++) if (bal[d] < 0) return d;
     return null;
   }, [bal, daysInMonth]);
-  const recoverEvent = useMemo(() => (firstNegDay == null ? null : events.find((e) => e.kind === "in" && e.day >= firstNegDay) ?? null), [events, firstNegDay]);
+  const recoverEvent = useMemo(() => (firstNegDay == null ? null : projectionEvents.find((e) => e.kind === "in" && e.day >= firstNegDay) ?? null), [projectionEvents, firstNegDay]);
 
   // Totales.
   const ins = events.filter((e) => e.kind === "in");
@@ -263,13 +272,21 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
   const monthLabel = `${MESES[month][0].toUpperCase()}${MESES[month].slice(1)} ${year}`;
 
   const onPay = (e: CalEvent) => {
+    if (payingId) return; // candado: una marca a la vez, evita doble submit
+    setPayingId(e.srcId);
     pay
       .mutateAsync({
         id: e.srcId,
         data: { date: today, amount: e.amount, paymentMethod: e.payMethod, accountId: e.accountId ?? null, creditCardName: e.creditCardName ?? null },
       })
       .then(() => toast({ title: "Marcado como pagado", description: `${e.name} (${formatCLP(e.amount)})` }))
-      .catch((err) => toast({ title: "No se pudo marcar", description: err instanceof Error ? err.message : String(err), variant: "destructive" }));
+      .catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Si ya quedó pagado (carrera de doble click), no alarmar con un error rojo.
+        if (/ya tiene un movimiento asociado/i.test(msg)) return;
+        toast({ title: "No se pudo marcar", description: msg, variant: "destructive" });
+      })
+      .finally(() => setPayingId(null));
   };
 
   const loading = !commitments.data || !clientPayments.data;
@@ -350,7 +367,7 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
                 {s === "pagado" ? (
                   <span className="flex items-center gap-[5px] text-[11.5px] font-bold" style={{ color: LIME }}><Check className="size-[13px]" strokeWidth={2.6} /> Pagado</span>
                 ) : payable ? (
-                  <button onClick={() => onPay(e)} disabled={pay.isPending} className="shrink-0 whitespace-nowrap rounded-[8px] px-[13px] py-[6px] text-[11.5px] font-bold text-[#0a0a0f] hover-elevate active-elevate-2" style={{ background: LIME }}>
+                  <button onClick={() => onPay(e)} disabled={payingId === e.srcId} className="shrink-0 whitespace-nowrap rounded-[8px] px-[13px] py-[6px] text-[11.5px] font-bold text-[#0a0a0f] hover-elevate active-elevate-2 disabled:opacity-60" style={{ background: LIME }}>
                     Marcar pagado
                   </button>
                 ) : null}
@@ -501,7 +518,7 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
                   <div className="shrink-0 text-right">
                     <div className="font-mono text-[13px] font-bold tabular-nums" style={{ color: e.kind === "in" ? LIME : GRAY }}>{fmtSigned(e.amount, e.kind)}</div>
                     {payable ? (
-                      <button onClick={() => onPay(e)} disabled={pay.isPending} className="mt-1 rounded-[6px] px-2 py-0.5 text-[9px] font-bold text-[#0a0a0f]" style={{ background: LIME }}>Pagar</button>
+                      <button onClick={() => onPay(e)} disabled={payingId === e.srcId} className="mt-1 rounded-[6px] px-2 py-0.5 text-[9px] font-bold text-[#0a0a0f] disabled:opacity-60" style={{ background: LIME }}>Pagar</button>
                     ) : e.est ? <div className="text-[8.5px] font-semibold" style={{ color: LIME }}>~est.</div> : null}
                   </div>
                 </div>
