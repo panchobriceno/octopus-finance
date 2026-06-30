@@ -21,8 +21,8 @@ import os from "node:os";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { initializeApp } from "firebase/app";
-import { collection, doc, getDocs, getFirestore, writeBatch, type Firestore } from "firebase/firestore/lite";
+import { collection, doc, getDocs, writeBatch, type Firestore } from "firebase/firestore/lite";
+import { getAuthedDb } from "./_db";
 import type { ImportedMovement } from "../../shared/schema";
 
 const DRY = process.argv.includes("--dry");
@@ -73,7 +73,7 @@ async function commitChunked(db: Firestore, updates: { id: string; patch: Record
 async function main() {
   loadEnv(path.join(process.cwd(), ".env.local"));
   loadEnv(path.join(process.cwd(), "client", ".env.local"));
-  const db = getFirestore(initializeApp({ apiKey: req("VITE_FIREBASE_API_KEY"), authDomain: req("VITE_FIREBASE_AUTH_DOMAIN"), projectId: req("VITE_FIREBASE_PROJECT_ID"), storageBucket: req("VITE_FIREBASE_STORAGE_BUCKET"), messagingSenderId: req("VITE_FIREBASE_MESSAGING_SENDER_ID"), appId: req("VITE_FIREBASE_APP_ID") }));
+  const db = await getAuthedDb();
 
   // Categorias reales por tipo (la lista blanca es la coleccion categories)
   const cats = (await getDocs(collection(db, "categories"))).docs.map((d) => d.data() as { name: string; type: string });

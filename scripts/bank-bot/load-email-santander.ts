@@ -11,7 +11,8 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { initializeApp } from "firebase/app";
-import { collection, doc, getDocs, getFirestore, query, where, writeBatch } from "firebase/firestore/lite";
+import { collection, doc, getDocs, query, where, writeBatch } from "firebase/firestore/lite";
+import { getAuthedDb } from "./_db";
 import type { ImportBatch, ImportedMovement, MovementRule, Transaction } from "../../shared/schema";
 import { buildImportedMovement, findBestMovementRule, applyMovementRule } from "../../client/src/domain/bank-imports";
 import { parseSantanderTransfer, parseSantanderPayment } from "./parse-email";
@@ -25,7 +26,7 @@ function loadEnv(fp: string) { if (!fs.existsSync(fp)) return; for (const l of f
 function req(n: string) { const v = process.env[n]; if (!v) throw new Error(`Falta ${n}`); return v; }
 loadEnv(path.join(process.cwd(), ".env.local"));
 loadEnv(path.join(process.cwd(), "client", ".env.local"));
-const db = getFirestore(initializeApp({ apiKey: req("VITE_FIREBASE_API_KEY"), authDomain: req("VITE_FIREBASE_AUTH_DOMAIN"), projectId: req("VITE_FIREBASE_PROJECT_ID"), storageBucket: req("VITE_FIREBASE_STORAGE_BUCKET"), messagingSenderId: req("VITE_FIREBASE_MESSAGING_SENDER_ID"), appId: req("VITE_FIREBASE_APP_ID") }));
+const db = await getAuthedDb();
 const detId = (k: string) => "sanmail_" + createHash("sha1").update(k).digest("hex").slice(0, 20);
 const daysBetween = (a: string, b: string) => Math.abs((Date.parse(a) - Date.parse(b)) / 86400000);
 
