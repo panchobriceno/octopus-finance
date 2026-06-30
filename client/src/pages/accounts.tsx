@@ -28,7 +28,14 @@ import { Badge } from "@/components/ui/badge";
 import { Landmark, Plus, Pencil, Trash2, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-type AccountType = "checking" | "savings" | "credit_card";
+type AccountType = "checking" | "savings" | "credit_card" | "credit_line";
+
+const TYPE_LABELS: Record<AccountType, string> = {
+  checking: "Cuenta corriente",
+  savings: "Cuenta de ahorro",
+  credit_card: "Tarjeta de crédito",
+  credit_line: "Línea de crédito",
+};
 type AccountWorkspace = "business" | "family" | "shared";
 
 function formatCLP(value: number) {
@@ -49,6 +56,7 @@ export default function AccountsPage() {
 
   const [newName, setNewName] = useState("");
   const [newBank, setNewBank] = useState("");
+  const [newAccountNumber, setNewAccountNumber] = useState("");
   const [newType, setNewType] = useState<AccountType>("checking");
   const [newBalance, setNewBalance] = useState("");
   const [newWorkspace, setNewWorkspace] = useState<AccountWorkspace>("business");
@@ -57,11 +65,21 @@ export default function AccountsPage() {
   const [editForm, setEditForm] = useState({
     name: "",
     bank: "",
+    accountNumber: "",
     type: "checking" as AccountType,
     workspace: "business" as AccountWorkspace,
     currentBalance: "",
     notes: "",
   });
+  const emptyEditForm = {
+    name: "",
+    bank: "",
+    accountNumber: "",
+    type: "checking" as AccountType,
+    workspace: "business" as AccountWorkspace,
+    currentBalance: "",
+    notes: "",
+  };
 
   const balanceBreakdowns = useMemo(
     () => getAccountBalanceBreakdowns(accounts, transactions),
@@ -99,6 +117,7 @@ export default function AccountsPage() {
       {
         name: newName.trim(),
         bank: newBank.trim(),
+        accountNumber: newAccountNumber.trim() || null,
         type: newType,
         currentBalance,
         workspace: newWorkspace,
@@ -108,6 +127,7 @@ export default function AccountsPage() {
         onSuccess: () => {
           setNewName("");
           setNewBank("");
+          setNewAccountNumber("");
           setNewType("checking");
           setNewBalance("");
           setNewWorkspace("business");
@@ -122,6 +142,7 @@ export default function AccountsPage() {
     setEditForm({
       name: account.name,
       bank: account.bank,
+      accountNumber: account.accountNumber ?? "",
       type: (account.type as AccountType) ?? "checking",
       workspace: (account.workspace as AccountWorkspace) ?? "business",
       currentBalance: String(account.currentBalance ?? 0),
@@ -148,6 +169,7 @@ export default function AccountsPage() {
         data: {
           name: editForm.name.trim(),
           bank: editForm.bank.trim(),
+          accountNumber: editForm.accountNumber.trim() || null,
           type: editForm.type,
           workspace: editForm.workspace,
           currentBalance,
@@ -159,14 +181,7 @@ export default function AccountsPage() {
       {
         onSuccess: () => {
           setEditingId(null);
-          setEditForm({
-            name: "",
-            bank: "",
-            type: "checking",
-            workspace: "business",
-            currentBalance: "",
-            notes: "",
-          });
+          setEditForm(emptyEditForm);
           toast({ title: "Cuenta actualizada" });
         },
       },
@@ -193,7 +208,7 @@ export default function AccountsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleCreate} className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <form onSubmit={handleCreate} className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <Input
               placeholder="Nombre de la cuenta"
               value={newName}
@@ -207,6 +222,12 @@ export default function AccountsPage() {
               onChange={(e) => setNewBank(e.target.value)}
               data-testid="input-account-bank"
             />
+            <Input
+              placeholder="N° cuenta / últimos 4 tarjeta"
+              value={newAccountNumber}
+              onChange={(e) => setNewAccountNumber(e.target.value)}
+              data-testid="input-account-number"
+            />
             <Select value={newType} onValueChange={(value) => setNewType(value as AccountType)}>
               <SelectTrigger data-testid="select-account-type">
                 <SelectValue placeholder="Tipo" />
@@ -215,6 +236,7 @@ export default function AccountsPage() {
                 <SelectItem value="checking">Cuenta corriente</SelectItem>
                 <SelectItem value="savings">Cuenta de ahorro</SelectItem>
                 <SelectItem value="credit_card">Tarjeta de crédito</SelectItem>
+                <SelectItem value="credit_line">Línea de crédito</SelectItem>
               </SelectContent>
             </Select>
             <Input
@@ -235,7 +257,7 @@ export default function AccountsPage() {
                 <SelectItem value="shared">Compartida</SelectItem>
               </SelectContent>
             </Select>
-            <div className="md:col-span-2 xl:col-span-5">
+            <div className="md:col-span-2 xl:col-span-6">
               <Button type="submit" disabled={createMutation.isPending} data-testid="button-create-account">
                 Crear cuenta
               </Button>
@@ -299,13 +321,28 @@ export default function AccountsPage() {
                     </TableCell>
                     <TableCell>
                       {editingId === account.id ? (
-                        <Input
-                          value={editForm.bank}
-                          onChange={(e) => setEditForm((current) => ({ ...current, bank: e.target.value }))}
-                          className="h-8 min-w-[140px]"
-                        />
+                        <div className="space-y-2">
+                          <Input
+                            value={editForm.bank}
+                            onChange={(e) => setEditForm((current) => ({ ...current, bank: e.target.value }))}
+                            className="h-8 min-w-[140px]"
+                            placeholder="Banco"
+                          />
+                          <Input
+                            value={editForm.accountNumber}
+                            onChange={(e) => setEditForm((current) => ({ ...current, accountNumber: e.target.value }))}
+                            className="h-8 min-w-[140px]"
+                            placeholder="N° / últimos 4"
+                            data-testid={`input-edit-number-${account.id}`}
+                          />
+                        </div>
                       ) : (
-                        account.bank
+                        <div className="space-y-0.5">
+                          <p className="text-sm">{account.bank}</p>
+                          {account.accountNumber ? (
+                            <p className="text-xs text-muted-foreground font-mono">{account.accountNumber}</p>
+                          ) : null}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell>
@@ -321,15 +358,12 @@ export default function AccountsPage() {
                             <SelectItem value="checking">Cuenta corriente</SelectItem>
                             <SelectItem value="savings">Cuenta de ahorro</SelectItem>
                             <SelectItem value="credit_card">Tarjeta de crédito</SelectItem>
+                            <SelectItem value="credit_line">Línea de crédito</SelectItem>
                           </SelectContent>
                         </Select>
                       ) : (
                         <Badge variant="secondary" className="text-xs">
-                          {account.type === "credit_card"
-                            ? "Tarjeta de crédito"
-                            : account.type === "savings"
-                            ? "Ahorro"
-                            : "Cuenta corriente"}
+                          {TYPE_LABELS[account.type as AccountType] ?? "Cuenta corriente"}
                         </Badge>
                       )}
                     </TableCell>
@@ -410,14 +444,7 @@ export default function AccountsPage() {
                             className="size-7"
                             onClick={() => {
                               setEditingId(null);
-                              setEditForm({
-                                name: "",
-                                bank: "",
-                                type: "checking",
-                                workspace: "business",
-                                currentBalance: "",
-                                notes: "",
-                              });
+                              setEditForm(emptyEditForm);
                             }}
                           >
                             <X className="size-3.5 text-muted-foreground" />
