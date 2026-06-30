@@ -16,6 +16,7 @@ import OverviewPage from "@/pages/overview";
 import AdvisorPage from "@/pages/advisor";
 import CashFlowPage from "@/pages/cash-flow";
 import PnLPage from "@/pages/pnl";
+import DebtPage from "@/pages/debt";
 import CategoriesPage from "@/pages/categories";
 import ItemsManagerPage from "@/pages/items-manager";
 import AccountsPage from "@/pages/accounts";
@@ -167,6 +168,7 @@ function AppRouter() {
       <Route path="/advisor" component={AdvisorPage} />
       <Route path="/cash-flow" component={CashFlowPage} />
       <Route path="/pnl" component={PnLPage} />
+      <Route path="/deuda" component={DebtPage} />
       <Route path="/import" component={ImportRoute} />
       <Route path="/client-payments" component={ClientPaymentsPage} />
       <Route path="/budget" component={BudgetPage} />

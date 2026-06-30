@@ -43,6 +43,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "Resumen", url: "/", icon: LayoutDashboard },
       { title: "Tu asesor", url: "/advisor", icon: Sparkles },
       { title: "Flujo de Caja", url: "/cash-flow", icon: ArrowUpDown },
+      { title: "Centro de Deuda", url: "/deuda", icon: CreditCard },
       { title: "Estado de Resultados", url: "/pnl", icon: FileText },
     ],
   },
