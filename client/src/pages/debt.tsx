@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { CreditCard, AlertTriangle, ChevronRight } from "lucide-react";
+import { CreditCard, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCLP } from "@/lib/utils";
 import { useCreditCardStatements, useTransactions, useAccounts } from "@/lib/hooks";
@@ -29,6 +29,8 @@ function CardRow({ d }: { d: CardDebt }) {
   const dueLabel = dueDays == null ? "" : dueDays < 0 ? `venció hace ${Math.abs(dueDays)}d` : dueDays === 0 ? "vence hoy" : `en ${dueDays}d`;
   const dueCls = dueDays != null && dueDays <= 3 ? "text-red-400" : "text-[#9a9aa6]";
   const cupoPct = d.cupoTotal && d.cupoUtilizado != null ? Math.min(100, Math.round((d.cupoUtilizado / d.cupoTotal) * 100)) : null;
+  const usdClp = Math.round((d.deudaInternacionalUsd || 0) * USD_CLP);
+  const totalCard = d.pendienteReal + usdClp; // pendiente real incluyendo la deuda en dólares
 
   return (
     <Card className="border-card-border bg-secondary">
@@ -44,8 +46,8 @@ function CardRow({ d }: { d: CardDebt }) {
             </div>
           </div>
           <div className="shrink-0 text-right">
-            <div className="font-mono text-2xl font-extrabold tabular-nums" style={{ color: d.pendienteReal > 0 ? "#f4f4f7" : LIME }}>{formatCLP(d.pendienteReal)}</div>
-            <div className="text-[11px] text-[#9a9aa6]">pendiente real</div>
+            <div className="font-mono text-2xl font-extrabold tabular-nums" style={{ color: totalCard > 0 ? "#f4f4f7" : LIME }}>{formatCLP(totalCard)}</div>
+            <div className="text-[11px] text-[#9a9aa6]">pendiente real{usdClp > 0 ? " (nacional + dólares)" : ""}</div>
           </div>
         </div>
 
@@ -64,6 +66,17 @@ function CardRow({ d }: { d: CardDebt }) {
             <div className="font-mono text-sm font-bold tabular-nums">{d.montoMinimo != null ? formatCLP(d.montoMinimo) : "—"}</div>
           </div>
         </div>
+
+        {/* Deuda en dólares — destacada (no puede pasar desapercibida) */}
+        {usdClp > 0 && (
+          <div className="mt-3 flex items-center justify-between rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5">
+            <span className="flex items-center gap-2 text-[13px] font-bold text-amber-300"><DollarSign className="size-4" /> Deuda en dólares</span>
+            <span className="text-right">
+              <span className="font-mono text-base font-extrabold text-amber-300">US${(d.deudaInternacionalUsd ?? 0).toFixed(2)}</span>
+              <span className="ml-2 font-mono text-xs text-amber-400/80">≈ {formatCLP(usdClp)}</span>
+            </span>
+          </div>
+        )}
 
         {/* pagos post-cierre */}
         {d.pagos.length > 0 && (
@@ -87,7 +100,6 @@ function CardRow({ d }: { d: CardDebt }) {
 
         {/* flags + intl + historial */}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-          {d.deudaInternacionalUsd ? <span className="rounded border border-card-border bg-background/40 px-1.5 py-0.5 text-[#9a9aa6]">+ internacional US${d.deudaInternacionalUsd.toFixed(2)} (≈{formatCLP(Math.round(d.deudaInternacionalUsd * USD_CLP))})</span> : null}
           {d.vencido && <span className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-red-400">plazo vencido</span>}
           {d.history.length > 1 && (
             <span className="text-[#9a9aa6]">Historial: {d.history.map((h) => `${h.statementMonthKey.slice(5)} ${formatCLP(h.montoFacturado)}`).join(" → ")}</span>
@@ -132,7 +144,12 @@ export default function DebtPage() {
           <div>
             <div className="text-xs text-[#9a9aa6]">Deuda real de tarjetas (pendiente hoy)</div>
             <div className="font-mono text-3xl font-extrabold tabular-nums">{formatCLP(totalConUsd)}</div>
-            {totalUsd > 0 && <div className="mt-0.5 text-[11px] text-[#9a9aa6]">nacional {formatCLP(totalPendiente)} + internacional US${totalUsd.toFixed(2)} (≈{formatCLP(totalUsdClp)})</div>}
+            {totalUsd > 0 && (
+              <div className="mt-1 text-xs">
+                <span className="text-[#9a9aa6]">nacional {formatCLP(totalPendiente)} + </span>
+                <span className="font-bold text-amber-300">dólares US${totalUsd.toFixed(2)} (≈{formatCLP(totalUsdClp)})</span>
+              </div>
+            )}
           </div>
           <div className="text-right text-xs text-[#9a9aa6]">
             <div>Facturado: <span className="font-mono">{formatCLP(totalFacturado)}</span></div>
