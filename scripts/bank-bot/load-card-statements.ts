@@ -1,7 +1,7 @@
 import fs from "node:fs"; import path from "node:path"; import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { initializeApp } from "firebase/app";
-import { collection, getDocs, getFirestore, doc, setDoc } from "firebase/firestore/lite";
+import { collection, getDocs, getFirestore, doc, setDoc, deleteDoc } from "firebase/firestore/lite";
 function le(fp:string){if(!fs.existsSync(fp))return;for(const l of fs.readFileSync(fp,"utf8").split(/\r?\n/)){const t=l.trim();if(!t||t.startsWith("#"))continue;const s=t.indexOf("=");if(s===-1)continue;const k=t.slice(0,s).trim();const v=t.slice(s+1).trim().replace(/^['"]|['"]$/g,"");if(k&&process.env[k]===undefined)process.env[k]=v;}}
 le(path.join(process.cwd(),".env.local")); le(path.join(process.cwd(),"client",".env.local"));
 const EXPECT="my-cash-flow-bcb24"; if(process.env.VITE_FIREBASE_PROJECT_ID!==EXPECT){console.error("ABORT projectId");process.exit(1);}
@@ -12,6 +12,7 @@ const PASSWORDS=["1822","8374",""]; const CLAUDE_BIN=process.env.CLAUDE_BIN||"cl
 const clp=(n:any)=>"$"+Math.round(Number(n)||0).toLocaleString("es-CL");
 const digits=(s:any)=>String(s||"").replace(/\D/g,"");
 const norm=(s:any)=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+function bankCode(bank:any):string{const b=norm(bank);if(b.includes("edwards")||b.includes("chile"))return "bancochile";if(b.includes("santander"))return "santander";if(b.includes("itau"))return "itau";if(b.includes("bci"))return "bci";if(b.includes("estado"))return "bancoestado";if(b.includes("scotia"))return "scotiabank";if(b.includes("falabella"))return "falabella";return b.replace(/\s+/g,"").slice(0,14)||"banco";}
 function pdfText(file:string,pw:string):string{ try{ return execFileSync("/opt/homebrew/bin/pdftotext",["-layout","-upw",pw,file,"-"],{encoding:"utf8",timeout:30000,maxBuffer:32*1024*1024}); }catch{ return ""; } }
 function decrypt(file:string):{text:string;pw:string}|null{
   for(const pw of PASSWORDS){ const t=pdfText(file,pw);
@@ -29,6 +30,11 @@ REGLAS: montos CLP como enteros sin puntos. El monto es del período ACTUAL, jam
   const existing=new Map((await getDocs(collection(db,"creditCardStatements"))).docs.map(d=>[d.id,d.data() as any]));
   console.log(APPLY?"=== APLICANDO ===":"=== DRY (--apply para escribir) ===");
   if(APPLY){const bp=path.join(process.cwd(),"scripts","bank-bot",`_backup-statements-${NOW.replace(/[:.]/g,"-")}.json`);fs.writeFileSync(bp,JSON.stringify([...existing.values()],null,2));console.log(`Backup: ${bp}`);}
+  // --reset: borra las docs existentes (p.ej. ids viejos con titular) antes de recargar limpio
+  if(process.argv.includes("--reset")){
+    console.log(`${APPLY?"Borrando":"[DRY] borraría"} ${existing.size} estados existentes...`);
+    if(APPLY){ for(const id of Array.from(existing.keys())) await deleteDoc(doc(db,"creditCardStatements",id)); existing.clear(); }
+  }
   console.log(`Carpeta: ${FOLDER} — ${files.length} PDFs\n`);
   const seen=new Map<string,any>(); let ok=0,skip=0,conflict=0;
   for(const file of files){
@@ -51,7 +57,7 @@ REGLAS: montos CLP como enteros sin puntos. El monto es del período ACTUAL, jam
     if(!okLabel || badLabel || !hasNum){ console.log(`  ✗ ${name}: evidencia no valida monto (label=${okLabel} bad=${badLabel} num=${hasNum}) raw="${String(o.montoFacturadoRawLine).slice(0,50)}"`); skip++; continue; }
     const bank=String(o.bank||"").trim(), holder=String(o.holder||"").trim();
     if(!bank||!holder){ console.log(`  ✗ ${name}: falta bank/holder`); skip++; continue; }
-    const cardKey=`${norm(bank)}|${norm(holder)}|${last4}`;
+    const cardKey=`${bankCode(bank)}|${last4}`; // canon de banco + last4 (sin titular ni nombre variable)
     const smk=String(o.periodEnd).slice(0,7); const id=`${cardKey}::${smk}`;
     const rec={ id, cardKey, cardLabel:`${bank} · ${holder} …${last4}`, bank, holder, last4,
       statementMonthKey:smk, paymentMonthKey:String(o.pagarHasta).slice(0,7), periodStart:/^\d{4}-\d{2}-\d{2}$/.test(String(o.periodStart))?o.periodStart:null, periodEnd:o.periodEnd, pagarHasta:o.pagarHasta,

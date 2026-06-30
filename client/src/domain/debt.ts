@@ -10,6 +10,20 @@ const digits = (s: unknown) => String(s ?? "").replace(/\D/g, "");
 const norm = (s: unknown) =>
   String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 
+/** Código canónico de banco: el banco imprime su nombre distinto entre cartolas
+ * (ej. "Banco Edwards" y "Banco de Chile" son el mismo). Agrupa por código + last4. */
+export function bankCode(bank: unknown): string {
+  const b = norm(bank);
+  if (b.includes("edwards") || b.includes("chile")) return "bancochile";
+  if (b.includes("santander")) return "santander";
+  if (b.includes("itau")) return "itau";
+  if (b.includes("bci")) return "bci";
+  if (b.includes("estado")) return "bancoestado";
+  if (b.includes("scotia")) return "scotiabank";
+  if (b.includes("falabella")) return "falabella";
+  return b.replace(/\s+/g, "").slice(0, 14) || "banco";
+}
+
 export type CardPayment = { date: string; amount: number; name: string };
 export type CardDebt = {
   cardKey: string;
@@ -38,11 +52,8 @@ function resolveCardAccount(statement: CreditCardStatement, accounts: Account[])
     (a) => a.type === "credit_card" && digits(a.accountNumber).slice(-4) === statement.last4 && statement.last4.length === 4,
   );
   if (byLast4.length <= 1) return byLast4;
-  const sb = norm(statement.bank);
-  const byBank = byLast4.filter((a) => {
-    const ab = norm(a.bank);
-    return ab && sb && (ab === sb || ab.includes(sb) || sb.includes(ab));
-  });
+  const sb = bankCode(statement.bank);
+  const byBank = byLast4.filter((a) => bankCode(a.bank) === sb);
   return byBank.length ? byBank : byLast4;
 }
 
@@ -53,11 +64,14 @@ export function buildCardDebt(
   opts: { asOf: string },
 ): CardDebt[] {
   const asOf = opts.asOf;
+  // Agrupa por banco|last4 (NO por titular: el banco lo imprime distinto entre cartolas y
+  // partiría la misma tarjeta en dos, neteando el pago dos veces).
   const byCard = new Map<string, CreditCardStatement[]>();
   for (const s of statements) {
-    const arr = byCard.get(s.cardKey) ?? [];
+    const key = `${bankCode(s.bank)}|${s.last4}`;
+    const arr = byCard.get(key) ?? [];
     arr.push(s);
-    byCard.set(s.cardKey, arr);
+    byCard.set(key, arr);
   }
 
   const out: CardDebt[] = [];
