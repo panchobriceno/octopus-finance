@@ -4,13 +4,17 @@
  * El endpoint /api/advisor es read-only (nunca escribe). Ver server/routes.ts.
  */
 import type {
+  Account,
   ClientPayment,
   CommitmentInstance,
   CreditCardSetting,
+  CreditCardStatement,
   ImportBatch,
   ImportedMovement,
   Transaction,
 } from "@shared/schema";
+import { buildCardDebt } from "@/domain/debt";
+import { buildCashObligations, type MonthSummary } from "@/domain/cash-obligations";
 
 const DAY = 86400000;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -28,6 +32,8 @@ export type DuplicatePair = { a: DupTx; b: DupTx };
 export type AdvisorFacts = {
   asOf: string;
   obligations: Obligation[];
+  obligationsByMonth: MonthSummary[];
+  cardWarnings: string[];
   upcomingIncome: IncomeFact[];
   review: { pendingMovements: number; oldestPendingDate: string | null };
   missingDocs: MissingDoc[];
@@ -56,16 +62,26 @@ export function buildAdvisorFacts(input: {
   creditCards: CreditCardSetting[];
   pendingMovements: ImportedMovement[];
   transactions: Transaction[];
+  accounts?: Account[];
+  creditCardStatements?: CreditCardStatement[];
 }): AdvisorFacts {
   const now = today();
   const cap = (n: number) => Number(n) || 0;
 
-  // Obligaciones: compromisos pendientes con vencimiento entre hace 7 días y dentro de 45.
-  const obligations: Obligation[] = input.commitments
-    .filter((c) => c.status === "pending" && c.dueDate)
-    .map((c) => ({ id: `commitment:${c.id}`, label: c.name, amount: cap(c.expectedAmount), dueDate: c.dueDate, daysUntilDue: daysBetween(c.dueDate, now), cuenta: c.creditCardName ?? c.accountId ?? null }))
-    .filter((o) => o.daysUntilDue >= -7 && o.daysUntilDue <= 45 && o.amount > 0)
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  // Obligaciones SIN doble-conteo (Plan 1): caja (cuentas) + pago REAL de tarjetas del ciclo,
+  // excluyendo las suscripciones de tarjeta y los placeholders fijos. Rango: este mes + 2.
+  const accounts = input.accounts ?? [];
+  const cardDebts = buildCardDebt(input.creditCardStatements ?? [], input.transactions, accounts, { asOf: now });
+  const cashObs = buildCashObligations({
+    commitments: input.commitments,
+    cardDebts,
+    cardAccounts: accounts.filter((a) => a.type === "credit_card"),
+    asOf: now,
+    monthsAhead: 3,
+  });
+  const obligations: Obligation[] = cashObs.obligations.map((o) => ({
+    id: o.id, label: o.label, amount: o.amount, dueDate: o.dueDate, daysUntilDue: o.daysUntilDue, cuenta: o.workspace,
+  }));
 
   // Ingresos esperados de clientes (no liquidados) en los próximos 60 días.
   const upcomingIncome: IncomeFact[] = input.clientPayments
@@ -137,7 +153,7 @@ export function buildAdvisorFacts(input: {
     }
   }
 
-  return { asOf: now, obligations, upcomingIncome, review, missingDocs, categoryDeltas, duplicates: duplicates.slice(0, 8) };
+  return { asOf: now, obligations, obligationsByMonth: cashObs.byMonth, cardWarnings: cashObs.warnings, upcomingIncome, review, missingDocs, categoryDeltas, duplicates: duplicates.slice(0, 8) };
 }
 
 /** Resuelve un duplicado: borra la transacción elegida y descarta su movimiento de origen.

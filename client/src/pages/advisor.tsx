@@ -24,6 +24,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { formatCLP } from "@/lib/utils";
 import { openImportWizard } from "@/lib/import-wizard";
+import { CashSummaryCard } from "@/components/finance/cash-summary-card";
 import {
   useCommitmentInstances,
   useClientPayments,
@@ -31,6 +32,8 @@ import {
   useCreditCardSettings,
   useImportedMovements,
   useTransactions,
+  useAccounts,
+  useCreditCardStatements,
   useResolveDuplicateTransaction,
 } from "@/lib/hooks";
 import {
@@ -224,6 +227,8 @@ export default function AdvisorPage() {
   const creditCards = useCreditCardSettings();
   const pendingMovs = useImportedMovements({ status: "pending", limitCount: 500 });
   const transactions = useTransactions();
+  const accounts = useAccounts();
+  const creditCardStatements = useCreditCardStatements();
   const { toast } = useToast();
 
   const [report, setReport] = useState<AdvisorReport | null>(null);
@@ -241,7 +246,7 @@ export default function AdvisorPage() {
   }, []);
 
   const facts = useMemo<AdvisorFacts | null>(() => {
-    if (!commitments.data || !clientPayments.data || !importBatches.data || !creditCards.data || !pendingMovs.data || !transactions.data) return null;
+    if (!commitments.data || !clientPayments.data || !importBatches.data || !creditCards.data || !pendingMovs.data || !transactions.data || !accounts.data || !creditCardStatements.data) return null;
     return buildAdvisorFacts({
       commitments: commitments.data,
       clientPayments: clientPayments.data,
@@ -249,8 +254,10 @@ export default function AdvisorPage() {
       creditCards: creditCards.data,
       pendingMovements: pendingMovs.data,
       transactions: transactions.data,
+      accounts: accounts.data ?? [],
+      creditCardStatements: creditCardStatements.data ?? [],
     });
-  }, [commitments.data, clientPayments.data, importBatches.data, creditCards.data, pendingMovs.data, transactions.data]);
+  }, [commitments.data, clientPayments.data, importBatches.data, creditCards.data, pendingMovs.data, transactions.data, accounts.data, creditCardStatements.data]);
 
 
   const loadingData = !facts;
@@ -418,6 +425,9 @@ export default function AdvisorPage() {
       {/* Cuerpo scrolleable */}
       <div className="flex-1 space-y-[18px] overflow-y-auto px-4 py-[18px] sm:px-7 sm:py-6">
         {summaryCard}
+
+        {/* A pagar (Plan 1): este mes + 2, por ambiente, con desglose por tarjeta en el (i) */}
+        {facts && <CashSummaryCard months={facts.obligationsByMonth} />}
 
         {/* Calendario financiero — reemplaza "Qué pagar y cuándo" (full width) */}
         <FinancialCalendar />
