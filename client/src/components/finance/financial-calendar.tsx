@@ -166,7 +166,7 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
   // filtrado por ámbito (Empresa/Familia incluyen las cuentas compartidas).
   const accountsCash = useMemo(() => {
     return ((accounts.data ?? []) as Account[])
-      .filter((a) => a.type !== "credit_card")
+      .filter((a) => a.type !== "credit_card" && a.type !== "credit_line") // deuda, no efectivo
       .filter((a) => filters.ambito === "all" || a.workspace === filters.ambito || a.isShared)
       .reduce((sum, a) => sum + (Number(a.currentBalance) || 0), 0);
   }, [accounts.data, filters.ambito]);
