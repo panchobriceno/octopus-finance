@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore/lite";
+import { getAuth } from "firebase/auth";
 
 declare global {
   interface Window {
@@ -31,3 +32,7 @@ const app = initializeApp(firebaseConfig);
 // Use Firestore Lite SDK — no offline persistence, no IndexedDB
 // Reduces bundle size significantly and avoids sandboxed iframe issues
 export const db = getFirestore(app);
+
+// Auth en la MISMA app → firestore/lite adjunta el token de la sesión automáticamente.
+// Persistencia local por defecto (la sesión sobrevive al cerrar el navegador).
+export const auth = getAuth(app);

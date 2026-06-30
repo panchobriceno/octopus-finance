@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "@/components/command-palette";
+import { AuthGate } from "@/components/auth-gate";
 import { MobileTabBar } from "@/components/mobile-tab-bar";
 import { ImportWizardDialog } from "@/components/finance/import-wizard-dialog";
 import { QuickExpenseCapture } from "@/components/finance/quick-expense-capture";
@@ -197,14 +198,12 @@ const sidebarStyle = {
   "--sidebar-width-icon": "3rem",
 };
 
-function App() {
+function AuthedApp() {
   useEffect(() => {
     void autoCarryForwardOpeningBalance(getCurrentMonthKey());
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
         <Router hook={useHashLocation}>
           <CommandPalette />
           <GlobalImportWizard />
@@ -230,6 +229,16 @@ function App() {
             </div>
           </SidebarProvider>
         </Router>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <AuthGate>
+          <AuthedApp />
+        </AuthGate>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

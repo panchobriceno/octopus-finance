@@ -10,8 +10,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
+  SidebarFooter,
 } from "@/components/ui/sidebar";
 import { NAV_GROUPS } from "@/lib/navigation";
+import { auth } from "@/lib/firebase";
+import { signOut } from "firebase/auth";
+import { LogOut } from "lucide-react";
 
 const ITEM_CLASS =
   "mx-0 h-10 rounded-lg px-3 text-[#9a9aa6] transition-all duration-200 " +
@@ -91,6 +95,21 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
+      <SidebarFooter className="px-4 pb-4">
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-[#22222b] bg-[#15151c] px-3 py-2">
+          <span className="min-w-0 truncate text-[11px] text-[#8a8a96]" title={auth.currentUser?.email ?? ""}>
+            {auth.currentUser?.email ?? "—"}
+          </span>
+          <button
+            onClick={() => void signOut(auth)}
+            className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-[#9a9aa6] hover:bg-[#22222b] hover:text-[#f4f4f7]"
+            title="Cerrar sesión"
+            data-testid="button-logout"
+          >
+            <LogOut className="size-3.5" /> Salir
+          </button>
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }
