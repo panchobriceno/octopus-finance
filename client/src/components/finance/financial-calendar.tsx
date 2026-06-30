@@ -13,9 +13,10 @@ import {
   useCommitmentInstances,
   useClientPayments,
   usePayCommitmentInstance,
+  useAccounts,
 } from "@/lib/hooks";
-import { useOpeningBalance } from "@/lib/monthly-balances";
-import type { CommitmentInstance, ClientPayment } from "@shared/schema";
+import { useMonthlyBalances } from "@/lib/monthly-balances";
+import type { CommitmentInstance, ClientPayment, Account } from "@shared/schema";
 
 const LIME = "#cdfa46";
 const GRAY = "#cfcfd8";
@@ -92,7 +93,9 @@ function StatusPill({ s, className = "", style = {} }: { s: Resolved; className?
 export function FinancialCalendar({ className = "" }: { className?: string }) {
   const commitments = useCommitmentInstances();
   const clientPayments = useClientPayments();
+  const accounts = useAccounts();
   const pay = usePayCommitmentInstance();
+  const { balances: openingMap } = useMonthlyBalances();
   const { toast } = useToast();
 
   const [view, setView] = useState<"cal" | "list" | "time">("cal");
@@ -118,7 +121,16 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
   const isCurrentMonth = year === base.getFullYear() && month === base.getMonth();
   const todayDay = isCurrentMonth ? base.getDate() : -1;
 
-  const startBalance = useOpeningBalance(monthKey).amount ?? 0;
+  // Saldo con que arranca la proyección: si hay opening balance seteado a mano para el mes,
+  // se respeta; si no, se usa el saldo REAL de las cuentas hoy (excluye tarjetas = deuda),
+  // filtrado por ámbito (Empresa/Familia incluyen las cuentas compartidas).
+  const accountsCash = useMemo(() => {
+    return ((accounts.data ?? []) as Account[])
+      .filter((a) => a.type !== "credit_card")
+      .filter((a) => filters.ambito === "all" || a.workspace === filters.ambito || a.isShared)
+      .reduce((sum, a) => sum + (Number(a.currentBalance) || 0), 0);
+  }, [accounts.data, filters.ambito]);
+  const startBalance = monthKey in (openingMap ?? {}) ? openingMap[monthKey] ?? 0 : accountsCash;
 
   // Estado resuelto de un evento (mismo criterio que el handoff).
   const resolve = (e: CalEvent): Resolved => {
