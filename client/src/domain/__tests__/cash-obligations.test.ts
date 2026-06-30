@@ -59,6 +59,35 @@ describe("buildCashObligations", () => {
     expect(r.warnings[0]).toContain("T.C Sin EECC"); // menciona la cuenta
   });
 
+  it("agrupa por mes (3 meses) y por ambiente, con desglose por tarjeta", () => {
+    const r = buildCashObligations({
+      commitments: [
+        ci({ id: "arr", category: "Consulta Javi", expectedAmount: 290000, dueDate: "2026-06-18", workspace: "family" }),
+        ci({ id: "iva", category: "Empresa", expectedAmount: 414000, dueDate: "2026-07-12", workspace: "business" }),
+        ci({ id: "lejos", category: "Empresa", expectedAmount: 999, dueDate: "2026-12-01", workspace: "business" }), // fuera de 3 meses
+      ],
+      cardDebts: [debt({ pagarHasta: "2026-06-25", last4: "7232" }), debt({ pagarHasta: "2026-07-08", last4: "6101", pendienteReal: 500000 })],
+      cardAccounts: [
+        { id: "a7232", name: "T.C Pancho", bank: "Banco Edwards", type: "credit_card", accountNumber: "****7232", workspace: "family" } as Account,
+        { id: "a6101", name: "T.C OM", bank: "Banco Santander", type: "credit_card", accountNumber: "****6101", workspace: "business" } as Account,
+      ],
+      asOf, monthsAhead: 3,
+    });
+    expect(r.byMonth.map((m) => m.monthKey)).toEqual(["2026-06", "2026-07", "2026-08"]);
+    const jun = r.byMonth[0];
+    expect(jun.cash).toBe(290000); // arriendo
+    expect(jun.card).toBe(150000); // 7232
+    expect(jun.cardBreakdown).toHaveLength(1);
+    expect(jun.cardBreakdown[0].last4).toBe("7232");
+    // ambiente: junio tiene family (arriendo 290k + 7232 150k = 440k)
+    expect(jun.byWorkspace.find((w) => w.workspace === "family")?.total).toBe(440000);
+    const jul = r.byMonth[1];
+    expect(jul.card).toBe(500000); // 6101
+    expect(jul.byWorkspace.find((w) => w.workspace === "business")?.total).toBe(914000); // iva 414k + 6101 500k
+    // el de diciembre quedó fuera de rango
+    expect(r.obligations.find((o) => o.id === "commitment:lejos")).toBeUndefined();
+  });
+
   it("no doble-cuenta: sub de tarjeta excluida + pago real agregado", () => {
     const r = buildCashObligations({
       commitments: [ci({ id: "netflix", cardAccountId: "acc7232", expectedAmount: 13000 }), ci({ id: "ph", category: "T.C Pancho", expectedAmount: 140000 })],
