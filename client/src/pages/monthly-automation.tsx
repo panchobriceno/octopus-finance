@@ -193,14 +193,14 @@ export default function MonthlyAutomationPage() {
     () => instances.filter((instance) => instance.monthKey === selectedMonth),
     [instances, selectedMonth],
   );
-  const dashboard = useMemo(
-    () => buildCommitmentDashboard(monthInstances),
-    [monthInstances],
-  );
-  // En la tabla escondemos los cancelados (ruido: ej. duplicados desactivados).
+  // Escondemos los cancelados (ruido: ej. duplicados desactivados) — tabla Y KPIs (que cuadren).
   const visibleInstances = useMemo(
     () => monthInstances.filter((instance) => instance.status !== "cancelled"),
     [monthInstances],
+  );
+  const dashboard = useMemo(
+    () => buildCommitmentDashboard(visibleInstances),
+    [visibleInstances],
   );
   const transactionById = useMemo(
     () => new Map(transactions.map((transaction) => [transaction.id, transaction])),
@@ -887,25 +887,24 @@ export default function MonthlyAutomationPage() {
                               {formatCLP(instance.expectedAmount)}
                             </TableCell>
                             <TableCell className="pr-5">
-                              {isCardPaidCommitment(instance) ? (
-                                // Ítem de tarjeta: NO se paga individualmente (se paga la tarjeta / se concilia
-                                // con la cartola). Sin botón de pago para no doble-contar.
-                                <div className="flex justify-end">
+                              <div className="flex items-center justify-end gap-1">
+                                {isCardPaidCommitment(instance) ? (
+                                  // Ítem de tarjeta: sin "Pago" individual (se paga la tarjeta / se concilia con
+                                  // la cartola → evita doble-conteo). Se mantiene "Skip" por si no corre ese mes.
                                   <Badge variant="outline" className="gap-1 text-xs text-muted-foreground" title="Se paga al pagar la tarjeta o se concilia al importar la cartola">
                                     <CreditCard className="size-3.5" /> En tarjeta
                                   </Badge>
-                                </div>
-                              ) : (
-                              <div className="flex justify-end gap-1">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => openPaymentDialog(instance)}
-                                  disabled={updateInstanceMutation.isPending || instance.status === "paid"}
-                                >
-                                  <CheckCircle2 className="size-4 text-lime-600" />
-                                  Pago
-                                </Button>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openPaymentDialog(instance)}
+                                    disabled={updateInstanceMutation.isPending || instance.status === "paid"}
+                                  >
+                                    <CheckCircle2 className="size-4 text-lime-600" />
+                                    Pago
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -916,7 +915,6 @@ export default function MonthlyAutomationPage() {
                                   <XCircle className="size-4 text-muted-foreground" />
                                 </Button>
                               </div>
-                              )}
                             </TableCell>
                           </TableRow>
                         );
