@@ -39,9 +39,14 @@ REGLAS: montos CLP como enteros sin puntos. El monto es del período ACTUAL, jam
     if(APPLY){ for(const id of Array.from(existing.keys())) await deleteDoc(doc(db,"creditCardStatements",id)); existing.clear(); }
   }
   console.log(`Carpeta: ${FOLDER} — ${files.length} PDFs\n`);
-  const seen=new Map<string,any>(); let ok=0,skip=0,conflict=0;
+  // Incremental: saltar PDFs ya procesados (mismo hash) para no re-llamar a la IA cada día.
+  const FORCE=process.argv.includes("--reset")||process.argv.includes("--force");
+  const knownHashes=new Set(Array.from(existing.values()).map((s:any)=>s.sourceFileHash).filter(Boolean));
+  const seen=new Map<string,any>(); let ok=0,skip=0,conflict=0,unchanged=0;
   for(const file of files){
     const name=path.basename(file);
+    const fileHash=crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex").slice(0,16);
+    if(!FORCE && knownHashes.has(fileHash)){ unchanged++; continue; } // ya cargado, sin cambios
     const dec=decrypt(file);
     if(!dec){ console.log(`  ✗ ${name}: no descifra/no parece cartola`); skip++; continue; }
     const raw=callClaude(`${PROMPT}\n\nTEXTO:\n${dec.text.slice(0,50000)}`);
@@ -79,12 +84,12 @@ REGLAS: montos CLP como enteros sin puntos. El monto es del período ACTUAL, jam
       cupoUtilizado: hasNac?(o.cupoUtilizado!=null?Math.round(Number(o.cupoUtilizado)):null):(prev?.cupoUtilizado??null),
       cupoDisponible: hasNac?(o.cupoDisponible!=null?Math.round(Number(o.cupoDisponible)):null):(prev?.cupoDisponible??null),
       deudaInternacionalUsd: Math.max(usd, Number(prev?.deudaInternacionalUsd)||0), currency:"CLP", source:"manual_file",
-      sourceFileHash:crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex").slice(0,16),
+      sourceFileHash:fileHash,
       createdAt:(prev?.createdAt)??NOW, updatedAt:NOW };
     seen.set(id,rec);
     console.log(`  ✓ ${name}: ${rec.cardLabel} | ${smk} | a pagar ${clp(rec.montoFacturado)}${rec.deudaInternacionalUsd?` + US$${rec.deudaInternacionalUsd} intl`:""} | vence ${o.pagarHasta}`);
     if(APPLY) await setDoc(doc(db,"creditCardStatements",id),rec);
     ok++;
   }
-  console.log(`\n${APPLY?"✅":"[DRY]"} cargados ${ok} | descartados ${skip} | conflictos ${conflict}`);
+  console.log(`\n${APPLY?"✅":"[DRY]"} cargados ${ok} | sin cambios ${unchanged} | descartados ${skip} | conflictos ${conflict}`);
 })().catch(e=>{console.error("❌",e.message);process.exit(1);});

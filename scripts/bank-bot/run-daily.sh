@@ -39,6 +39,11 @@ fi
   npx tsx scripts/bank-bot/resolve-transfers.ts --apply
   echo "exit resolve-transfers: $?"
 
+  # Cargar estados de cuenta nuevos de la carpeta de cartolas (Centro de Deuda; incremental por hash).
+  echo "--- Cargar estados de cuenta (Centro de Deuda) ---"
+  npx tsx scripts/bank-bot/load-card-statements.ts --apply
+  echo "exit load-card-statements: $?"
+
   # Solo marcamos el dia como exitoso si ambos loaders corrieron sin error
   if [ "$RC_EDW" = "0" ] && [ "$RC_SAN" = "0" ]; then touch "$STAMP"; fi
   echo "=== fin $(date) ==="
