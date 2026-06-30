@@ -49,7 +49,8 @@ export type MonthSummary = {
   cash: number;
   card: number;
   byWorkspace: { workspace: string; total: number }[];
-  cardBreakdown: { last4: string; label: string; amount: number; workspace: string; deudaUsd?: number | null }[];
+  cardBreakdown: { last4: string; label: string; amount: number; workspace: string; deudaUsd?: number | null; overdue: boolean }[];
+  cashBreakdown: { label: string; amount: number; workspace: string; dueDate: string; overdue: boolean }[];
 };
 
 function addMonthKey(monthKey: string, n: number): string {
@@ -145,11 +146,15 @@ export function buildCashObligations(input: {
     for (const o of inMonth) wsMap.set(o.workspace, (wsMap.get(o.workspace) ?? 0) + o.amount);
     const cardBreakdown = inMonth
       .filter((o) => o.kind === "card_payment")
-      .map((o) => ({ last4: o.meta?.last4 ?? "", label: o.label, amount: o.amount, workspace: o.workspace, deudaUsd: o.meta?.deudaUsd ?? null }));
+      .map((o) => ({ last4: o.meta?.last4 ?? "", label: o.label, amount: o.amount, workspace: o.workspace, deudaUsd: o.meta?.deudaUsd ?? null, overdue: o.daysUntilDue < 0 }));
+    const cashBreakdown = inMonth
+      .filter((o) => o.kind === "commitment")
+      .map((o) => ({ label: o.label, amount: o.amount, workspace: o.workspace, dueDate: o.dueDate, overdue: o.daysUntilDue < 0 }))
+      .sort((a, b) => b.amount - a.amount);
     return {
       monthKey: mk, total: cash + card, cash, card,
       byWorkspace: Array.from(wsMap.entries()).map(([workspace, total]) => ({ workspace, total })).sort((a, b) => b.total - a.total),
-      cardBreakdown,
+      cardBreakdown, cashBreakdown,
     };
   });
 
