@@ -1,0 +1,122 @@
+[
+  {
+    "id": "2Bx9eSqmlGJaBLw5RBTy",
+    "currency": "CLP",
+    "workspace": "family",
+    "isShared": false,
+    "notes": null,
+    "bank": "Banco Edwards",
+    "type": "checking",
+    "name": "Cuenta Corriente Edwards Pancho",
+    "currentBalance": 21470,
+    "updatedAt": "2026-06-25"
+  },
+  {
+    "id": "36WevzgCYGVlb0YpWFdU",
+    "currency": "CLP",
+    "workspace": "family",
+    "isShared": false,
+    "notes": null,
+    "bank": "Itaú",
+    "type": "checking",
+    "name": "Cuenta corriente Itaú Javi",
+    "updatedAt": "2026-06-25",
+    "currentBalance": 1363000
+  },
+  {
+    "id": "4FWn8ZXcXRc0x3sVDApP",
+    "currency": "CLP",
+    "workspace": "family",
+    "isShared": false,
+    "notes": null,
+    "updatedAt": "2026-03-24",
+    "name": "T.C Edwards Signature Javi",
+    "bank": "Banco Edwards",
+    "type": "credit_card",
+    "currentBalance": 0
+  },
+  {
+    "id": "PkkkaDXs7JzFXqgfeosS",
+    "currency": "CLP",
+    "workspace": "family",
+    "isShared": false,
+    "notes": null,
+    "bank": "Banco Edwards",
+    "type": "credit_card",
+    "currentBalance": 0,
+    "name": "T.C Edwards Pancho",
+    "updatedAt": "2026-03-24"
+  },
+  {
+    "id": "RsR8lD7JZumlq63fX9lG",
+    "currency": "CLP",
+    "workspace": "family",
+    "isShared": false,
+    "notes": null,
+    "updatedAt": "2026-03-24",
+    "name": "T.C Edward Infini Javi",
+    "bank": "Banco Edward",
+    "type": "credit_card",
+    "currentBalance": 0
+  },
+  {
+    "id": "asIrUoWJkN1jH2zzJhT0",
+    "currency": "CLP",
+    "workspace": "shared",
+    "isShared": true,
+    "notes": null,
+    "type": "checking",
+    "bank": "Banco Santander",
+    "name": "Cuenta Corriente OM",
+    "currentBalance": 0,
+    "updatedAt": "2026-06-25"
+  },
+  {
+    "id": "c9winUUyqHUlTE1SHypY",
+    "currency": "CLP",
+    "workspace": "family",
+    "isShared": false,
+    "notes": null,
+    "updatedAt": "2026-03-24",
+    "name": "Cuenta Corriente Santander Javi",
+    "bank": "Banco Santander",
+    "type": "checking",
+    "currentBalance": 0
+  },
+  {
+    "id": "jgk2V3pZyqMKoatb4ymX",
+    "currency": "CLP",
+    "workspace": "family",
+    "isShared": false,
+    "notes": null,
+    "updatedAt": "2026-03-24",
+    "name": "Cuenta Corriente Banco Edwards Javi",
+    "bank": "Banco Edwards Javi",
+    "type": "checking",
+    "currentBalance": 0
+  },
+  {
+    "id": "ofDf2tnlBbum76tvuiXp",
+    "currency": "CLP",
+    "workspace": "family",
+    "isShared": false,
+    "notes": null,
+    "bank": "Itaú",
+    "type": "credit_card",
+    "currentBalance": 0,
+    "name": "T.C Itaú Javi",
+    "updatedAt": "2026-03-24"
+  },
+  {
+    "id": "qj3ab3ft9aEMHo5XBoqK",
+    "currency": "CLP",
+    "workspace": "family",
+    "isShared": false,
+    "notes": null,
+    "name": "Cuenta Ahorro",
+    "type": "savings",
+    "bank": "Banco Santander",
+    "currentBalance": 0,
+    "updatedAt": "2026-06-25"
+  }
+]

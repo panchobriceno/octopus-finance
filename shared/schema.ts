@@ -470,6 +470,7 @@ export interface ImportedMovement {
   suggestedPaymentMethod: string; // "bank_account" | "credit_card" | "cash"
   suggestedDestinationWorkspace: string | null;
   suggestedDestinationAccountId: string | null;
+  suggestedSourceAccountId: string | null; // cuenta ORIGEN sugerida para traspasos (no pisa accountId/procedencia)
   installmentCount: number | null;
   confidence: number;
   matchedRuleId: string | null;
@@ -509,6 +510,7 @@ export interface InsertImportedMovement {
   suggestedPaymentMethod?: string;
   suggestedDestinationWorkspace?: string | null;
   suggestedDestinationAccountId?: string | null;
+  suggestedSourceAccountId?: string | null;
   installmentCount?: number | null;
   confidence?: number;
   matchedRuleId?: string | null;
@@ -789,6 +791,7 @@ export const insertImportedMovementSchema = z.object({
   suggestedPaymentMethod: z.enum(["bank_account", "credit_card", "cash"]).optional(),
   suggestedDestinationWorkspace: z.string().nullable().optional(),
   suggestedDestinationAccountId: z.string().nullable().optional(),
+  suggestedSourceAccountId: z.string().nullable().optional(),
   installmentCount: z.number().int().positive().nullable().optional(),
   confidence: z.number().min(0).max(100).optional(),
   matchedRuleId: z.string().nullable().optional(),

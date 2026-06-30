@@ -59,6 +59,8 @@ type RowOverride = {
   category?: string;
   workspace?: string;
   accountId?: string;
+  destinationWorkspace?: string;
+  destinationAccountId?: string;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -326,6 +328,7 @@ export default function BankMovementsPage({
   const handleConvert = async (movement: ImportedMovement) => {
     const rowOverride = overrides[movement.id] ?? {};
     const accountId = rowOverride.accountId === "none" ? null : rowOverride.accountId;
+    const destinationAccountId = rowOverride.destinationAccountId === "none" ? null : rowOverride.destinationAccountId;
 
     setConvertingId(movement.id);
     try {
@@ -335,6 +338,8 @@ export default function BankMovementsPage({
           category: rowOverride.category,
           workspace: rowOverride.workspace,
           accountId,
+          destinationWorkspace: rowOverride.destinationWorkspace,
+          destinationAccountId,
         },
         forceDuplicate: movement.status === "duplicate",
       });
@@ -766,7 +771,13 @@ export default function BankMovementsPage({
                         selectedWorkspace,
                         selectedCategory,
                       );
-                      const selectedAccountId = rowOverride.accountId ?? movement.accountId ?? "none";
+                      const isTransfer = movement.suggestedMovementType === "transfer";
+                      const selectedAccountId = rowOverride.accountId ?? movement.suggestedSourceAccountId ?? movement.accountId ?? "none";
+                      const selectedDestWorkspace = rowOverride.destinationWorkspace ?? movement.suggestedDestinationWorkspace ?? "";
+                      const selectedDestAccountId = rowOverride.destinationAccountId ?? movement.suggestedDestinationAccountId ?? "none";
+                      const accountOptions = accounts.filter(
+                        (account) => account.type === "checking" || account.type === "savings" || (isTransfer && account.type === "credit_line"),
+                      );
                       const canReview = !isSelectedBatchClosed && (movement.status === "pending" || movement.status === "duplicate");
                       const sourceAccount = movement.accountId ? accountById.get(movement.accountId) : null;
 
@@ -852,18 +863,56 @@ export default function BankMovementsPage({
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="none">Sin cuenta</SelectItem>
-                                {accounts
-                                  .filter((account) => account.type === "checking" || account.type === "savings")
-                                  .map((account) => (
-                                    <SelectItem key={account.id} value={account.id}>
-                                      {accountLabel(account)}
-                                    </SelectItem>
-                                  ))}
+                                {accountOptions.map((account) => (
+                                  <SelectItem key={account.id} value={account.id}>
+                                    {accountLabel(account)}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                             <div className="mt-1 text-xs text-muted-foreground">
-                              Detectada: {accountLabel(sourceAccount)}
+                              {isTransfer ? "Origen · detectada: " : "Detectada: "}{accountLabel(sourceAccount)}
                             </div>
+                            {isTransfer && (
+                              <div className="mt-2 space-y-1 border-t border-dashed pt-2">
+                                <div className="text-xs font-medium text-muted-foreground">Destino del traspaso</div>
+                                <Select
+                                  value={selectedDestWorkspace || undefined}
+                                  onValueChange={(value) => setRowOverride(movement.id, { destinationWorkspace: value })}
+                                  disabled={!canReview}
+                                >
+                                  <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="Ámbito destino" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {Object.entries(WORKSPACE_LABELS).map(([value, label]) => (
+                                      <SelectItem key={`dw-${value}`} value={value}>
+                                        {label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Select
+                                  value={selectedDestAccountId}
+                                  onValueChange={(value) => setRowOverride(movement.id, { destinationAccountId: value })}
+                                  disabled={!canReview}
+                                >
+                                  <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="Cuenta destino" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Sin cuenta</SelectItem>
+                                    {accountOptions
+                                      .filter((account) => account.id !== selectedAccountId)
+                                      .map((account) => (
+                                        <SelectItem key={`dest-${account.id}`} value={account.id}>
+                                          {accountLabel(account)}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="align-top">
                             <Badge className={statusTone(movement.status)}>

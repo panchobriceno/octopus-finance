@@ -55,6 +55,7 @@ export type MovementSeedInput = {
   paymentMethod?: "bank_account" | "credit_card" | "cash";
   destinationWorkspace?: string | null;
   destinationAccountId?: string | null;
+  sourceAccountId?: string | null;
   installmentCount?: number | null;
   confidence?: number;
   matchedRuleId?: string | null;
@@ -232,6 +233,7 @@ export function buildImportedMovement(input: MovementSeedInput): Omit<ImportedMo
     suggestedPaymentMethod: paymentMethod,
     suggestedDestinationWorkspace: input.destinationWorkspace ?? null,
     suggestedDestinationAccountId: input.destinationAccountId ?? null,
+    suggestedSourceAccountId: input.sourceAccountId ?? null,
     installmentCount: input.installmentCount ?? null,
     confidence: input.confidence ?? 72,
     matchedRuleId: input.matchedRuleId ?? null,
@@ -285,7 +287,8 @@ export function buildTransactionFromImportedMovement(
       movement.creditCardName ??
       null,
     installmentCount: movement.installmentCount ?? null,
-    accountId: override.accountId ?? movement.accountId ?? null,
+    // origen del traspaso: usa la cuenta ORIGEN sugerida (no pisa accountId/procedencia del import)
+    accountId: override.accountId ?? movement.suggestedSourceAccountId ?? movement.accountId ?? null,
     sourceClientPaymentId: null,
     importBatchId: movement.batchId,
     importBatchLabel: movement.sourceName,

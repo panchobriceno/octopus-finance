@@ -34,6 +34,11 @@ fi
   npx tsx scripts/bank-bot/categorize-ai.ts
   echo "exit categorize-ai: $?"
 
+  # Resolver traspasos: matchear cuenta destino por numero (best-effort, no bloquea).
+  echo "--- Resolver traspasos (match por numero de cuenta) ---"
+  npx tsx scripts/bank-bot/resolve-transfers.ts --apply
+  echo "exit resolve-transfers: $?"
+
   # Solo marcamos el dia como exitoso si ambos loaders corrieron sin error
   if [ "$RC_EDW" = "0" ] && [ "$RC_SAN" = "0" ]; then touch "$STAMP"; fi
   echo "=== fin $(date) ==="
