@@ -149,7 +149,8 @@ export interface Account {
   id: string;
   name: string;
   bank: string;
-  type: string; // "checking" | "savings" | "credit_card"
+  type: string; // "checking" | "savings" | "credit_card" | "credit_line"
+  accountNumber: string | null; // número de cuenta (para matchear traspasos por número)
   currentBalance: number;
   currency: string;
   workspace: string; // "business" | "family" | "shared"
@@ -162,6 +163,7 @@ export interface InsertAccount {
   name: string;
   bank: string;
   type: string;
+  accountNumber?: string | null;
   currentBalance: number;
   currency?: string;
   workspace?: string;
@@ -645,7 +647,8 @@ export const insertClientSchema = z.object({
 export const insertAccountSchema = z.object({
   name: z.string().min(1),
   bank: z.string().min(1),
-  type: z.enum(["checking", "savings", "credit_card"]),
+  type: z.enum(["checking", "savings", "credit_card", "credit_line"]),
+  accountNumber: z.string().nullable().optional(),
   currentBalance: z.number(),
   currency: z.string().optional(),
   workspace: z.enum(["business", "family", "shared"]).optional(),

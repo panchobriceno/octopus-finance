@@ -1244,6 +1244,7 @@ export async function createAccount(data: Record<string, any>) {
     currency: "CLP",
     workspace: "business",
     isShared: false,
+    accountNumber: null,
     notes: null,
     updatedAt: new Date().toISOString().slice(0, 10),
     ...data,
