@@ -127,7 +127,6 @@ export default function BudgetPage() {
   const [recurringValues, setRecurringValues] = useState<Record<string, boolean>>({});
   const [dayOfMonthValues, setDayOfMonthValues] = useState<Record<string, string>>({});
   const [savingGroup, setSavingGroup] = useState<string | null>(null);
-  const [savedGroup, setSavedGroup] = useState<string | null>(null);
   const [newBudgetCategory, setNewBudgetCategory] = useState("");
   // Categoría elegida en el paso 1 de la cascada (solo UI; el valor que se guarda
   // sigue siendo newBudgetCategory: nombre de categoría o "item:<id>").
@@ -701,6 +700,16 @@ export default function BudgetPage() {
     return effectiveBudgetByGroup[group]?.amount ?? 0;
   };
 
+  // "Guardado" persistente: hay presupuesto guardado para ESTE mes y el valor del input coincide.
+  // Si editás (difiere) o aún no está guardado este mes → "Guardar".
+  const isGroupSaved = (group: string, stateKey: string) => {
+    const saved = budgetByGroup[group];
+    if (!saved) return false;
+    const cur = inputValues[stateKey];
+    if (cur === undefined || cur === "") return false;
+    return Number(cur) === Number(saved.amount);
+  };
+
   const getBudgetEntryLabel = (group: string) => {
     if (!isItemBudgetKey(group)) return group;
     const itemId = group.replace(ITEM_BUDGET_PREFIX, "");
@@ -798,8 +807,6 @@ export default function BudgetPage() {
         title: "Presupuesto guardado",
         description: `${groupName}: ${formatCLP(amount)} para ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear} (${selectedWorkspace === "business" ? "Empresa" : "Familia"})`,
       });
-      setSavedGroup(groupName);
-      setTimeout(() => setSavedGroup((g) => (g === groupName ? null : g)), 2000);
     } catch {
       toast({
         title: "Error",
@@ -1409,7 +1416,7 @@ export default function BudgetPage() {
                                     data-testid={`button-save-${group.replace(/\s+/g, "-").toLowerCase()}`}
                                   >
                                     <Save className="size-3.5" />
-                                    {savingGroup === group ? "..." : savedGroup === group ? "✓ Guardado" : "Guardar"}
+                                    {savingGroup === group ? "..." : isGroupSaved(group, stateKey) ? "✓ Guardado" : "Guardar"}
                                   </Button>
                                   <Button
                                     variant="ghost"
@@ -1656,7 +1663,7 @@ export default function BudgetPage() {
                               data-testid={`button-save-recurring-${group.replace(/\s+/g, "-").toLowerCase()}`}
                             >
                               <Save className="size-3.5" />
-                              {savingGroup === group ? "..." : "Guardar"}
+                              {savingGroup === group ? "..." : isGroupSaved(group, stateKey) ? "✓ Guardado" : "Guardar"}
                             </Button>
                           </TableCell>
                         </TableRow>
