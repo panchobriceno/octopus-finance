@@ -17,3 +17,7 @@ backup-pre-gen-*.json
 dedupe-categories.mjs
 backup-pre-dedupe-*.json
 .gstack/
+
+# debug probes + backups locales (data financiera)
+scripts/bank-bot/_probe-*.ts
+scripts/bank-bot/_backup-*.json
