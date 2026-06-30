@@ -13,6 +13,8 @@ const clp=(n:any)=>"$"+Math.round(Number(n)||0).toLocaleString("es-CL");
 const digits=(s:any)=>String(s||"").replace(/\D/g,"");
 const norm=(s:any)=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
 function bankCode(bank:any):string{const b=norm(bank);if(b.includes("edwards")||b.includes("chile"))return "bancochile";if(b.includes("santander"))return "santander";if(b.includes("itau"))return "itau";if(b.includes("bci"))return "bci";if(b.includes("estado"))return "bancoestado";if(b.includes("scotia"))return "scotiabank";if(b.includes("falabella"))return "falabella";return b.replace(/\s+/g,"").slice(0,14)||"banco";}
+// Banco DETERMINÍSTICO desde el texto del EECC (la IA a veces alucina el banco).
+function detectBank(text:string):string{const t=norm(text);if(t.includes("santander"))return "Banco Santander";if(t.includes("itau"))return "Itaú";if(t.includes("edwards"))return "Banco Edwards";if(t.includes("banco de chile"))return "Banco de Chile";if(t.includes("scotia"))return "Scotiabank";if(t.includes("falabella"))return "Banco Falabella";if(t.includes("bci"))return "BCI";if(t.includes("bancoestado")||t.includes("banco estado"))return "BancoEstado";return "";}
 function pdfText(file:string,pw:string):string{ try{ return execFileSync("/opt/homebrew/bin/pdftotext",["-layout","-upw",pw,file,"-"],{encoding:"utf8",timeout:30000,maxBuffer:32*1024*1024}); }catch{ return ""; } }
 function decrypt(file:string):{text:string;pw:string}|null{
   for(const pw of PASSWORDS){ const t=pdfText(file,pw);
@@ -23,7 +25,8 @@ function decrypt(file:string):{text:string;pw:string}|null{
 function callClaude(prompt:string):string|null{ try{ const out=execFileSync(CLAUDE_BIN,["-p","--output-format","json","--max-turns","1"],{input:prompt,encoding:"utf8",timeout:180000,maxBuffer:16*1024*1024}); try{const e=JSON.parse(out);if(e&&typeof e.result==="string")return e.result;}catch{} return out; }catch(e:any){console.error("IA no disp:",e?.message);return null;} }
 function parseObj(t:string):any|null{ const i=t.indexOf("{"); if(i===-1)return null; for(let j=t.length;j>i;j--){ const s=t.slice(i,j); if(s.trim().endsWith("}")){ try{return JSON.parse(s);}catch{} } } return null; }
 const PROMPT=`Sos un extractor del RESUMEN de un estado de cuenta (EECC) de tarjeta de crédito chileno. Te doy el TEXTO crudo. Devolvé SOLO un objeto JSON con el resumen del PERÍODO ACTUAL (NUNCA del "PERÍODO ANTERIOR"):
-{"bank":"<Banco Edwards|Banco Santander|Itaú|...>","holder":"<titular>","last4":"<4 dígitos>","periodStart":"YYYY-MM-DD","periodEnd":"YYYY-MM-DD","pagarHasta":"YYYY-MM-DD","montoFacturado":<entero CLP del MONTO TOTAL FACTURADO A PAGAR nacional del período ACTUAL>,"montoFacturadoRawLine":"<la línea textual EXACTA de donde sale montoFacturado>","montoMinimo":<entero|null>,"cupoTotal":<entero|null>,"cupoUtilizado":<entero|null>,"cupoDisponible":<entero|null>,"deudaInternacionalUsd":<número|0>}
+{"bank":"<Banco Edwards|Banco Santander|Itaú|...>","holder":"<titular>","last4":"<4 dígitos>","periodStart":"YYYY-MM-DD","periodEnd":"YYYY-MM-DD","pagarHasta":"YYYY-MM-DD","montoFacturado":<entero CLP del MONTO TOTAL FACTURADO A PAGAR nacional del período ACTUAL, o 0 si el EECC es SOLO internacional>,"montoFacturadoRawLine":"<la línea textual EXACTA de donde sale montoFacturado, o vacío si no hay nacional>","montoMinimo":<entero|null>,"cupoTotal":<entero|null>,"cupoUtilizado":<entero|null>,"cupoDisponible":<entero|null>,"deudaInternacionalUsd":<número|0>}
+IMPORTANTE deudaInternacionalUsd: si el EECC tiene una sección "ESTADO DE CUENTA INTERNACIONAL" o cargos en US$, devolvé ahí el monto de "DEUDA TOTAL" en US$ del período actual (NO el saldo anterior, NO traspasos). Muchos EECC traen nacional E internacional en el MISMO documento. Si no hay deuda internacional, 0.
 REGLAS: montos CLP como enteros sin puntos. El monto es del período ACTUAL, jamás de "período anterior"/"saldo anterior"/"monto cancelado"/"pago"/"abono". Si falta un dato, null.`;
 (async()=>{
   const files=fs.readdirSync(FOLDER).filter(f=>f.toLowerCase().endsWith(".pdf")).map(f=>path.join(FOLDER,f));
@@ -41,37 +44,45 @@ REGLAS: montos CLP como enteros sin puntos. El monto es del período ACTUAL, jam
     const name=path.basename(file);
     const dec=decrypt(file);
     if(!dec){ console.log(`  ✗ ${name}: no descifra/no parece cartola`); skip++; continue; }
-    const raw=callClaude(`${PROMPT}\n\nTEXTO:\n${dec.text.slice(0,16000)}`);
+    const raw=callClaude(`${PROMPT}\n\nTEXTO:\n${dec.text.slice(0,50000)}`);
     const o=raw?parseObj(raw):null;
     if(!o){ console.log(`  ✗ ${name}: IA sin JSON`); skip++; continue; }
     // validaciones
     const last4=digits(o.last4).slice(-4);
     const monto=Math.round(Number(o.montoFacturado)||0);
+    const usd=o.deudaInternacionalUsd!=null?Math.max(0,Number(o.deudaInternacionalUsd)):0;
     if(!/^\d{4}$/.test(last4) || !/^\d{4}-\d{2}-\d{2}$/.test(String(o.periodEnd)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(o.pagarHasta))){ console.log(`  ✗ ${name}: campos clave inválidos (last4=${o.last4} periodEnd=${o.periodEnd})`); skip++; continue; }
-    if(!(monto>0) || monto>50_000_000){ console.log(`  ✗ ${name}: montoFacturado fuera de rango (${o.montoFacturado})`); skip++; continue; }
-    // evidencia: la línea fuente debe tener el monto y un label permitido, y NO uno prohibido
-    const rl=norm(o.montoFacturadoRawLine);
-    const okLabel=/(facturado a pagar|total a pagar)/.test(rl);
-    const badLabel=/(anterior|cancelad|abono|saldo|pago )/.test(rl);
-    const hasNum=digits(rl).includes(String(monto));
-    if(!okLabel || badLabel || !hasNum){ console.log(`  ✗ ${name}: evidencia no valida monto (label=${okLabel} bad=${badLabel} num=${hasNum}) raw="${String(o.montoFacturadoRawLine).slice(0,50)}"`); skip++; continue; }
-    const bank=String(o.bank||"").trim(), holder=String(o.holder||"").trim();
+    if(!(monto>0) && !(usd>0)){ console.log(`  ✗ ${name}: sin deuda nacional ni internacional`); skip++; continue; }
+    const hasNac=monto>0;
+    if(hasNac){
+      if(monto>50_000_000){ console.log(`  ✗ ${name}: montoFacturado fuera de rango (${o.montoFacturado})`); skip++; continue; }
+      // evidencia: la línea fuente debe tener el monto y un label permitido, y NO uno prohibido
+      const rl=norm(o.montoFacturadoRawLine);
+      const okLabel=/(facturado a pagar|total a pagar)/.test(rl);
+      const badLabel=/(anterior|cancelad|abono|saldo|pago )/.test(rl);
+      const hasNum=digits(rl).includes(String(monto));
+      if(!okLabel || badLabel || !hasNum){ console.log(`  ✗ ${name}: evidencia no valida monto (label=${okLabel} bad=${badLabel} num=${hasNum}) raw="${String(o.montoFacturadoRawLine).slice(0,50)}"`); skip++; continue; }
+    }
+    const bank=detectBank(dec.text.slice(0,1500))||String(o.bank||"").trim(), holder=String(o.holder||"").trim();
     if(!bank||!holder){ console.log(`  ✗ ${name}: falta bank/holder`); skip++; continue; }
-    const cardKey=`${bankCode(bank)}|${last4}`; // canon de banco + last4 (sin titular ni nombre variable)
+    const cardKey=last4; // identidad = last4 (único entre las tarjetas del hogar; el banco/titular son ruidosos en el PDF)
     const smk=String(o.periodEnd).slice(0,7); const id=`${cardKey}::${smk}`;
+    const prev:any=seen.get(id)??existing.get(id);
+    // conflicto solo si AMBOS traen nacional y difieren (intl-only no entra en conflicto)
+    if(hasNac && prev && Math.round(Number(prev.montoFacturado))>0 && Math.round(Number(prev.montoFacturado))!==monto){ console.log(`  ⚠ CONFLICTO ${name}: ${id} ya tiene ${clp(prev.montoFacturado)} != ${clp(monto)} — NO piso`); conflict++; continue; }
     const rec={ id, cardKey, cardLabel:`${bank} · ${holder} …${last4}`, bank, holder, last4,
-      statementMonthKey:smk, paymentMonthKey:String(o.pagarHasta).slice(0,7), periodStart:/^\d{4}-\d{2}-\d{2}$/.test(String(o.periodStart))?o.periodStart:null, periodEnd:o.periodEnd, pagarHasta:o.pagarHasta,
-      montoFacturado:monto, montoMinimo:o.montoMinimo!=null?Math.round(Number(o.montoMinimo)):null,
-      cupoTotal:o.cupoTotal!=null?Math.round(Number(o.cupoTotal)):null, cupoUtilizado:o.cupoUtilizado!=null?Math.round(Number(o.cupoUtilizado)):null, cupoDisponible:o.cupoDisponible!=null?Math.round(Number(o.cupoDisponible)):null,
-      deudaInternacionalUsd:o.deudaInternacionalUsd!=null?Number(o.deudaInternacionalUsd):0, currency:"CLP", source:"manual_file",
+      statementMonthKey:smk, paymentMonthKey:String(o.pagarHasta).slice(0,7),
+      periodStart:/^\d{4}-\d{2}-\d{2}$/.test(String(o.periodStart))?o.periodStart:(prev?.periodStart??null), periodEnd:o.periodEnd, pagarHasta:o.pagarHasta,
+      montoFacturado: hasNac?monto:Math.round(Number(prev?.montoFacturado)||0),
+      montoMinimo: hasNac?(o.montoMinimo!=null?Math.round(Number(o.montoMinimo)):null):(prev?.montoMinimo??null),
+      cupoTotal: hasNac?(o.cupoTotal!=null?Math.round(Number(o.cupoTotal)):null):(prev?.cupoTotal??null),
+      cupoUtilizado: hasNac?(o.cupoUtilizado!=null?Math.round(Number(o.cupoUtilizado)):null):(prev?.cupoUtilizado??null),
+      cupoDisponible: hasNac?(o.cupoDisponible!=null?Math.round(Number(o.cupoDisponible)):null):(prev?.cupoDisponible??null),
+      deudaInternacionalUsd: Math.max(usd, Number(prev?.deudaInternacionalUsd)||0), currency:"CLP", source:"manual_file",
       sourceFileHash:crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex").slice(0,16),
-      createdAt:(existing.get(id)?.createdAt)??NOW, updatedAt:NOW };
-    // conflicto: mismo id ya visto/existente con monto distinto -> no pisar
-    const prev=seen.get(id)??existing.get(id);
-    if(prev && Math.round(Number(prev.montoFacturado))!==monto){ console.log(`  ⚠ CONFLICTO ${name}: ${id} ya tiene ${clp(prev.montoFacturado)} != ${clp(monto)} — NO piso`); conflict++; continue; }
-    if(seen.has(id)){ console.log(`  · ${name}: duplicado de ${id} (ya cargado en esta corrida)`); continue; }
+      createdAt:(prev?.createdAt)??NOW, updatedAt:NOW };
     seen.set(id,rec);
-    console.log(`  ✓ ${name}: ${rec.cardLabel} | ${smk} | a pagar ${clp(monto)} | vence ${o.pagarHasta}${rec.deudaInternacionalUsd?` | US$${rec.deudaInternacionalUsd} intl`:""}`);
+    console.log(`  ✓ ${name}: ${rec.cardLabel} | ${smk} | a pagar ${clp(rec.montoFacturado)}${rec.deudaInternacionalUsd?` + US$${rec.deudaInternacionalUsd} intl`:""} | vence ${o.pagarHasta}`);
     if(APPLY) await setDoc(doc(db,"creditCardStatements",id),rec);
     ok++;
   }

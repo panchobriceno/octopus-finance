@@ -64,11 +64,11 @@ export function buildCardDebt(
   opts: { asOf: string },
 ): CardDebt[] {
   const asOf = opts.asOf;
-  // Agrupa por banco|last4 (NO por titular: el banco lo imprime distinto entre cartolas y
-  // partiría la misma tarjeta en dos, neteando el pago dos veces).
+  // Agrupa por last4 (identidad estable del plástico): el banco Y el titular se imprimen
+  // distinto entre cartolas, así que partirían la misma tarjeta en dos y netearían doble.
   const byCard = new Map<string, CreditCardStatement[]>();
   for (const s of statements) {
-    const key = `${bankCode(s.bank)}|${s.last4}`;
+    const key = s.last4;
     const arr = byCard.get(key) ?? [];
     arr.push(s);
     byCard.set(key, arr);

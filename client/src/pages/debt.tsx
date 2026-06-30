@@ -6,6 +6,7 @@ import { useCreditCardStatements, useTransactions, useAccounts } from "@/lib/hoo
 import { buildCardDebt, type CardDebt } from "@/domain/debt";
 
 const LIME = "#cdfa46";
+const USD_CLP = 960; // tipo de cambio referencial para mostrar la deuda en dólares en pesos
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const fmtDate = (s: string) => {
   const m = (s || "").match(/(\d{4})-(\d{2})-(\d{2})/);
@@ -86,7 +87,7 @@ function CardRow({ d }: { d: CardDebt }) {
 
         {/* flags + intl + historial */}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-          {d.deudaInternacionalUsd ? <span className="rounded border border-card-border bg-background/40 px-1.5 py-0.5 text-[#9a9aa6]">+ US${d.deudaInternacionalUsd} internacional</span> : null}
+          {d.deudaInternacionalUsd ? <span className="rounded border border-card-border bg-background/40 px-1.5 py-0.5 text-[#9a9aa6]">+ internacional US${d.deudaInternacionalUsd.toFixed(2)} (≈{formatCLP(Math.round(d.deudaInternacionalUsd * USD_CLP))})</span> : null}
           {d.matchStatus === "missing" && <span className="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-amber-400">sin pagos vinculados</span>}
           {d.matchStatus === "ambiguous" && <span className="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-amber-400">tarjeta ambigua</span>}
           {d.vencido && <span className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-red-400">plazo vencido</span>}
@@ -113,6 +114,9 @@ export default function DebtPage() {
   const totalPendiente = debts.reduce((s, d) => s + d.pendienteReal, 0);
   const totalFacturado = debts.reduce((s, d) => s + d.montoFacturado, 0);
   const totalPagado = debts.reduce((s, d) => s + d.pagado, 0);
+  const totalUsd = debts.reduce((s, d) => s + (d.deudaInternacionalUsd || 0), 0);
+  const totalUsdClp = Math.round(totalUsd * USD_CLP);
+  const totalConUsd = totalPendiente + totalUsdClp;
 
   return (
     <div className="h-full space-y-5 overflow-y-auto p-4 sm:p-6">
@@ -129,7 +133,8 @@ export default function DebtPage() {
         <CardContent className="flex flex-wrap items-end justify-between gap-4 pt-5">
           <div>
             <div className="text-xs text-[#9a9aa6]">Deuda real de tarjetas (pendiente hoy)</div>
-            <div className="font-mono text-3xl font-extrabold tabular-nums">{formatCLP(totalPendiente)}</div>
+            <div className="font-mono text-3xl font-extrabold tabular-nums">{formatCLP(totalConUsd)}</div>
+            {totalUsd > 0 && <div className="mt-0.5 text-[11px] text-[#9a9aa6]">nacional {formatCLP(totalPendiente)} + internacional US${totalUsd.toFixed(2)} (≈{formatCLP(totalUsdClp)})</div>}
           </div>
           <div className="text-right text-xs text-[#9a9aa6]">
             <div>Facturado: <span className="font-mono">{formatCLP(totalFacturado)}</span></div>
