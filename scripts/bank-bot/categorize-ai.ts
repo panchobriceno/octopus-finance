@@ -91,16 +91,19 @@ async function main() {
   const incomeList = [...byType.income].sort();
   const lines = todo.map((m, i) => `[${i}] ${m.direction === "income" ? "ingreso" : "gasto"} $${Number(m.amount).toLocaleString("es-CL")} — "${String(m.description ?? "").slice(0, 80)}"`);
   const prompt = [
-    "Sos un categorizador de movimientos bancarios chilenos. Para cada movimiento elegi la MEJOR categoria de la lista que corresponda. Si ninguna calza con claridad, usa \"Sin categoria\". NO inventes categorias nuevas. Respeta el tipo: un GASTO solo puede llevar categoria de gasto; un INGRESO solo de ingreso.",
+    "Sos el categorizador de movimientos de Pancho (dueño de la agencia de marketing 'Octopus Media' + gastos personales/familia). Para CADA movimiento elegí (1) la MEJOR categoria de la lista y (2) el AMBITO: 'business' (empresa: software/herramientas de trabajo, publicidad/ads, servicios profesionales, suscripciones de la agencia) o 'family' (personal/hogar: comida, supermercado, streaming personal, salud, ropa, transporte).",
+    "Si ninguna categoria calza con claridad usá \"Sin categoria\". NO inventes categorias. Respetá el tipo: un GASTO solo lleva categoria de gasto; un INGRESO solo de ingreso.",
     "",
     `Categorias de GASTO validas: ${expenseList.join(" | ")}`,
     `Categorias de INGRESO validas: ${incomeList.join(" | ")}`,
+    "",
+    "Guía de ámbito: Netflix -> family/Digital; Slack, Adobe, GitHub, Hubspot, Google Workspace, Anthropic/Claude, Metricool, Freepik, Squarespace, Suno -> business/Software Empresa; Facebook/Google ads -> business; Jumbo/supermercado, Uber Eats, farmacia, ropa -> family.",
     "",
     "Movimientos:",
     ...lines,
     "",
     "Responde para CADA movimiento (no omitas ninguno). SOLO un array JSON, sin texto adicional:",
-    '[{"i":0,"category":"<categoria exacta de la lista o Sin categoria>"}, ...]',
+    '[{"i":0,"category":"<categoria exacta o Sin categoria>","ambito":"business|family"}, ...]',
   ].join("\n");
 
   console.log(`Llamando a la IA (claude -p) para ${todo.length} movimientos...`);
@@ -110,10 +113,10 @@ async function main() {
   if (!arr || arr.length === 0) { console.log("La IA no devolvio JSON usable; no se toca nada (se reintenta)."); return; }
 
   // Solo consideramos filas que la IA REALMENTE respondio (las omitidas se reintentan).
-  const answered = new Map<number, string>();
+  const answered = new Map<number, { category: string; ambito: string }>();
   for (const item of arr) {
     const i = Number(item?.i);
-    if (Number.isInteger(i) && i >= 0 && i < todo.length && typeof item?.category === "string") answered.set(i, item.category.trim());
+    if (Number.isInteger(i) && i >= 0 && i < todo.length && typeof item?.category === "string") answered.set(i, { category: item.category.trim(), ambito: String(item?.ambito ?? "").trim() });
   }
 
   const updates: { id: string; patch: Record<string, unknown> }[] = [];
@@ -121,11 +124,12 @@ async function main() {
   for (let i = 0; i < todo.length; i++) {
     if (!answered.has(i)) continue; // la IA no la respondio -> reintentar otro dia
     const m = todo[i];
-    const cat = answered.get(i)!;
+    const { category: cat, ambito } = answered.get(i)!;
+    const ws = ambito === "business" || ambito === "family" ? ambito : null; // ambito valido -> tambien ajusta el ambito
     const ok = !isSinCat(cat) && validFor(m.direction).has(cat);
-    if (ok) { updates.push({ id: m.id, patch: { suggestedCategory: cat, confidence: AI_CONFIDENCE, matchedRuleId: null, aiCategorizedAt: NOW, updatedAt: NOW } }); applied++; }
-    else { updates.push({ id: m.id, patch: { aiCategorizedAt: NOW, updatedAt: NOW } }); noFit++; } // vista, sin sugerencia -> no re-preguntar
-    console.log(`  [${i}] ${m.direction} $${Number(m.amount).toLocaleString("es-CL")} ${String(m.description).slice(0, 40)} -> ${ok ? cat : "(sin sugerencia)"}`);
+    if (ok) { updates.push({ id: m.id, patch: { suggestedCategory: cat, ...(ws ? { suggestedWorkspace: ws } : {}), confidence: AI_CONFIDENCE, matchedRuleId: null, aiCategorizedAt: NOW, updatedAt: NOW } }); applied++; }
+    else { updates.push({ id: m.id, patch: { aiCategorizedAt: NOW, updatedAt: NOW } }); noFit++; }
+    console.log(`  [${i}] ${m.direction} $${Number(m.amount).toLocaleString("es-CL")} ${String(m.description).slice(0, 38)} -> ${ok ? `${cat} / ${ws ?? "(ámbito s/c)"}` : "(sin sugerencia)"}`);
   }
   console.log(`\nRespondidas ${answered.size}/${todo.length} | con categoria: ${applied} | sin sugerencia: ${noFit} | omitidas (reintento): ${todo.length - answered.size}`);
 
