@@ -182,6 +182,8 @@ export default function BankMovementsPage({
 
   const seedDemoMutation = useSeedDemoImportedMovements();
   const convertMutation = useConvertImportedMovement();
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [recentlyConverted, setRecentlyConverted] = useState<Set<string>>(new Set());
   const bulkConvertMutation = useBulkConvertImportedMovements();
   const bulkPreflightMutation = usePreviewBulkImportedMovementConversion();
   const discardMutation = useDiscardImportedMovement();
@@ -201,8 +203,9 @@ export default function BankMovementsPage({
     const needle = normalizeImportText(search);
 
     return movements.filter((movement) => {
-      if (statusFilter === "active" && !["pending", "duplicate"].includes(movement.status)) return false;
-      if (statusFilter !== "active" && statusFilter !== "all" && movement.status !== statusFilter) return false;
+      // Mantener visible ~2s una fila recién convertida para mostrar "✓ Convertido" antes de que salga.
+      if (statusFilter === "active" && !["pending", "duplicate"].includes(movement.status) && !recentlyConverted.has(movement.id)) return false;
+      if (statusFilter !== "active" && statusFilter !== "all" && movement.status !== statusFilter && !recentlyConverted.has(movement.id)) return false;
       if (!needle) return true;
 
       return normalizeImportText([
@@ -213,7 +216,7 @@ export default function BankMovementsPage({
         movement.creditCardName,
       ].filter(Boolean).join(" ")).includes(needle);
     });
-  }, [movements, search, statusFilter]);
+  }, [movements, search, statusFilter, recentlyConverted]);
 
   const dashboard = useMemo(
     () => buildImportedMovementDashboard(movements),
@@ -324,6 +327,7 @@ export default function BankMovementsPage({
     const rowOverride = overrides[movement.id] ?? {};
     const accountId = rowOverride.accountId === "none" ? null : rowOverride.accountId;
 
+    setConvertingId(movement.id);
     try {
       await convertMutation.mutateAsync({
         id: movement.id,
@@ -338,12 +342,18 @@ export default function BankMovementsPage({
         title: "Movimiento convertido",
         description: `${movement.description} quedo como transaccion real.`,
       });
+      // Mantener "✓ Convertido" en el botón ~2s antes de que la fila salga de la bandeja.
+      const id = movement.id;
+      setRecentlyConverted((s) => new Set(s).add(id));
+      setTimeout(() => setRecentlyConverted((s) => { const n = new Set(s); n.delete(id); return n; }), 2200);
     } catch (error) {
       toast({
         title: "No se pudo convertir",
         description: error instanceof Error ? error.message : "El movimiento no cambio de estado.",
         variant: "destructive",
       });
+    } finally {
+      setConvertingId(null);
     }
   };
 
@@ -868,10 +878,15 @@ export default function BankMovementsPage({
                               <Button
                                 size="sm"
                                 onClick={() => handleConvert(movement)}
-                                disabled={!canReview || convertMutation.isPending}
+                                disabled={!canReview || convertingId === movement.id || recentlyConverted.has(movement.id)}
+                                className={recentlyConverted.has(movement.id) ? "bg-[#cdfa46] text-black hover:bg-[#cdfa46]" : undefined}
                               >
                                 <CheckCircle2 className="mr-2 size-4" />
-                                {movement.status === "duplicate" ? "Forzar" : "Convertir"}
+                                {recentlyConverted.has(movement.id)
+                                  ? "Convertido"
+                                  : convertingId === movement.id
+                                    ? "Convirtiendo…"
+                                    : movement.status === "duplicate" ? "Forzar" : "Convertir"}
                               </Button>
                               <Button
                                 size="sm"

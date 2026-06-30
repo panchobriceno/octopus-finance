@@ -127,6 +127,7 @@ export default function BudgetPage() {
   const [recurringValues, setRecurringValues] = useState<Record<string, boolean>>({});
   const [dayOfMonthValues, setDayOfMonthValues] = useState<Record<string, string>>({});
   const [savingGroup, setSavingGroup] = useState<string | null>(null);
+  const [savedGroup, setSavedGroup] = useState<string | null>(null);
   const [newBudgetCategory, setNewBudgetCategory] = useState("");
   // Categoría elegida en el paso 1 de la cascada (solo UI; el valor que se guarda
   // sigue siendo newBudgetCategory: nombre de categoría o "item:<id>").
@@ -797,6 +798,8 @@ export default function BudgetPage() {
         title: "Presupuesto guardado",
         description: `${groupName}: ${formatCLP(amount)} para ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear} (${selectedWorkspace === "business" ? "Empresa" : "Familia"})`,
       });
+      setSavedGroup(groupName);
+      setTimeout(() => setSavedGroup((g) => (g === groupName ? null : g)), 2000);
     } catch {
       toast({
         title: "Error",
@@ -1406,7 +1409,7 @@ export default function BudgetPage() {
                                     data-testid={`button-save-${group.replace(/\s+/g, "-").toLowerCase()}`}
                                   >
                                     <Save className="size-3.5" />
-                                    {savingGroup === group ? "..." : "Guardar"}
+                                    {savingGroup === group ? "..." : savedGroup === group ? "✓ Guardado" : "Guardar"}
                                   </Button>
                                   <Button
                                     variant="ghost"

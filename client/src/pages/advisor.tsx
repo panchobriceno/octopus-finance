@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { formatCLP } from "@/lib/utils";
 import {
   useCommitmentInstances,
   useClientPayments,
@@ -16,14 +17,14 @@ import {
 import { buildAdvisorFacts, fetchAdvisor, type AdvisorFacts, type AdvisorReport, type DupTx, type Obligation } from "@/lib/advisor";
 
 const CACHE_KEY = "octopus_advisor_report";
-const clp = (n: number) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CL");
 const fmtDate = (s: string) => { const m = (s || "").match(/(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}-${m[2]}` : s; };
+const LIME = "#cdfa46";
 
 function dueLabel(days: number): { text: string; cls: string } {
-  if (days < 0) return { text: `Vencido hace ${Math.abs(days)}d`, cls: "bg-red-500/15 text-red-300 border-red-500/30" };
-  if (days === 0) return { text: "Vence hoy", cls: "bg-red-500/15 text-red-300 border-red-500/30" };
-  if (days <= 3) return { text: `En ${days}d`, cls: "bg-amber-500/15 text-amber-300 border-amber-500/30" };
-  return { text: `En ${days}d`, cls: "bg-white/5 text-[#cfc7dd]/70 border-white/10" };
+  if (days < 0) return { text: `Vencido hace ${Math.abs(days)}d`, cls: "border-red-500/40 bg-red-500/10 text-red-400" };
+  if (days === 0) return { text: "Vence hoy", cls: "border-red-500/40 bg-red-500/10 text-red-400" };
+  if (days <= 3) return { text: `En ${days}d`, cls: "border-amber-500/40 bg-amber-500/10 text-amber-400" };
+  return { text: `En ${days}d`, cls: "border-card-border bg-secondary text-[#9a9aa6]" };
 }
 
 export default function AdvisorPage() {
@@ -51,8 +52,6 @@ export default function AdvisorPage() {
   }, [commitments.data, clientPayments.data, importBatches.data, creditCards.data, pendingMovs.data, transactions.data]);
 
   const oblById = useMemo(() => new Map((facts?.obligations ?? []).map((o) => [o.id, o])), [facts]);
-
-  // "pagar" = orden de la IA (solo IDs válidos) + obligaciones no mencionadas al final (nada real se oculta).
   const pagarList = useMemo<{ o: Obligation; razon?: string; prioridad?: string }[]>(() => {
     if (!facts) return [];
     const seen = new Set<string>();
@@ -65,13 +64,14 @@ export default function AdvisorPage() {
   const loadingData = !facts;
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-8 text-[#ece5fc]">
-      <div className="mb-6 flex items-start justify-between gap-4">
+    <div className="h-full space-y-5 overflow-y-auto p-4 sm:p-6">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="grid size-11 place-items-center rounded-xl bg-[#2a213d] ring-1 ring-[#bb9eff]/24"><Sparkles className="size-5 text-[#d8c7ff]" /></div>
+          <span className="flex size-9 items-center justify-center rounded-xl border border-card-border bg-secondary text-[#cdfa46]"><Sparkles className="size-4" /></span>
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">Tu asesor</h1>
-            <p className="text-sm text-[#aea8be]">Qué pagar, cuándo, y qué revisar. La IA sugiere; vos decidís.</p>
+            <h2 className="text-xl font-extrabold tracking-tight">Tu asesor</h2>
+            <p className="mt-0.5 text-xs text-[#9a9aa6]">Qué pagar, cuándo, y qué revisar. La IA sugiere; vos decidís.{report?.generatedAt ? ` · Última: ${new Date(report.generatedAt).toLocaleString("es-CL")}` : ""}</p>
           </div>
         </div>
         <Button onClick={() => {
@@ -86,39 +86,33 @@ export default function AdvisorPage() {
         </Button>
       </div>
 
-      {report?.generatedAt && (
-        <p className="mb-4 text-xs text-[#aea8be]">Última actualización: {new Date(report.generatedAt).toLocaleString("es-CL")}</p>
-      )}
-
       {report?.resumen && (
-        <Card className="mb-5 border-[#bb9eff]/20 bg-[#1a1430]"><CardContent className="pt-5 text-[15px] leading-relaxed text-[#e7ddff]">{report.resumen}</CardContent></Card>
+        <Card className="border-card-border bg-secondary"><CardContent className="pt-5 text-[15px] leading-relaxed">{report.resumen}</CardContent></Card>
       )}
 
-      {/* Alertas (IA) */}
       {(report?.alertas?.length ?? 0) > 0 && (
-        <Card className="mb-5 border-amber-500/20 bg-[#1a1430]">
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="size-4 text-amber-300" /> Alertas</CardTitle></CardHeader>
+        <Card className="border-card-border bg-secondary">
+          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="size-4 text-amber-400" /> Alertas</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {report!.alertas.map((a, i) => (
-              <div key={i} className="flex gap-2 text-sm"><span className={`mt-1 size-2 shrink-0 rounded-full ${a.severidad === "alta" ? "bg-red-400" : a.severidad === "media" ? "bg-amber-400" : "bg-white/30"}`} /><span className="text-[#e7ddff]">{a.texto}</span></div>
+              <div key={i} className="flex gap-2 text-sm"><span className={`mt-1.5 size-2 shrink-0 rounded-full ${a.severidad === "alta" ? "bg-red-400" : a.severidad === "media" ? "bg-amber-400" : "bg-[#9a9aa6]"}`} /><span>{a.texto}</span></div>
             ))}
           </CardContent>
         </Card>
       )}
 
-      {/* Qué pagar y cuándo (números/fechas del código; orden/razón de la IA) */}
-      <Card className="mb-5 bg-[#1a1430]">
-        <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><CalendarClock className="size-4 text-[#d8c7ff]" /> Qué pagar y cuándo</CardTitle></CardHeader>
+      <Card className="border-card-border bg-secondary">
+        <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><CalendarClock className="size-4" style={{ color: LIME }} /> Qué pagar y cuándo</CardTitle></CardHeader>
         <CardContent className="space-y-2">
-          {pagarList.length === 0 && <p className="text-sm text-[#aea8be]">No hay obligaciones próximas registradas.</p>}
+          {pagarList.length === 0 && <p className="text-sm text-[#9a9aa6]">No hay obligaciones próximas registradas.</p>}
           {pagarList.map(({ o, razon, prioridad }) => { const d = dueLabel(o.daysUntilDue); return (
-            <div key={o.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
+            <div key={o.id} className="flex items-center justify-between gap-3 rounded-lg border border-card-border bg-background/40 px-3 py-2">
               <div className="min-w-0">
-                <div className="flex items-center gap-2"><span className="truncate font-medium text-[#f1e9fc]">{o.label}</span>{prioridad === "alta" && <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-red-300">PRIORIDAD</span>}</div>
-                {razon && <p className="mt-0.5 truncate text-xs text-[#aea8be]">{razon}</p>}
+                <div className="flex items-center gap-2"><span className="truncate font-medium">{o.label}</span>{prioridad === "alta" && <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-red-400">PRIORIDAD</span>}</div>
+                {razon && <p className="mt-0.5 truncate text-xs text-[#9a9aa6]">{razon}</p>}
               </div>
               <div className="flex shrink-0 items-center gap-3">
-                <span className="font-semibold tabular-nums text-[#f1e9fc]">{clp(o.amount)}</span>
+                <span className="font-mono text-sm tabular-nums">{formatCLP(o.amount)}</span>
                 <span className={`rounded-md border px-2 py-0.5 text-[11px] ${d.cls}`} title={o.dueDate}>{d.text}</span>
               </div>
             </div>
@@ -126,56 +120,38 @@ export default function AdvisorPage() {
         </CardContent>
       </Card>
 
-      {/* Documentos faltantes (código, siempre visible) */}
       {(facts?.missingDocs?.length ?? 0) > 0 && (
-        <Card className="mb-5 border-orange-500/20 bg-[#1a1430]">
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><FileWarning className="size-4 text-orange-300" /> Documentos faltantes</CardTitle></CardHeader>
-          <CardContent className="space-y-2">{facts!.missingDocs.map((m) => <p key={m.id} className="text-sm text-[#e7ddff]">• {m.texto}</p>)}</CardContent>
+        <Card className="border-card-border bg-secondary">
+          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><FileWarning className="size-4 text-orange-400" /> Documentos faltantes</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm">{facts!.missingDocs.map((m) => <p key={m.id}>• {m.texto}</p>)}</CardContent>
         </Card>
       )}
 
-      {/* Por revisar (código + IA) */}
-      <Card className="mb-5 bg-[#1a1430]">
-        <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Inbox className="size-4 text-[#d8c7ff]" /> Por revisar</CardTitle></CardHeader>
-        <CardContent className="space-y-2 text-sm text-[#e7ddff]">
-          {facts && facts.review.pendingMovements > 0 && <p>• Tenés <b>{facts.review.pendingMovements}</b> movimientos en la bandeja sin revisar{facts.review.oldestPendingDate ? ` (el más antiguo del ${facts.review.oldestPendingDate})` : ""}.</p>}
+      <Card className="border-card-border bg-secondary">
+        <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Inbox className="size-4" style={{ color: LIME }} /> Por revisar</CardTitle></CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          {facts && facts.review.pendingMovements > 0 && <p>• Tenés <b style={{ color: LIME }}>{facts.review.pendingMovements}</b> movimientos en la bandeja sin revisar{facts.review.oldestPendingDate ? ` (el más antiguo del ${facts.review.oldestPendingDate})` : ""}.</p>}
           {(report?.revisar ?? []).map((r, i) => <p key={i}>• {r.texto}</p>)}
-          {facts && facts.review.pendingMovements === 0 && (report?.revisar?.length ?? 0) === 0 && <p className="text-[#aea8be]">Nada pendiente de revisar.</p>}
+          {facts && facts.review.pendingMovements === 0 && (report?.revisar?.length ?? 0) === 0 && <p className="text-[#9a9aa6]">Nada pendiente de revisar.</p>}
         </CardContent>
       </Card>
 
-      {/* Cambios de gasto (código) */}
-      {(facts?.categoryDeltas?.length ?? 0) > 0 && (
-        <Card className="mb-5 bg-[#1a1430]">
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><TrendingUp className="size-4 text-[#d8c7ff]" /> Cambios de gasto vs mes anterior</CardTitle></CardHeader>
-          <CardContent className="space-y-1.5">
-            {facts!.categoryDeltas.map((d) => (
-              <div key={d.categoria} className="flex items-center justify-between text-sm">
-                <span className="text-[#e7ddff]">{d.categoria}</span>
-                <span className={`tabular-nums ${d.delta > 0 ? "text-red-300" : "text-emerald-300"}`}>{d.delta > 0 ? "+" : ""}{clp(d.delta)}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Posibles duplicados (código, alta confianza) — acción de borrar con confirmación */}
       {(facts?.duplicates?.length ?? 0) > 0 && (
-        <Card className="mb-5 border-red-500/20 bg-[#1a1430]">
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Copy className="size-4 text-red-300" /> Posibles duplicados</CardTitle></CardHeader>
+        <Card className="border-red-500/30 bg-secondary">
+          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Copy className="size-4 text-red-400" /> Posibles duplicados</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-xs text-[#aea8be]">Mismo monto, misma categoría y fechas cercanas. Revisá y borrá el que sobra; se conserva el otro.</p>
+            <p className="text-xs text-[#9a9aa6]">Mismo monto, misma categoría y fechas cercanas. Revisá y borrá el que sobra; se conserva el otro.</p>
             {facts!.duplicates.map((pair, i) => (
-              <div key={i} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+              <div key={i} className="rounded-lg border border-card-border bg-background/40 p-3">
                 {[pair.a, pair.b].map((t, idx) => (
                   <div key={t.id} className="flex items-center justify-between gap-3 py-1.5">
                     <div className="min-w-0">
-                      <div className="truncate text-sm text-[#f1e9fc]">{t.name}</div>
-                      <div className="text-xs text-[#aea8be]">{t.date} · {t.category} · {t.source}</div>
+                      <div className="truncate text-sm">{t.name}</div>
+                      <div className="text-xs text-[#9a9aa6]">{t.date} · {t.category} · {t.source}</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
-                      <span className="tabular-nums text-sm text-[#f1e9fc]">{clp(t.amount)}</span>
-                      <Button size="sm" variant="outline" className="h-7 border-red-500/40 text-red-300 hover:bg-red-500/10" onClick={() => setPendingDel({ tx: t, keep: idx === 0 ? pair.b : pair.a })}>Borrar este</Button>
+                      <span className="font-mono text-sm tabular-nums">{formatCLP(t.amount)}</span>
+                      <Button size="sm" variant="outline" className="h-7 border-red-500/40 text-red-400 hover:bg-red-500/10" onClick={() => setPendingDel({ tx: t, keep: idx === 0 ? pair.b : pair.a })}>Borrar este</Button>
                     </div>
                   </div>
                 ))}
@@ -185,8 +161,22 @@ export default function AdvisorPage() {
         </Card>
       )}
 
+      {(facts?.categoryDeltas?.length ?? 0) > 0 && (
+        <Card className="border-card-border bg-secondary">
+          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><TrendingUp className="size-4" style={{ color: LIME }} /> Cambios de gasto vs mes anterior</CardTitle></CardHeader>
+          <CardContent className="space-y-1.5">
+            {facts!.categoryDeltas.map((d) => (
+              <div key={d.categoria} className="flex items-center justify-between text-sm">
+                <span>{d.categoria}</span>
+                <span className={`font-mono tabular-nums ${d.delta > 0 ? "text-red-400" : "text-emerald-400"}`}>{d.delta > 0 ? "+" : ""}{formatCLP(d.delta)}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {!report && (
-        <p className="mt-2 text-center text-sm text-[#aea8be]">{loadingData ? "Cargando tus datos…" : "Apretá “Generar recomendaciones” para que la IA priorice y te avise qué hacer."}</p>
+        <p className="text-center text-sm text-[#9a9aa6]">{loadingData ? "Cargando tus datos…" : "Apretá “Generar recomendaciones” para que la IA priorice y te avise qué hacer."}</p>
       )}
 
       <AlertDialog open={!!pendingDel} onOpenChange={(o) => { if (!o) setPendingDel(null); }}>
@@ -194,7 +184,7 @@ export default function AdvisorPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Borrar transacción duplicada</AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingDel && (<>Se va a <b>BORRAR</b>: {pendingDel.tx.name} — {pendingDel.tx.date}, {clp(pendingDel.tx.amount)}.<br />Se conserva: {pendingDel.keep.name} ({pendingDel.keep.date}). Esto no se puede deshacer.</>)}
+              {pendingDel && (<>Se va a <b>BORRAR</b>: {pendingDel.tx.name} — {pendingDel.tx.date}, {formatCLP(pendingDel.tx.amount)}.<br />Se conserva: {pendingDel.keep.name} ({pendingDel.keep.date}). Esto no se puede deshacer.</>)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -204,7 +194,7 @@ export default function AdvisorPage() {
               onClick={() => {
                 const t = pendingDel?.tx; if (!t) return;
                 resolveDup.mutateAsync(t.id)
-                  .then(() => toast({ title: "Duplicado borrado", description: `${t.name} (${clp(t.amount)})` }))
+                  .then(() => toast({ title: "Duplicado borrado", description: `${t.name} (${formatCLP(t.amount)})` }))
                   .catch((e) => toast({ title: "No se pudo borrar", description: e instanceof Error ? e.message : String(e), variant: "destructive" }))
                   .finally(() => setPendingDel(null));
               }}
