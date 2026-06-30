@@ -116,6 +116,15 @@ export function QuickExpenseCapture() {
     [accounts],
   );
 
+  const creditCardAccounts = useMemo(
+    () =>
+      accounts.filter((account) => {
+        const isActive = (account as { isActive?: boolean }).isActive ?? true;
+        return account.type === "credit_card" && isActive;
+      }),
+    [accounts],
+  );
+
   const cardNames = useMemo(
     () =>
       Array.from(
@@ -584,18 +593,18 @@ export function QuickExpenseCapture() {
                   <>
                     <div className="space-y-1.5">
                       <Label>Tarjeta</Label>
-                      <Input
-                        list="quick-expense-card-names"
-                        value={form.creditCardName}
-                        onChange={(event) => updateForm("creditCardName", event.target.value)}
-                        placeholder="Ej: Santander Visa"
-                        data-testid="quick-expense-card"
-                      />
-                      <datalist id="quick-expense-card-names">
-                        {cardNames.map((cardName) => (
-                          <option key={cardName} value={cardName} />
-                        ))}
-                      </datalist>
+                      <Select value={form.creditCardName || undefined} onValueChange={(value) => updateForm("creditCardName", value)}>
+                        <SelectTrigger data-testid="quick-expense-card">
+                          <SelectValue placeholder="Elegir tarjeta" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {creditCardAccounts.map((account) => (
+                            <SelectItem key={account.id} value={account.name}>
+                              {account.name} · {account.bank}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1.5">
                       <Label>Cuotas</Label>
