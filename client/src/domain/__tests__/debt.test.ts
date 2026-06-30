@@ -49,9 +49,8 @@ function pay(p: Partial<Transaction> = {}): Transaction {
 describe("buildCardDebt — neteo de pagos post-cierre", () => {
   it("pago ejecutado después del cierre NETEA y baja la deuda real", () => {
     const [d] = buildCardDebt([stmt()], [pay()], [card()], { asOf });
-    expect(d.matchStatus).toBe("linked");
     expect(d.pagado).toBe(1_520_000);
-    expect(d.pendienteReal).toBe(3_435_877 - 1_520_000); // 1.915.877
+    expect(d.pendienteReal).toBe(3_435_877 - 1_520_000); // 1.915.877 (vía cuenta-tarjeta por nombre)
   });
 
   it("pago ANTES del cierre NO cuenta", () => {
@@ -70,18 +69,25 @@ describe("buildCardDebt — neteo de pagos post-cierre", () => {
     expect(d.pagado).toBe(0);
   });
 
-  it("sin cuenta de tarjeta -> missing, no netea (muestra facturado)", () => {
+  it("pago sin last4 en el nombre y sin cuenta-tarjeta -> no netea (muestra facturado)", () => {
     const [d] = buildCardDebt([stmt()], [pay()], [], { asOf });
-    expect(d.matchStatus).toBe("missing");
+    expect(d.pagado).toBe(0);
     expect(d.pendienteReal).toBe(3_435_877);
   });
 
-  it("dos cuentas con el mismo last4 sin banco que desempate -> ambiguous, no netea", () => {
-    const a = card({ id: "a", bank: "" });
-    const b = card({ id: "b", bank: "" });
-    const [d] = buildCardDebt([stmt()], [pay()], [a, b], { asOf });
-    expect(d.matchStatus).toBe("ambiguous");
-    expect(d.pendienteReal).toBe(3_435_877);
+  it("netea por last4 en el nombre del pago (sin cuenta-tarjeta)", () => {
+    const [d] = buildCardDebt([stmt()], [pay({ creditCardName: "Tarjeta …7232" })], [], { asOf });
+    expect(d.pagado).toBe(1_520_000);
+  });
+
+  it("nombre con dígitos internos (T.C 2024 Visa) sin cuenta NO netea (no agarra 2024)", () => {
+    const [d] = buildCardDebt([stmt()], [pay({ creditCardName: "T.C 2024 Visa" })], [], { asOf });
+    expect(d.pagado).toBe(0);
+  });
+
+  it("pago de OTRA tarjeta (last4 distinto) NO cuenta", () => {
+    const [d] = buildCardDebt([stmt()], [pay({ creditCardName: "Tarjeta …9999" })], [card()], { asOf });
+    expect(d.pagado).toBe(0);
   });
 
   it("toma el ÚLTIMO estado: el pago de junio ya no cuenta contra el estado de julio", () => {

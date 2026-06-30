@@ -88,8 +88,6 @@ function CardRow({ d }: { d: CardDebt }) {
         {/* flags + intl + historial */}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
           {d.deudaInternacionalUsd ? <span className="rounded border border-card-border bg-background/40 px-1.5 py-0.5 text-[#9a9aa6]">+ internacional US${d.deudaInternacionalUsd.toFixed(2)} (≈{formatCLP(Math.round(d.deudaInternacionalUsd * USD_CLP))})</span> : null}
-          {d.matchStatus === "missing" && <span className="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-amber-400">sin pagos vinculados</span>}
-          {d.matchStatus === "ambiguous" && <span className="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-amber-400">tarjeta ambigua</span>}
           {d.vencido && <span className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-red-400">plazo vencido</span>}
           {d.history.length > 1 && (
             <span className="text-[#9a9aa6]">Historial: {d.history.map((h) => `${h.statementMonthKey.slice(5)} ${formatCLP(h.montoFacturado)}`).join(" → ")}</span>

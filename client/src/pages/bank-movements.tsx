@@ -21,6 +21,7 @@ import {
   useCategories,
   useCloseImportBatch,
   useConvertImportedMovement,
+  useCreditCardStatements,
   useDiscardImportedMovement,
   useImportBatches,
   useImportedMovements,
@@ -61,6 +62,7 @@ type RowOverride = {
   accountId?: string;
   destinationWorkspace?: string;
   destinationAccountId?: string;
+  creditCardName?: string;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -181,6 +183,19 @@ export default function BankMovementsPage({
   });
   const { data: categories = [] } = useCategories();
   const { data: accounts = [] } = useAccounts();
+  const { data: cardStatements = [] } = useCreditCardStatements();
+  // Tarjetas conocidas (de los estados de cuenta), distinct por last4, para asignar un pago a su tarjeta.
+  const cardOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { value: string; label: string }[] = [];
+    for (const s of cardStatements as Array<{ last4?: string; cardLabel?: string }>) {
+      const last4 = String(s.last4 ?? "");
+      if (!/^\d{4}$/.test(last4) || seen.has(last4)) continue;
+      seen.add(last4);
+      out.push({ value: s.cardLabel || `Tarjeta …${last4}`, label: s.cardLabel || `Tarjeta …${last4}` });
+    }
+    return out;
+  }, [cardStatements]);
 
   const seedDemoMutation = useSeedDemoImportedMovements();
   const convertMutation = useConvertImportedMovement();
@@ -340,6 +355,7 @@ export default function BankMovementsPage({
           accountId,
           destinationWorkspace: rowOverride.destinationWorkspace,
           destinationAccountId,
+          creditCardName: rowOverride.creditCardName,
         },
         forceDuplicate: movement.status === "duplicate",
       });
@@ -772,6 +788,8 @@ export default function BankMovementsPage({
                         selectedCategory,
                       );
                       const isTransfer = movement.suggestedMovementType === "transfer";
+                      const isCardPayment = movement.suggestedMovementType === "credit_card_payment";
+                      const selectedCardName = rowOverride.creditCardName ?? movement.creditCardName ?? "";
                       const selectedAccountId = rowOverride.accountId ?? movement.suggestedSourceAccountId ?? movement.accountId ?? "none";
                       const selectedDestWorkspace = rowOverride.destinationWorkspace ?? movement.suggestedDestinationWorkspace ?? "";
                       const selectedDestAccountId = rowOverride.destinationAccountId ?? movement.suggestedDestinationAccountId ?? "none";
@@ -909,6 +927,27 @@ export default function BankMovementsPage({
                                           {accountLabel(account)}
                                         </SelectItem>
                                       ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                            {isCardPayment && (
+                              <div className="mt-2 space-y-1 border-t border-dashed pt-2">
+                                <div className="text-xs font-medium text-muted-foreground">Tarjeta pagada</div>
+                                <Select
+                                  value={selectedCardName || undefined}
+                                  onValueChange={(value) => setRowOverride(movement.id, { creditCardName: value })}
+                                  disabled={!canReview}
+                                >
+                                  <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="¿A qué tarjeta?" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {cardOptions.map((c) => (
+                                      <SelectItem key={`cc-${c.value}`} value={c.value}>
+                                        {c.label}
+                                      </SelectItem>
+                                    ))}
                                   </SelectContent>
                                 </Select>
                               </div>

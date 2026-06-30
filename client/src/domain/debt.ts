@@ -41,20 +41,24 @@ export type CardDebt = {
   cupoTotal: number | null;
   deudaInternacionalUsd: number | null;
   pagos: CardPayment[];
-  matchStatus: "linked" | "missing" | "ambiguous";
   vencido: boolean; // pagarHasta ya pasó (asOf)
   history: { statementMonthKey: string; montoFacturado: number }[];
 };
 
-/** Resuelve la cuenta de tarjeta para un estado: por last4; si hay varias, desempata por banco. */
-function resolveCardAccount(statement: CreditCardStatement, accounts: Account[]) {
-  const byLast4 = accounts.filter(
-    (a) => a.type === "credit_card" && digits(a.accountNumber).slice(-4) === statement.last4 && statement.last4.length === 4,
-  );
-  if (byLast4.length <= 1) return byLast4;
-  const sb = bankCode(statement.bank);
-  const byBank = byLast4.filter((a) => bankCode(a.bank) === sb);
-  return byBank.length ? byBank : byLast4;
+/** Últimos 4 dígitos de la tarjeta que pagó una transacción.
+ * 1) si creditCardName TERMINA en 4 dígitos (ej "Banco … …1449") → esos (estricto: solo al final,
+ *    para no agarrar un "2024" interno); 2) si no, cuenta credit_card por nombre exacto → su last4. */
+export function paymentCardLast4(creditCardName: unknown, accounts: Account[]): string | null {
+  const cc = String(creditCardName ?? "").trim();
+  if (!cc) return null;
+  const m = cc.match(/(\d{4})\s*$/);
+  if (m) return m[1];
+  const acc = accounts.find((a) => a.type === "credit_card" && norm(a.name) === norm(cc));
+  if (acc) {
+    const l4 = digits(acc.accountNumber).slice(-4);
+    if (l4.length === 4) return l4;
+  }
+  return null;
 }
 
 export function buildCardDebt(
@@ -80,31 +84,23 @@ export function buildCardDebt(
     const latest = sorted[sorted.length - 1];
     const montoFacturado = Number(latest.montoFacturado) || 0;
 
-    const candidates = resolveCardAccount(latest, accounts);
-    let matchStatus: CardDebt["matchStatus"] = "missing";
-    let pagos: CardPayment[] = [];
-    if (candidates.length === 1) {
-      matchStatus = "linked";
-      const cardName = norm(candidates[0].name);
-      pagos = transactions
-        .filter((t) => {
-          const n = normalizeTransaction(t);
-          return (
-            n.movementType === "credit_card_payment" &&
-            norm(t.creditCardName) === cardName &&
-            isExecutedTransaction(t) &&
-            String(t.date) > String(latest.periodEnd) &&
-            String(t.date) <= asOf
-          );
-        })
-        .map((t) => ({ date: t.date, amount: Number(t.amount) || 0, name: t.name }))
-        .sort((a, b) => a.date.localeCompare(b.date));
-    } else if (candidates.length > 1) {
-      matchStatus = "ambiguous";
-    }
+    // Netea por LAST4: pagos de tarjeta ejecutados, entre el cierre y asOf, cuya tarjeta == este estado.
+    const pagos: CardPayment[] = transactions
+      .filter((t) => {
+        const n = normalizeTransaction(t);
+        return (
+          n.movementType === "credit_card_payment" &&
+          isExecutedTransaction(t) &&
+          String(t.date) > String(latest.periodEnd) &&
+          String(t.date) <= asOf &&
+          paymentCardLast4(t.creditCardName, accounts) === latest.last4
+        );
+      })
+      .map((t) => ({ date: t.date, amount: Number(t.amount) || 0, name: t.name }))
+      .sort((a, b) => a.date.localeCompare(b.date));
 
     const pagado = pagos.reduce((s, p) => s + p.amount, 0);
-    const pendienteReal = matchStatus === "linked" ? Math.max(0, montoFacturado - pagado) : montoFacturado;
+    const pendienteReal = Math.max(0, montoFacturado - pagado);
 
     out.push({
       cardKey,
@@ -122,7 +118,6 @@ export function buildCardDebt(
       cupoTotal: latest.cupoTotal ?? null,
       deudaInternacionalUsd: latest.deudaInternacionalUsd ?? null,
       pagos,
-      matchStatus,
       vencido: Boolean(latest.pagarHasta) && String(latest.pagarHasta) < asOf,
       history: sorted.map((s) => ({ statementMonthKey: s.statementMonthKey, montoFacturado: Number(s.montoFacturado) || 0 })),
     });
