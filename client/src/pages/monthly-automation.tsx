@@ -26,6 +26,7 @@ import {
   useUpdateCommitmentTemplate,
 } from "@/lib/hooks";
 import { buildCommitmentDashboard, getCurrentMonthKey } from "@/domain/commitments";
+import { isCardPaidCommitment } from "@/domain/cash-obligations";
 import { formatCLP } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -194,6 +195,11 @@ export default function MonthlyAutomationPage() {
   );
   const dashboard = useMemo(
     () => buildCommitmentDashboard(monthInstances),
+    [monthInstances],
+  );
+  // En la tabla escondemos los cancelados (ruido: ej. duplicados desactivados).
+  const visibleInstances = useMemo(
+    () => monthInstances.filter((instance) => instance.status !== "cancelled"),
     [monthInstances],
   );
   const transactionById = useMemo(
@@ -844,14 +850,14 @@ export default function MonthlyAutomationPage() {
                           Cargando
                         </TableCell>
                       </TableRow>
-                    ) : monthInstances.length === 0 ? (
+                    ) : visibleInstances.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                           Sin compromisos para {selectedMonth}
                         </TableCell>
                       </TableRow>
                     ) : (
-                      monthInstances.map((instance) => {
+                      visibleInstances.map((instance) => {
                         const matchedTransaction = instance.matchedTransactionId
                           ? transactionById.get(instance.matchedTransactionId) ?? null
                           : null;
@@ -881,6 +887,15 @@ export default function MonthlyAutomationPage() {
                               {formatCLP(instance.expectedAmount)}
                             </TableCell>
                             <TableCell className="pr-5">
+                              {isCardPaidCommitment(instance) ? (
+                                // Ítem de tarjeta: NO se paga individualmente (se paga la tarjeta / se concilia
+                                // con la cartola). Sin botón de pago para no doble-contar.
+                                <div className="flex justify-end">
+                                  <Badge variant="outline" className="gap-1 text-xs text-muted-foreground" title="Se paga al pagar la tarjeta o se concilia al importar la cartola">
+                                    <CreditCard className="size-3.5" /> En tarjeta
+                                  </Badge>
+                                </div>
+                              ) : (
                               <div className="flex justify-end gap-1">
                                 <Button
                                   variant="outline"
@@ -901,6 +916,7 @@ export default function MonthlyAutomationPage() {
                                   <XCircle className="size-4 text-muted-foreground" />
                                 </Button>
                               </div>
+                              )}
                             </TableCell>
                           </TableRow>
                         );
