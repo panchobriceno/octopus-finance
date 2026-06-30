@@ -18,6 +18,7 @@ import type {
   MonthlyCloseSnapshot,
   Transaction,
 } from "@shared/schema";
+import { resolveCardAccount } from "@/domain/account-identity";
 import {
   collection,
   doc,
@@ -422,12 +423,41 @@ export async function getTransactions() {
   return fixRecurringBudgetTransactionLabels(transactions);
 }
 
+/**
+ * Fase 5 — chokepoint de identidad: al crear/editar con tarjeta, dejar seteado cardAccountId
+ * (la cuenta-tarjeta canónica) además del creditCardName. Dos capas:
+ *  - sync: recibe `accounts` ya cargadas (para lotes, una sola lectura).
+ *  - async: lee accounts y aplica (para writes sueltos).
+ * Solo actúa si el payload TOCA creditCardName. Si lo deja en null (deja de ser tarjeta) → limpia cardAccountId.
+ */
+function applyCardAccountIdSync<T extends Record<string, any>>(data: T, accounts: Account[]): T {
+  if (!("creditCardName" in data)) return data;       // el payload no toca la tarjeta → no tocar
+  const cc = data.creditCardName;
+  if (cc === undefined) return data;                   // update parcial con undefined → no tocar
+  if (cc === null || cc === "") return { ...data, cardAccountId: null }; // dejó de ser tarjeta → limpiar
+  if (data.cardAccountId) return data;                 // ya trae un id real → respetar
+  const resolved = resolveCardAccount({ creditCardName: cc }, accounts); // null (de builders) → resolver
+  return resolved ? { ...data, cardAccountId: resolved.id } : data;
+}
+
+async function withCardAccountId<T extends Record<string, any>>(data: T): Promise<T> {
+  if (!("creditCardName" in data)) return data;
+  const cc = data.creditCardName;
+  if (cc === undefined) return data;
+  if (cc === null || cc === "") return { ...data, cardAccountId: null };
+  if (data.cardAccountId) return data;
+  const accounts = snapToArray<Account>(await getDocs(accountsCol()));
+  return applyCardAccountIdSync(data, accounts);
+}
+
 export async function createTransaction(data: Record<string, any>) {
+  data = await withCardAccountId(data);
   const ref = await addDoc(transactionsCol(), data);
   return { id: ref.id, ...data };
 }
 
 export async function updateTransaction(id: string, data: Record<string, any>) {
+  data = await withCardAccountId(data);
   const ref = doc(db, "transactions", id);
   await updateDoc(ref, data);
   return { id, ...data };
@@ -477,13 +507,14 @@ export async function bulkDeleteTransactions(ids: string[]) {
 /** Batch-create multiple transactions (for CSV import) */
 export async function bulkCreateTransactions(rows: Record<string, any>[]) {
   let imported = 0;
+  const accounts = snapToArray<Account>(await getDocs(accountsCol())); // una sola lectura para el lote
   // Firestore batches max 500 writes
   for (let i = 0; i < rows.length; i += 450) {
     const chunk = rows.slice(i, i + 450);
     const batch = writeBatch(db);
     for (const row of chunk) {
       const ref = doc(transactionsCol());
-      batch.set(ref, row);
+      batch.set(ref, applyCardAccountIdSync(row, accounts));
       imported++;
     }
     await batch.commit();
@@ -1388,16 +1419,17 @@ export async function createCommitmentTemplate(data: Record<string, any>) {
     updatedAt: now,
     ...data,
   };
-  const ref = await addDoc(commitmentTemplatesCol(), payload);
-  return { id: ref.id, ...payload };
+  const resolved = await withCardAccountId(payload);
+  const ref = await addDoc(commitmentTemplatesCol(), resolved);
+  return { id: ref.id, ...resolved };
 }
 
 export async function updateCommitmentTemplate(id: string, data: Record<string, any>) {
   const ref = doc(db, "commitmentTemplates", id);
-  const payload = {
+  const payload = await withCardAccountId({
     ...data,
     updatedAt: nowIso(),
-  };
+  });
   await updateDoc(ref, payload);
   return { id, ...payload };
 }
@@ -1426,6 +1458,7 @@ export async function deleteCommitmentInstance(id: string) {
 
 export async function payCommitmentInstance(id: string, data: PayCommitmentInstanceInput) {
   const instanceRef = doc(db, "commitmentInstances", id);
+  const accounts = snapToArray<Account>(await getDocs(accountsCol())); // fuera del runTransaction
 
   return runTransaction(db, async (transaction) => {
     const instanceSnapshot = await transaction.get(instanceRef);
@@ -1465,7 +1498,8 @@ export async function payCommitmentInstance(id: string, data: PayCommitmentInsta
       notes: data.notes,
     });
 
-    transaction.set(transactionRef, transactionPayload);
+    const resolvedTransactionPayload = applyCardAccountIdSync(transactionPayload, accounts);
+    transaction.set(transactionRef, resolvedTransactionPayload);
     transaction.update(instanceRef, {
       status: "paid",
       matchedTransactionId: transactionRef.id,
@@ -1480,7 +1514,7 @@ export async function payCommitmentInstance(id: string, data: PayCommitmentInsta
       transactionId: transactionRef.id,
       transaction: {
         id: transactionRef.id,
-        ...transactionPayload,
+        ...resolvedTransactionPayload,
       },
     };
   });
@@ -2668,8 +2702,9 @@ function assertCompleteTransfer(transactionPayload: Omit<Transaction, "id">) {
 export async function convertImportedMovementToTransaction(
   id: string,
   override: ImportedMovementOverride = {},
-  options: { forceDuplicate?: boolean; categoryKeys?: Set<string> } = {},
+  options: { forceDuplicate?: boolean; categoryKeys?: Set<string>; accounts?: Account[] } = {},
 ) {
+  const accounts = options.accounts ?? snapToArray<Account>(await getDocs(accountsCol()));
   const movementRef = doc(db, "importedMovements", id);
   const movementSnapshot = await getDoc(movementRef);
   if (!movementSnapshot.exists()) {
@@ -2736,7 +2771,7 @@ export async function convertImportedMovementToTransaction(
 
     const transactionRef = doc(transactionsCol());
     const convertedAt = nowIso();
-    transaction.set(transactionRef, freshTransactionPayload);
+    transaction.set(transactionRef, applyCardAccountIdSync(freshTransactionPayload, accounts));
     transaction.update(movementRef, {
       status: "converted",
       matchedTransactionId: transactionRef.id,
@@ -2763,6 +2798,7 @@ export async function bulkConvertImportedMovements(ids: string[]) {
   let blocked = 0;
   const failed: Array<{ id: string; error: string }> = [];
   const categoryKeys = await getExistingCategoryKeys();
+  const accounts = snapToArray<Account>(await getDocs(accountsCol())); // una sola lectura para el lote
   const preflight = await previewBulkImportedMovementConversion(ids);
 
   for (const duplicate of preflight.duplicates) {
@@ -2797,7 +2833,7 @@ export async function bulkConvertImportedMovements(ids: string[]) {
 
   for (const id of preflight.readyIds) {
     try {
-      await convertImportedMovementToTransaction(id, {}, { categoryKeys });
+      await convertImportedMovementToTransaction(id, {}, { categoryKeys, accounts });
       converted += 1;
     } catch (error) {
       skipped += 1;
