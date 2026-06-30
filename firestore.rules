@@ -1,0 +1,18 @@
+rules_version = '2';
+
+// Octopus Finance — solo los dueños (Pancho + Javiera) pueden leer/escribir. Todo lo demás: DENEGADO.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner() {
+      return request.auth != null && request.auth.uid in [
+        "AKgiLAeRImfeGKg1N18MxmgV28q2", // francisco@octopusmedia.cl
+        "PRFhKlsOrfgqNnupSv0771UzhH03"  // javiera@octopusmedia.cl
+      ];
+    }
+
+    // Default deny: cualquier ruta requiere ser dueño.
+    match /{document=**} {
+      allow read, write: if isOwner();
+    }
+  }
+}
