@@ -7,8 +7,9 @@
  *  - avisar (no romper) si una tarjeta no tiene estado de cuenta cargado.
  * Helper PURO: asOf se inyecta. Diseño revisado por Codex.
  */
-import type { CommitmentInstance, Account } from "@shared/schema";
+import type { CommitmentInstance, Account, Transaction, ClientPayment } from "@shared/schema";
 import type { CardDebt } from "./debt";
+import { clientPaymentToIncomeTransaction, buildVatProjectionTransactions } from "@/lib/finance";
 
 const norm = (s: unknown) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 const digits = (s: unknown) => String(s ?? "").replace(/\D/g, "");
@@ -161,4 +162,75 @@ export function buildCashObligations(input: {
   const cash = obligations.filter((o) => o.kind === "commitment").reduce((s, o) => s + o.amount, 0);
   const card = obligations.filter((o) => o.kind === "card_payment").reduce((s, o) => s + o.amount, 0);
   return { obligations, byMonth, warnings, totals: { cash, card, total: cash + card }, excluded: { cardCommitments, placeholders } };
+}
+
+/**
+ * Convierte las obligaciones de caja (mismo motor que el asesor) en transacciones SINTÉTICAS
+ * planificadas, para que Flujo de Caja proyecte EXACTAMENTE lo mismo que el asesor (sin doble-conteo).
+ * Vencidos se imputan a `asOf` (igual que buildCashObligations los pone en el mes actual).
+ */
+export function buildObligationProjectionTransactions(input: {
+  commitments: CommitmentInstance[];
+  cardDebts: CardDebt[];
+  cardAccounts?: Account[];
+  asOf: string;
+  monthsAhead?: number;
+}): Transaction[] {
+  const co = buildCashObligations({ ...input, monthsAhead: input.monthsAhead ?? 12 });
+  return co.obligations.map((o) => {
+    const overdue = o.daysUntilDue < 0;
+    const date = overdue ? input.asOf : o.dueDate; // vencido → hoy (como el asesor lo imputa al mes actual)
+    const isCard = o.kind === "card_payment";
+    return {
+      id: `obligation-${o.id}`,
+      name: o.label,
+      category: isCard ? "Pago Tarjeta" : "Compromiso",
+      amount: o.amount,
+      type: "expense",
+      date,
+      notes: overdue ? `Vencía ${o.dueDate}` : null,
+      subtype: "planned",
+      status: "pending",
+      itemId: null,
+      workspace: o.workspace,
+      movementType: isCard ? "credit_card_payment" : "expense",
+      paymentMethod: "bank_account",
+      destinationWorkspace: null,
+      destinationAccountId: null,
+      creditCardName: null,
+      cardAccountId: null,
+      installmentCount: null,
+      accountId: null,
+      sourceClientPaymentId: null,
+    } satisfies Transaction;
+  });
+}
+
+/**
+ * Universo de transacciones para Flujo de Caja: SOLO lo real (no planned) + ingresos cliente + IVA
+ * + obligaciones (commitments + pago de tarjeta de cartola). NO incluye cuotas proyectadas de tarjeta
+ * (el pago real viene de la cartola) ni planned legacy/manual → evita doble-conteo. Misma fuente que el asesor.
+ */
+export function buildCashFlowFinancialTransactions(input: {
+  transactions: Transaction[];
+  clientPayments: ClientPayment[];
+  commitments: CommitmentInstance[];
+  cardDebts: CardDebt[];
+  cardAccounts?: Account[];
+  asOf: string;
+  monthsAhead?: number;
+}): Transaction[] {
+  const base = input.transactions.filter((t) => (t.subtype ?? "actual") !== "planned");
+  const income = input.clientPayments
+    .map(clientPaymentToIncomeTransaction)
+    .filter((t): t is Transaction => t !== null);
+  const vat = buildVatProjectionTransactions(input.clientPayments);
+  const obligations = buildObligationProjectionTransactions({
+    commitments: input.commitments,
+    cardDebts: input.cardDebts,
+    cardAccounts: input.cardAccounts,
+    asOf: input.asOf,
+    monthsAhead: input.monthsAhead,
+  });
+  return [...base, ...income, ...vat, ...obligations];
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCashObligations } from "../cash-obligations";
+import { buildCashObligations, buildObligationProjectionTransactions, buildCashFlowFinancialTransactions } from "../cash-obligations";
 import type { CommitmentInstance, Account } from "@shared/schema";
 import type { CardDebt } from "../debt";
 
@@ -95,5 +95,47 @@ describe("buildCashObligations", () => {
     });
     // total = solo el pago real de la tarjeta (150k), NO 13k+140k+150k
     expect(r.totals.total).toBe(150000);
+  });
+});
+
+describe("buildObligationProjectionTransactions / buildCashFlowFinancialTransactions", () => {
+  it("convierte obligaciones en tx planned (commitment→expense, tarjeta→credit_card_payment)", () => {
+    const txs = buildObligationProjectionTransactions({
+      commitments: [ci({ id: "arr", category: "Consulta Javi", expectedAmount: 290000, dueDate: "2026-06-18", workspace: "family" })],
+      cardDebts: [debt({})],
+      cardAccounts: [{ id: "a7232", name: "T.C Pancho", bank: "Banco Edwards", type: "credit_card", accountNumber: "****7232", workspace: "family" } as Account],
+      asOf,
+    });
+    const exp = txs.find((t) => t.movementType === "expense");
+    const card = txs.find((t) => t.movementType === "credit_card_payment");
+    expect(exp?.subtype).toBe("planned");
+    expect(exp?.status).toBe("pending");
+    expect(exp?.amount).toBe(290000);
+    expect(card?.amount).toBe(150000);
+    expect(card?.paymentMethod).toBe("bank_account");
+  });
+
+  it("imputa vencidos a asOf (no a la fecha pasada)", () => {
+    const txs = buildObligationProjectionTransactions({
+      commitments: [ci({ id: "viejo", category: "Consulta Javi", expectedAmount: 50000, dueDate: "2026-05-02", workspace: "family" })],
+      cardDebts: [], asOf,
+    });
+    expect(txs[0]?.date).toBe(asOf); // vencido → hoy
+    expect(txs[0]?.notes).toContain("2026-05-02");
+  });
+
+  it("cash-flow: sin cuotas proyectadas (installment) y sin planned legacy del base", () => {
+    const cf = buildCashFlowFinancialTransactions({
+      transactions: [
+        { id: "real", name: "x", category: "c", amount: 1000, type: "expense", date: "2026-06-10", subtype: "actual", status: "paid", movementType: "expense", paymentMethod: "bank_account", workspace: "family" } as any,
+        { id: "legacy-planned", name: "y", category: "c", amount: 999, type: "expense", date: "2026-06-10", subtype: "planned", status: "pending", movementType: "expense", paymentMethod: "bank_account", workspace: "family" } as any,
+      ],
+      clientPayments: [], commitments: [ci({ id: "n", cardAccountId: null, category: "Consulta Javi", expectedAmount: 290000, dueDate: "2026-06-18" })],
+      cardDebts: [debt({})], asOf,
+    });
+    expect(cf.some((t) => String(t.id).includes("installment"))).toBe(false);
+    expect(cf.some((t) => t.id === "legacy-planned")).toBe(false); // base planned se filtra
+    expect(cf.some((t) => t.id === "real")).toBe(true);
+    expect(cf.some((t) => t.id.startsWith("obligation-"))).toBe(true);
   });
 });

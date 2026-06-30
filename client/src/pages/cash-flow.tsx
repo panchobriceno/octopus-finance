@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { useAccounts, useClientPayments, useTransactions } from "@/lib/hooks";
+import { useAccounts, useClientPayments, useTransactions, useCommitmentInstances, useCreditCardStatements } from "@/lib/hooks";
+import { buildCardDebt } from "@/domain/debt";
+import { buildCashFlowFinancialTransactions } from "@/domain/cash-obligations";
 import { cn, formatCLP, getMonthName } from "@/lib/utils";
 import {
   buildDailyProjectionData,
   buildMonthlySummaries,
-  combineFinancialTransactions,
   getCurrentMonthKey,
   getVatProjectionDateForMonth,
   summarizeClientPaymentsByMonth,
@@ -165,6 +166,8 @@ export default function CashFlowPage() {
   const { data: transactions = [], isLoading } = useTransactions();
   const { data: clientPayments = [] } = useClientPayments();
   const { data: accounts = [] } = useAccounts();
+  const { data: commitments = [] } = useCommitmentInstances();
+  const { data: creditCardStatements = [] } = useCreditCardStatements();
   const currentMonthKey = getCurrentMonthKey();
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
   const [workspace, setWorkspace] = useState<WorkspaceFilter>("all");
@@ -176,9 +179,23 @@ export default function CashFlowPage() {
   } | null>(null);
   const { balances: openingBalancesMap } = useMonthlyBalances();
   const { amount: openingBalance, update: updateOpeningBalance } = useOpeningBalance(selectedMonth);
+  // Motor UNIFICADO con el asesor: mismas obligaciones (commitments + pago real de tarjeta de cartola),
+  // sin cuotas proyectadas (evita doble-conteo). asOf igual que el asesor (advisor.ts usa toISOString().slice(0,10)).
+  const asOf = new Date().toISOString().slice(0, 10);
+  const cardDebts = useMemo(
+    () => buildCardDebt(creditCardStatements, transactions, accounts, { asOf }),
+    [creditCardStatements, transactions, accounts, asOf],
+  );
   const financialTransactions = useMemo(
-    () => combineFinancialTransactions(transactions, clientPayments),
-    [transactions, clientPayments],
+    () => buildCashFlowFinancialTransactions({
+      transactions,
+      clientPayments,
+      commitments,
+      cardDebts,
+      cardAccounts: accounts.filter((a) => a.type === "credit_card"),
+      asOf,
+    }),
+    [transactions, clientPayments, commitments, cardDebts, accounts, asOf],
   );
   const clientPaymentsByMonth = useMemo(
     () => summarizeClientPaymentsByMonth(clientPayments),
@@ -241,7 +258,7 @@ export default function CashFlowPage() {
       return payment.status === "receivable" || payment.status === "projected" || payment.status === "invoiced";
     });
 
-    const relevantTransactions = transactions.filter((transaction) => matchesWorkspace(transaction.workspace, workspace));
+    const relevantTransactions = financialTransactions.filter((transaction) => matchesWorkspace(transaction.workspace, workspace));
     let rollingOpeningBalance = totalAccountsBalance;
 
     return weeklyColumns.map((column, index): WeeklyBreakdown => {
@@ -261,6 +278,7 @@ export default function CashFlowPage() {
           return (
             transaction.subtype === "planned" &&
             normalizedStatus === "pending" &&
+            transaction.movementType === "expense" && // SOLO gastos (no ingresos ni pago de tarjeta sintéticos)
             transaction.paymentMethod !== "credit_card" &&
             isDateWithinRange(transaction.date, column.start, column.end)
           );
@@ -335,7 +353,7 @@ export default function CashFlowPage() {
         details,
       };
     });
-  }, [clientPayments, selectedMonth, totalAccountsBalance, transactions, weeklyColumns, workspace]);
+  }, [clientPayments, selectedMonth, totalAccountsBalance, financialTransactions, weeklyColumns, workspace]);
 
   const openWeeklyDetail = (
     rowKey: keyof WeeklyBreakdown["details"],
