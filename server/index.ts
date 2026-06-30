@@ -7,7 +7,7 @@ const app = express();
 const httpServer = createServer(app);
 
 const defaultFirebaseConfig = {
-  VITE_FIREBASE_API_KEY: "AIzaSyDFkNHHxpcRNB_2n_JaDJxD0sCI_cY2skA",
+  VITE_FIREBASE_API_KEY: "AIzaSyBmqJF7jsGnf_IW7WDUItbFtxcuYNWCpx4",
   VITE_FIREBASE_AUTH_DOMAIN: "my-cash-flow-bcb24.firebaseapp.com",
   VITE_FIREBASE_PROJECT_ID: "my-cash-flow-bcb24",
   VITE_FIREBASE_STORAGE_BUCKET: "my-cash-flow-bcb24.firebasestorage.app",
