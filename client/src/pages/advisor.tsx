@@ -4,12 +4,10 @@ import {
   Sparkles,
   RefreshCw,
   AlertTriangle,
-  CalendarClock,
   Inbox,
   TrendingUp,
   FileText,
   CreditCard,
-  Check,
   ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,8 +40,8 @@ import {
   type AdvisorReport,
   type DupTx,
   type DuplicatePair,
-  type Obligation,
 } from "@/lib/advisor";
+import { FinancialCalendar } from "@/components/finance/financial-calendar";
 
 const CACHE_KEY = "octopus_advisor_report";
 const LIME = "#cdfa46";
@@ -63,13 +61,6 @@ const fmtUpdated = (iso: string) => {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} · ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
-
-function dueLabel(days: number): { text: string; cls: string } {
-  if (days < 0) return { text: `Vencido hace ${Math.abs(days)}d`, cls: "border-[rgba(205,250,70,.22)] bg-[rgba(205,250,70,.08)] text-[#cdfa46]" };
-  if (days === 0) return { text: "Vence hoy", cls: "border-[rgba(205,250,70,.22)] bg-[rgba(205,250,70,.08)] text-[#cdfa46]" };
-  if (days <= 3) return { text: `En ${days}d`, cls: "border-[rgba(205,250,70,.22)] bg-[rgba(205,250,70,.08)] text-[#cdfa46]" };
-  return { text: `En ${days}d`, cls: "border-[#2c2c38] bg-[#1f1f28] text-[#9a9aa6]" };
-}
 
 /* ============================ Piezas de presentación ============================ */
 
@@ -204,46 +195,6 @@ function DuplicateCard({ pair, onDelete }: { pair: DuplicatePair; onDelete: (tx:
   );
 }
 
-/** Fila de obligación a pagar (cuando hay datos). */
-function PagarRow({ o, razon, prioridad }: { o: Obligation; razon?: string; prioridad?: string }) {
-  const d = dueLabel(o.daysUntilDue);
-  return (
-    <div className="mb-[10px] flex items-center justify-between gap-3 rounded-[13px] border border-[#24242e] bg-[#101016] p-[13px] last:mb-0">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-[13px] font-bold text-[#f4f4f7]">{o.label}</span>
-          {prioridad === "alta" && (
-            <span className="rounded-[5px] bg-[#cdfa46] px-[6px] py-px text-[9px] font-bold text-[#0a0a0f]">PRIORIDAD</span>
-          )}
-        </div>
-        {razon && <p className="mt-0.5 truncate text-[11.5px] text-[#8a8a96]">{razon}</p>}
-      </div>
-      <div className="flex shrink-0 items-center gap-[10px]">
-        <span className="font-mono text-[14px] font-bold tabular-nums text-[#e3e3ea]">{formatCLP(o.amount)}</span>
-        <span className={`rounded-md border px-2 py-0.5 text-[11px] ${d.cls}`} title={o.dueDate}>{d.text}</span>
-      </div>
-    </div>
-  );
-}
-
-/** Empty state de "Qué pagar y cuándo". */
-function EmptyPagar() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-[14px] border border-dashed border-[#2c2c38] bg-[#101016] px-4 py-[26px] text-center">
-      <div
-        className="mb-3 flex size-11 items-center justify-center rounded-full"
-        style={{ background: "rgba(205,250,70,.08)", border: "1px solid rgba(205,250,70,.2)" }}
-      >
-        <Check className="size-5" style={{ color: LIME }} strokeWidth={2} />
-      </div>
-      <div className="text-[13.5px] font-bold text-[#e3e3ea]">Sin vencimientos próximos</div>
-      <div className="mt-[5px] max-w-[240px] text-[12px] leading-[1.5] text-[#7a7a86]">
-        No hay obligaciones próximas registradas. Cuando registres compromisos o cuentas por pagar, el asesor los priorizará acá.
-      </div>
-    </div>
-  );
-}
-
 /** Fila de documento faltante. */
 function MissingDocRow({ texto, onUpload }: { texto: string; onUpload: () => void }) {
   return (
@@ -301,21 +252,6 @@ export default function AdvisorPage() {
     });
   }, [commitments.data, clientPayments.data, importBatches.data, creditCards.data, pendingMovs.data, transactions.data]);
 
-  const oblById = useMemo(() => new Map((facts?.obligations ?? []).map((o) => [o.id, o])), [facts]);
-  const pagarList = useMemo<{ o: Obligation; razon?: string; prioridad?: string }[]>(() => {
-    if (!facts) return [];
-    const seen = new Set<string>();
-    const out: { o: Obligation; razon?: string; prioridad?: string }[] = [];
-    for (const p of report?.pagar ?? []) {
-      const o = oblById.get(p.sourceId);
-      if (o && !seen.has(o.id)) {
-        seen.add(o.id);
-        out.push({ o, razon: p.razon, prioridad: p.prioridad });
-      }
-    }
-    for (const o of facts.obligations) if (!seen.has(o.id)) out.push({ o });
-    return out;
-  }, [facts, report, oblById]);
 
   const loadingData = !facts;
 
@@ -415,8 +351,6 @@ export default function AdvisorPage() {
     </>
   );
 
-  const quePagarBody = pagarList.length === 0 ? <EmptyPagar /> : <div>{pagarList.map(({ o, razon, prioridad }) => <PagarRow key={o.id} o={o} razon={razon} prioridad={prioridad} />)}</div>;
-
   const docsBody = (facts?.missingDocs ?? []).map((m) => <MissingDocRow key={m.id} texto={m.texto} onUpload={openImportWizard} />);
 
   const advisorTip = report && tip ? (
@@ -485,6 +419,9 @@ export default function AdvisorPage() {
       <div className="flex-1 space-y-[18px] overflow-y-auto px-4 py-[18px] sm:px-7 sm:py-6">
         {summaryCard}
 
+        {/* Calendario financiero — reemplaza "Qué pagar y cuándo" (full width) */}
+        <FinancialCalendar />
+
         {/* ===== ESCRITORIO: grid 2 columnas ===== */}
         <div className="hidden lg:grid lg:grid-cols-[1.55fr_1fr] lg:items-start lg:gap-[18px]">
           <div className="flex min-w-0 flex-col gap-[18px]">
@@ -509,10 +446,6 @@ export default function AdvisorPage() {
           </div>
 
           <div className="flex min-w-0 flex-col gap-[18px]">
-            <ModuleCard>
-              <CardHead icon={<CalendarClock className="size-[18px]" style={{ color: LIME }} strokeWidth={1.9} />} title="Qué pagar y cuándo" />
-              {quePagarBody}
-            </ModuleCard>
             {docsFaltantes > 0 && (
               <ModuleCard>
                 <CardHead icon={<FileText className="size-[18px] text-[#cfcfd8]" strokeWidth={1.9} />} title="Documentos faltantes" badge={<CountBadge value={docsFaltantes} tone="muted" />} />
@@ -541,13 +474,6 @@ export default function AdvisorPage() {
               </div>
             </>
           )}
-
-          {/* Qué pagar */}
-          <div className="mb-3 mt-6 flex items-center gap-2">
-            <CalendarClock className="size-[18px]" style={{ color: LIME }} strokeWidth={1.9} />
-            <span className="text-[14px] font-bold">Qué pagar y cuándo</span>
-          </div>
-          {quePagarBody}
 
           {/* Por revisar */}
           <div className="mb-2 mt-6 flex items-center justify-between">
