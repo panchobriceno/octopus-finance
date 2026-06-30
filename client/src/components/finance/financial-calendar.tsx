@@ -6,7 +6,7 @@
  * El CÓDIGO es dueño de montos/fechas; "Marcar pagado" muta vía usePayCommitmentInstance.
  */
 import { useMemo, useState } from "react";
-import { Calendar as CalIcon, ChevronLeft, ChevronRight, ArrowDown, ArrowUp, TrendingUp, Clock, AlertTriangle, X, Check } from "lucide-react";
+import { Calendar as CalIcon, ChevronLeft, ChevronRight, ArrowDown, ArrowUp, TrendingUp, Clock, AlertTriangle, X, Check, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCLP } from "@/lib/utils";
 import {
@@ -14,9 +14,10 @@ import {
   useClientPayments,
   usePayCommitmentInstance,
   useAccounts,
+  useTransactions,
 } from "@/lib/hooks";
 import { useMonthlyBalances } from "@/lib/monthly-balances";
-import type { CommitmentInstance, ClientPayment, Account } from "@shared/schema";
+import type { CommitmentInstance, ClientPayment, Account, Transaction } from "@shared/schema";
 
 const LIME = "#cdfa46";
 const GRAY = "#cfcfd8";
@@ -93,15 +94,18 @@ function StatusPill({ s, className = "", style = {} }: { s: Resolved; className?
 export function FinancialCalendar({ className = "" }: { className?: string }) {
   const commitments = useCommitmentInstances();
   const clientPayments = useClientPayments();
+  const transactions = useTransactions();
   const accounts = useAccounts();
   const pay = usePayCommitmentInstance();
-  const { balances: openingMap } = useMonthlyBalances();
+  const { balances: openingMap, update: updateOpening } = useMonthlyBalances();
   const { toast } = useToast();
 
   const [view, setView] = useState<"cal" | "list" | "time">("cal");
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [editingStart, setEditingStart] = useState(false);
+  const [startDraft, setStartDraft] = useState("");
   const [filters, setFilters] = useState<{ ambito: "all" | Ambito; tipo: "all" | "in" | "out"; estado: "all" | "pend" | "paid" | "venc" }>({
     ambito: "all",
     tipo: "all",
@@ -188,8 +192,36 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
         rawStatus: p.status,
       });
     }
+    // Ingresos YA recibidos del mes: viven como transacciones (no clientPayments).
+    // Sin esto, el mes en curso muestra "Entra $0" y proyecta caja en rojo falsa.
+    // Se excluye el income que ya tiene su clientPayment conciliado (sourceClientPaymentId)
+    // para no contarlo dos veces, y los traspasos/giros (movementType=transfer).
+    for (const t of (transactions.data ?? []) as Transaction[]) {
+      if (t.type !== "income") continue;
+      if ((t.subtype ?? "actual") !== "actual") continue;
+      if ((t.status ?? "paid") !== "paid") continue;
+      if ((t.movementType ?? "") === "transfer") continue;
+      if (t.sourceClientPaymentId) continue;
+      const d = t.date || "";
+      if (d.slice(0, 7) !== monthKey) continue;
+      if (!(Number(t.amount) > 0)) continue;
+      out.push({
+        id: `t:${t.id}`,
+        srcId: t.id,
+        kind: "in",
+        day: dayOf(d),
+        dateStr: d,
+        name: t.name || "Ingreso",
+        cat: t.category || "Ventas",
+        ambito: (t.workspace as Ambito) in AMB ? (t.workspace as Ambito) : "business",
+        amount: Number(t.amount) || 0,
+        est: false,
+        method: methodLabel(t.paymentMethod),
+        rawStatus: "paid", // recibido
+      });
+    }
     return out;
-  }, [commitments.data, clientPayments.data, monthKey]);
+  }, [commitments.data, clientPayments.data, transactions.data, monthKey]);
 
   const events = useMemo(() => {
     return allEvents.filter((e) => {
@@ -301,7 +333,33 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
       .finally(() => setPayingId(null));
   };
 
-  const loading = !commitments.data || !clientPayments.data;
+  const loading = !commitments.data || !clientPayments.data || !transactions.data || !accounts.data;
+
+  // Saldo inicial editable: de dónde sale + cómo se ajusta a mano (persiste en openingBalances).
+  const startSource = monthKey in (openingMap ?? {}) ? "ajustado a mano" : "saldo de tus cuentas";
+  const saveStart = () => {
+    const v = Number(startDraft.replace(/[^\d-]/g, "")) || 0;
+    void updateOpening(monthKey, v);
+    setEditingStart(false);
+  };
+  const startControl = editingStart ? (
+    <span className="inline-flex items-center gap-1">
+      <input
+        autoFocus
+        value={startDraft}
+        onChange={(ev) => setStartDraft(ev.target.value)}
+        onKeyDown={(ev) => { if (ev.key === "Enter") saveStart(); if (ev.key === "Escape") setEditingStart(false); }}
+        className="w-[110px] rounded-[6px] border border-[#2c2c38] bg-[#101016] px-2 py-0.5 font-mono text-[11px] text-[#f4f4f7] outline-none focus:border-[#cdfa46]"
+      />
+      <button onClick={saveStart} title="Guardar"><Check className="size-[14px]" style={{ color: LIME }} strokeWidth={2.4} /></button>
+      <button onClick={() => setEditingStart(false)} title="Cancelar"><X className="size-[14px] text-[#9a9aa6]" strokeWidth={2.4} /></button>
+    </span>
+  ) : (
+    <button onClick={() => { setStartDraft(String(Math.round(startBalance))); setEditingStart(true); }} className="inline-flex items-center gap-1 rounded-[6px] px-1 hover-elevate" title="Editar saldo inicial">
+      <span className="font-mono" style={{ color: startBalance < 0 ? LIME : GRAY }}>{formatCLP(startBalance)}</span>
+      <Pencil className="size-3 text-[#6c6c78]" strokeWidth={2} />
+    </button>
+  );
 
   /* ---------- sub-render: chip de evento (celda) ---------- */
   const EventChip = ({ e }: { e: CalEvent }) => {
@@ -416,7 +474,7 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
       <div className="mt-[14px] rounded-[14px] border border-[#1e1e26] bg-[#0d0d12] px-4 pb-[10px] pt-[14px]">
         <div className="mb-[10px] flex items-center justify-between">
           <div className="text-[12px] font-bold" style={{ color: GRAY }}>Saldo proyectado por día</div>
-          <div className="text-[11px] font-medium text-[#7a7a86]">arranca en {formatCLP(startBalance)} · cierra en <span className="font-mono" style={{ color: (bal[daysInMonth] ?? 0) < 0 ? LIME : GRAY }}>{formatCLP(bal[daysInMonth] ?? 0)}</span></div>
+          <div className="flex items-center gap-1 text-[11px] font-medium text-[#7a7a86]">arranca en {startControl}<span className="text-[#5a5a66]">({startSource})</span> · cierra en <span className="font-mono" style={{ color: (bal[daysInMonth] ?? 0) < 0 ? LIME : GRAY }}>{formatCLP(bal[daysInMonth] ?? 0)}</span></div>
         </div>
         <div className="relative flex h-[88px] items-stretch gap-[2px]">
           <div className="absolute left-0 right-0 top-[54px] border-t border-dashed border-[#3a3a44]" />
@@ -686,7 +744,8 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
               <div className="text-[12px] font-semibold text-[#f4f4f7]">Caja en rojo el <b style={{ color: LIME }}>{firstNegDay} {MESES[month].slice(0, 3)}</b> ({fmtShort(bal[firstNegDay] ?? 0)}).</div>
             </div>
           )}
-          <div className="mt-3">{miniMonth}</div>
+          <div className="mt-3 flex items-center gap-1 px-0.5 text-[11px] font-medium text-[#7a7a86]">Arranca en {startControl}<span className="text-[#5a5a66]">({startSource})</span></div>
+          <div className="mt-2">{miniMonth}</div>
         </div>
         <div className="px-4 pb-2">{loading ? <div className="py-10 text-center text-[12.5px] text-[#6c6c78]">Cargando…</div> : mobileAgenda}</div>
       </div>
