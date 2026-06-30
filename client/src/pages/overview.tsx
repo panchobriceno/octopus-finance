@@ -80,6 +80,7 @@ import {
   Info,
   LineChart,
   Camera,
+  ArrowLeftRight,
   CalendarClock,
   ChevronRight,
   DollarSign,
@@ -2688,6 +2689,16 @@ export default function OverviewPage() {
                   <Camera className="size-4" />
                   Captura rápida
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0 gap-2 border-card-border bg-secondary text-[#f4f4f7] hover:bg-[#22222b]"
+                  onClick={() => { setCreateFormMode("internal"); setShowCreateDialog(true); }}
+                  data-testid="button-open-transfer"
+                >
+                  <ArrowLeftRight className="size-4" />
+                  Transferencia
+                </Button>
                 <Button type="button" variant="outline" className="shrink-0 border-card-border bg-secondary text-[#f4f4f7] hover:bg-[#22222b]" onClick={() => navigate("/monthly-close")}>
                   Cerrar mes
                 </Button>
@@ -3027,21 +3038,7 @@ export default function OverviewPage() {
           </section>
         </div>
 
-        {/* FAB de creación manual removido: en el dashboard queda un único FAB,
-            el de captura rápida (QuickExpenseCapture). Crear movimiento sigue en /transactions. */}
-
-        <CreateMovementDialog
-          open={showCreateDialog}
-          onOpenChange={setShowCreateDialog}
-          createFormMode={createFormMode}
-          onCreateFormModeChange={setCreateFormMode}
-          categories={categories}
-          items={items}
-          accounts={accounts}
-          isPending={createMutation.isPending}
-          onCreate={handleCreate}
-          onCreateInternalMovement={handleCreateInternalMovement}
-        />
+        {/* Diálogo de crear movimiento (con tab "Transferencia / Pago TC") — único render al final del componente. */}
 
         <EditMovementDialog
           transaction={editingTx}
