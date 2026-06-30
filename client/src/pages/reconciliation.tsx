@@ -157,13 +157,14 @@ export default function ReconciliationPage() {
       selectedAccount
         ? buildAccountReconciliationWorkspace({
             account: selectedAccount,
+            accounts,
             monthKey: selectedMonth,
             transactions,
             importedMovements,
             importBatches,
           })
         : null,
-    [selectedAccount, selectedMonth, transactions, importedMovements, importBatches],
+    [selectedAccount, accounts, selectedMonth, transactions, importedMovements, importBatches],
   );
   const isLoading = accountsLoading || transactionsLoading || batchesLoading || movementsLoading;
   const canCreateAdjustment =
@@ -550,7 +551,7 @@ export default function ReconciliationPage() {
                     </TableHeader>
                     <TableBody>
                       {workspace.unmatchedRegisteredTransactions.slice(0, 12).map((transaction) => {
-                        const impact = getTransactionAccountImpact(transaction, workspace.account);
+                        const impact = getTransactionAccountImpact(transaction, workspace.account, accounts);
                         return (
                           <TableRow key={transaction.id}>
                             <TableCell>{formatDate(transaction.date)}</TableCell>

@@ -1,6 +1,7 @@
 import type { Account, ImportBatch, ImportedMovement, Transaction } from "@shared/schema";
 import { isExecutedTransaction, normalizeTransaction } from "@/lib/finance";
 import { normalizeImportText } from "./bank-imports";
+import { resolveCardAccount } from "./account-identity";
 
 export type ReconciliationStatus =
   | "confident_match"
@@ -122,17 +123,36 @@ function creditCardMatchesAccount(value: string | null | undefined, account: Acc
   );
 }
 
-export function importedMovementBelongsToAccount(movement: ImportedMovement, account: Account) {
+/**
+ * ¿Esta referencia de tarjeta (cardAccountId/creditCardName) pertenece a `account`?
+ * ESTRUCTURAL primero: resolveCardAccount(ref, accounts) usa cardAccountId → last4 ÚNICO → nombre,
+ * y devuelve null si hay AMBIGÜEDAD (dos tarjetas con mismo last4). Si no resuelve, cae al
+ * match por nombre legacy (creditCardMatchesAccount). Pasar `accounts` evita el doble-match.
+ */
+function cardBelongsToAccount(
+  ref: { cardAccountId?: string | null; creditCardName?: string | null },
+  account: Account,
+  accounts: Account[],
+) {
+  const resolved = resolveCardAccount(ref, accounts);
+  if (resolved) return resolved.id === account.id;
+  // Si HAY señal estructural (cardAccountId o last4 en el nombre) pero no resolvió, es ambiguo o
+  // no-encontrado → NO caemos al fuzzy por nombre (eso reabriría el doble-match). Solo fuzzy si
+  // no hay ninguna señal estructural (datos viejos sin last4).
+  const hasStructural = Boolean(ref.cardAccountId) || /\d{4}\s*$/.test(String(ref.creditCardName ?? ""));
+  if (hasStructural) return false;
+  return creditCardMatchesAccount(ref.creditCardName, account);
+}
+
+export function importedMovementBelongsToAccount(movement: ImportedMovement, account: Account, accounts: Account[] = [account]) {
   if (movement.accountId === account.id) return true;
 
   if (account.type === "credit_card") {
-    return (
-      movement.sourceType === "credit_card" &&
-      (
-        creditCardMatchesAccount(movement.creditCardName, account) ||
-        textMentionsAccount(movement.sourceName, account)
-      )
-    );
+    // Solo cartolas de TARJETA (sourceType credit_card). Un pago de tarjeta en una cartola
+    // bancaria tiene cardAccountId pero direction=gasto banco → contarlo acá invertiría el signo.
+    // Solo por identidad de tarjeta (sin textMentions(sourceName): "Santander" tocaría
+    // todas las tarjetas Santander → doble-match).
+    return movement.sourceType === "credit_card" && cardBelongsToAccount(movement, account, accounts);
   }
 
   return (
@@ -145,7 +165,7 @@ export function importedMovementBelongsToAccount(movement: ImportedMovement, acc
   );
 }
 
-export function transactionTouchesAccount(transaction: Transaction, account: Account) {
+export function transactionTouchesAccount(transaction: Transaction, account: Account, accounts: Account[] = [account]) {
   const normalized = normalizeTransaction(transaction);
   if (normalized.status === "cancelled" || !isExecutedTransaction(normalized)) return false;
 
@@ -153,10 +173,10 @@ export function transactionTouchesAccount(transaction: Transaction, account: Acc
     return (
       normalized.paymentMethod === "credit_card" &&
       normalized.movementType === "expense" &&
-      creditCardMatchesAccount(normalized.creditCardName, account)
+      cardBelongsToAccount(normalized, account, accounts)
     ) || (
       normalized.movementType === "credit_card_payment" &&
-      creditCardMatchesAccount(normalized.creditCardName, account)
+      cardBelongsToAccount(normalized, account, accounts)
     );
   }
 
@@ -168,11 +188,11 @@ export function getImportedMovementImpact(movement: ImportedMovement) {
   return movement.direction === "income" ? amount : -amount;
 }
 
-export function getTransactionAccountImpact(transaction: Transaction, account: Account) {
+export function getTransactionAccountImpact(transaction: Transaction, account: Account, accounts: Account[] = [account]) {
   const normalized = normalizeTransaction(transaction);
   const amount = toNumber(normalized.amount);
 
-  if (!transactionTouchesAccount(normalized, account)) return 0;
+  if (!transactionTouchesAccount(normalized, account, accounts)) return 0;
 
   if (account.type === "credit_card") {
     if (normalized.movementType === "credit_card_payment") return amount;
@@ -239,6 +259,7 @@ export function scoreReconciliationCandidate(
   movement: ImportedMovement,
   transaction: Transaction,
   account: Account,
+  accounts: Account[] = [account],
 ): ReconciliationCandidate | null {
   const amount = amountScore(movement, transaction);
   const date = dateScore(movement, transaction);
@@ -253,7 +274,7 @@ export function scoreReconciliationCandidate(
     score += date.score;
     reasons.push(date.reason);
   }
-  if (transactionTouchesAccount(transaction, account)) {
+  if (transactionTouchesAccount(transaction, account, accounts)) {
     score += 14;
     reasons.push("misma cuenta");
   }
@@ -295,9 +316,9 @@ function getRowStatus(movement: ImportedMovement, bestCandidate: ReconciliationC
   return "possible_match";
 }
 
-function batchBelongsToAccount(batch: ImportBatch, account: Account) {
+function batchBelongsToAccount(batch: ImportBatch, account: Account, accounts: Account[] = [account]) {
   if (batch.accountId === account.id) return true;
-  if (account.type === "credit_card") return creditCardMatchesAccount(batch.creditCardName, account);
+  if (account.type === "credit_card") return cardBelongsToAccount(batch, account, accounts);
   return !batch.accountId && (
     textMentionsAccount(batch.bankName, account) ||
     textMentionsAccount(batch.sourceName, account)
@@ -306,16 +327,18 @@ function batchBelongsToAccount(batch: ImportBatch, account: Account) {
 
 export function buildAccountReconciliationWorkspace(input: {
   account: Account;
+  accounts?: Account[];
   monthKey: string;
   transactions: Transaction[];
   importedMovements: ImportedMovement[];
   importBatches: ImportBatch[];
 }): AccountReconciliationWorkspace {
   const { account, monthKey } = input;
+  const accounts = input.accounts ?? [account];
   const batchById = new Map(input.importBatches.map((batch) => [batch.id, batch]));
   const movements = input.importedMovements
     .filter((movement) => isDateInMonth(movement.date, monthKey))
-    .filter((movement) => importedMovementBelongsToAccount(movement, account))
+    .filter((movement) => importedMovementBelongsToAccount(movement, account, accounts))
     .sort((left, right) => {
       if (left.status !== right.status) {
         const order: Record<string, number> = { pending: 0, duplicate: 1, converted: 2, discarded: 3 };
@@ -327,11 +350,11 @@ export function buildAccountReconciliationWorkspace(input: {
 
   const registeredTransactions = input.transactions
     .filter((transaction) => isDateInMonth(transaction.date, monthKey))
-    .filter((transaction) => transactionTouchesAccount(transaction, account));
+    .filter((transaction) => transactionTouchesAccount(transaction, account, accounts));
 
   const rows = movements.map((movement): ReconciliationRow => {
     const candidates = registeredTransactions
-      .map((transaction) => scoreReconciliationCandidate(movement, transaction, account))
+      .map((transaction) => scoreReconciliationCandidate(movement, transaction, account, accounts))
       .filter((candidate): candidate is ReconciliationCandidate => Boolean(candidate))
       .sort((left, right) => right.score - left.score)
       .slice(0, 3);
@@ -367,13 +390,13 @@ export function buildAccountReconciliationWorkspace(input: {
     else acc.expense += amount;
     return acc;
   }, { income: 0, expense: 0 });
-  const registeredNet = registeredTransactions.reduce((sum, transaction) => sum + getTransactionAccountImpact(transaction, account), 0);
+  const registeredNet = registeredTransactions.reduce((sum, transaction) => sum + getTransactionAccountImpact(transaction, account, accounts), 0);
   const registeredIncome = registeredTransactions.reduce((sum, transaction) => {
-    const impact = getTransactionAccountImpact(transaction, account);
+    const impact = getTransactionAccountImpact(transaction, account, accounts);
     return impact > 0 ? sum + impact : sum;
   }, 0);
   const registeredExpense = registeredTransactions.reduce((sum, transaction) => {
-    const impact = getTransactionAccountImpact(transaction, account);
+    const impact = getTransactionAccountImpact(transaction, account, accounts);
     return impact < 0 ? sum + Math.abs(impact) : sum;
   }, 0);
   const importedNet = importedTotals.income - importedTotals.expense;
@@ -392,7 +415,7 @@ export function buildAccountReconciliationWorkspace(input: {
   const openBatchCount = input.importBatches.filter((batch) =>
     batch.status !== "closed" &&
     batchTouchesMonth(batch, monthKey) &&
-    batchBelongsToAccount(batch, account),
+    batchBelongsToAccount(batch, account, accounts),
   ).length;
 
   return {
@@ -434,6 +457,7 @@ export function buildAllAccountReconciliationSummaries(input: {
   return input.accounts.map((account) =>
     buildAccountReconciliationWorkspace({
       account,
+      accounts: input.accounts,
       monthKey: input.monthKey,
       transactions: input.transactions,
       importedMovements: input.importedMovements,

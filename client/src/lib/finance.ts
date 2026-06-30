@@ -1,6 +1,7 @@
 import type { Account, ClientPayment, Transaction } from "@shared/schema";
 import { getMonthName } from "./utils";
 import type { MonthlyBalanceMap } from "./monthly-balances";
+import { resolveCardAccount } from "@/domain/account-identity";
 
 export type Workspace = "business" | "family" | "dentist";
 export type WorkspaceFilter = Workspace | "all";
@@ -55,8 +56,18 @@ function normalizeCardName(value: string) {
     .trim();
 }
 
-function findMatchingCreditCardAccount(creditCardName: string | null | undefined, accounts: Account[] = []) {
+function findMatchingCreditCardAccount(
+  ref: { cardAccountId?: string | null; creditCardName?: string | null },
+  accounts: Account[] = [],
+) {
+  // Estructural primero (cardAccountId → last4 único, sin ambigüedad); fuzzy por nombre como respaldo.
+  const structural = resolveCardAccount(ref, accounts);
+  if (structural) return structural;
+
+  const creditCardName = ref.creditCardName;
   if (!creditCardName) return null;
+  // Si había señal estructural (cardAccountId o last4) y no resolvió → ambiguo: no fuzzy (no atribuir mal).
+  if (ref.cardAccountId || /\d{4}\s*$/.test(creditCardName)) return null;
 
   const normalizedCardName = normalizeCardName(creditCardName);
   const creditCardAccounts = accounts.filter((account) => account.type === "credit_card");
@@ -159,6 +170,7 @@ export function normalizeTransaction(tx: Transaction): NormalizedTransaction {
     destinationWorkspace: (tx.destinationWorkspace ?? null) as Workspace | null,
     destinationAccountId: tx.destinationAccountId ?? null,
     creditCardName: tx.creditCardName ?? null,
+    cardAccountId: tx.cardAccountId ?? null,
     subtype: tx.subtype ?? "actual",
     status: tx.status ?? "paid",
   };
@@ -244,7 +256,7 @@ export function getTransactionCreditCardDebtImpact(
   if (isGeneratedFromClientPayment(normalized)) return 0;
 
   if (accounts.length > 0) {
-    const matchedCreditCardAccount = findMatchingCreditCardAccount(normalized.creditCardName, accounts);
+    const matchedCreditCardAccount = findMatchingCreditCardAccount({ cardAccountId: normalized.cardAccountId, creditCardName: normalized.creditCardName }, accounts);
     if (matchedCreditCardAccount) {
       if (workspace !== "all" && matchedCreditCardAccount.workspace !== workspace) return 0;
     } else if (workspace !== "all") {
