@@ -188,6 +188,57 @@ export interface InsertCreditCardSetting {
   isActive?: boolean;
 }
 
+// Consolidado de deuda de una cartola de tarjeta (historial mes a mes). Fuente del Centro de Deuda.
+export interface CreditCardStatement {
+  id: string;                       // determinístico: `${cardKey}::${statementMonthKey}`
+  cardKey: string;                  // canónico: bank|holder|last4
+  cardLabel: string;                // legible
+  bank: string;
+  holder: string;
+  last4: string;
+  statementMonthKey: string;        // YYYY-MM (de periodEnd)
+  paymentMonthKey: string | null;   // YYYY-MM (de pagarHasta)
+  periodStart: string | null;       // YYYY-MM-DD
+  periodEnd: string;                // YYYY-MM-DD
+  pagarHasta: string;               // YYYY-MM-DD
+  montoFacturado: number;           // CLP, total nacional a pagar del período actual
+  montoMinimo: number | null;
+  cupoTotal: number | null;
+  cupoUtilizado: number | null;
+  cupoDisponible: number | null;
+  deudaInternacionalUsd: number | null;
+  currency: string;                 // "CLP"
+  source: string;                   // "manual_file" | "email"
+  sourceFileHash: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InsertCreditCardStatement {
+  id?: string;
+  cardKey: string;
+  cardLabel: string;
+  bank: string;
+  holder: string;
+  last4: string;
+  statementMonthKey: string;
+  paymentMonthKey?: string | null;
+  periodStart?: string | null;
+  periodEnd: string;
+  pagarHasta: string;
+  montoFacturado: number;
+  montoMinimo?: number | null;
+  cupoTotal?: number | null;
+  cupoUtilizado?: number | null;
+  cupoDisponible?: number | null;
+  deudaInternacionalUsd?: number | null;
+  currency?: string;
+  source?: string;
+  sourceFileHash?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // ── Categories ──────────────────────────────────────────────────
 export interface Category {
   id: string;
@@ -664,6 +715,33 @@ export const insertCreditCardSettingSchema = z.object({
   defaultPaymentAccountId: z.string().nullable().optional(),
   workspace: z.enum(["business", "family", "shared"]).optional(),
   isActive: z.boolean().optional(),
+});
+
+const MONTH_KEY = /^\d{4}-\d{2}$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+export const insertCreditCardStatementSchema = z.object({
+  id: z.string().optional(),
+  cardKey: z.string().min(1),
+  cardLabel: z.string().min(1),
+  bank: z.string().min(1),
+  holder: z.string().min(1),
+  last4: z.string().regex(/^\d{4}$/),
+  statementMonthKey: z.string().regex(MONTH_KEY),
+  paymentMonthKey: z.string().regex(MONTH_KEY).nullable().optional(),
+  periodStart: z.string().regex(ISO_DATE).nullable().optional(),
+  periodEnd: z.string().regex(ISO_DATE),
+  pagarHasta: z.string().regex(ISO_DATE),
+  montoFacturado: z.number(),
+  montoMinimo: z.number().nullable().optional(),
+  cupoTotal: z.number().nullable().optional(),
+  cupoUtilizado: z.number().nullable().optional(),
+  cupoDisponible: z.number().nullable().optional(),
+  deudaInternacionalUsd: z.number().nullable().optional(),
+  currency: z.string().optional(),
+  source: z.string().optional(),
+  sourceFileHash: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
 });
 
 export const monthlyCloseChecklistItemSchema = z.object({

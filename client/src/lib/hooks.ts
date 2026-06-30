@@ -15,6 +15,7 @@ import type {
   Client,
   Account,
   CreditCardSetting,
+  CreditCardStatement,
   OpeningBalance,
   CommitmentTemplate,
   CommitmentInstance,
@@ -462,6 +463,13 @@ export function useCreditCardSettings() {
   return useQuery<CreditCardSetting[]>({
     queryKey: ["credit-card-settings"],
     queryFn: () => fs.getCreditCardSettings(),
+  });
+}
+
+export function useCreditCardStatements() {
+  return useQuery<CreditCardStatement[]>({
+    queryKey: ["credit-card-statements"],
+    queryFn: () => fs.getCreditCardStatements(),
   });
 }
 

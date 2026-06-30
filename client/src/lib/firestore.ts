@@ -1271,6 +1271,13 @@ export async function getCreditCardSettings() {
   return snapToArray<any>(snap).sort((a, b) => `${a.cardName ?? ""}`.localeCompare(`${b.cardName ?? ""}`));
 }
 
+// Consolidado de deuda de tarjetas (historial mes a mes) — fuente del Centro de Deuda.
+const creditCardStatementsCol = () => collection(db, "creditCardStatements");
+export async function getCreditCardStatements() {
+  const snap = await getDocs(creditCardStatementsCol());
+  return snapToArray<any>(snap).sort((a, b) => `${b.statementMonthKey ?? ""}`.localeCompare(`${a.statementMonthKey ?? ""}`));
+}
+
 export async function createCreditCardSetting(data: Record<string, any>) {
   const payload = {
     defaultPaymentAccountId: null,
