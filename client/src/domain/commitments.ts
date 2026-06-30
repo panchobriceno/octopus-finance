@@ -26,6 +26,7 @@ export type CommitmentPaymentInput = {
   paymentMethod?: string;
   accountId?: string | null;
   creditCardName?: string | null;
+  cardAccountId?: string | null;
   installmentCount?: number | null;
   notes?: string | null;
 };
@@ -94,6 +95,7 @@ export function buildCommitmentInstanceFromTemplate(
     accountId: template.accountId ?? null,
     destinationAccountId: template.destinationAccountId ?? null,
     creditCardName: template.creditCardName ?? null,
+    cardAccountId: template.cardAccountId ?? null,
     status: "pending",
     matchedTransactionId: null,
     matchedAt: null,
@@ -143,6 +145,7 @@ export function buildTransactionFromCommitmentPayment(
     destinationAccountId: instance.destinationAccountId ?? null,
     accountId: explicitOrFallback(input.accountId, instance.accountId ?? null),
     creditCardName: explicitOrFallback(input.creditCardName, instance.creditCardName ?? null),
+    cardAccountId: explicitOrFallback(input.cardAccountId, instance.cardAccountId ?? null),
     installmentCount: explicitOrFallback(input.installmentCount, null),
     sourceClientPaymentId: null,
     sourceCommitmentInstanceId: instance.id,

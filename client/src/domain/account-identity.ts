@@ -14,13 +14,15 @@ const norm = (s: unknown) => String(s ?? "").toLowerCase().normalize("NFD").repl
 /** Banco canónico (el banco se imprime distinto entre cartolas: Edwards = Banco de Chile). */
 export function bankCode(bank: unknown): string {
   const b = norm(bank);
-  if (b.includes("edward") || b.includes("chile")) return "bancochile";
+  // Bancos específicos PRIMERO; "chile" al final como catch-all de Edwards/Banco de Chile
+  // (si no, "Santander Chile" o "Scotiabank Chile" caerían en bancochile).
   if (b.includes("santander")) return "santander";
   if (b.includes("itau")) return "itau";
-  if (b.includes("bci")) return "bci";
-  if (b.includes("estado")) return "bancoestado";
   if (b.includes("scotia")) return "scotiabank";
   if (b.includes("falabella")) return "falabella";
+  if (b.includes("bci")) return "bci";
+  if (b.includes("estado")) return "bancoestado";
+  if (b.includes("edward") || b.includes("chile")) return "bancochile";
   return b.replace(/\s+/g, "").slice(0, 14) || "banco";
 }
 
@@ -41,7 +43,8 @@ export function resolveCardAccount(
 ): Account | null {
   if (ref.cardAccountId) {
     const direct = accounts.find((a) => a.id === ref.cardAccountId);
-    if (direct) return direct;
+    // solo vale si apunta a una tarjeta; si apunta a otra cosa, no la tratamos como tarjeta
+    if (direct && (direct.type === "credit_card" || direct.type === "credit_line")) return direct;
   }
   const cc = ref.creditCardName;
   if (cc) {

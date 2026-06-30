@@ -47,4 +47,19 @@ describe("resolveCardAccount", () => {
   it("devuelve null si no matchea", () => {
     expect(resolveCardAccount({ creditCardName: "Banco Otro …9999" }, accounts)).toBeNull();
   });
+  it("cardAccountId que apunta a una cuenta NO-tarjeta → null", () => {
+    expect(resolveCardAccount({ cardAccountId: "cc" }, accounts)).toBeNull();
+  });
+  it("last4 ambiguo (dos tarjetas mismo last4) → null", () => {
+    const dup1 = acc({ id: "d1", accountNumber: "****1449" });
+    const dup2 = acc({ id: "d2", name: "Otra", accountNumber: "****1449" });
+    expect(resolveCardAccount({ creditCardName: "X …1449" }, [dup1, dup2])).toBeNull();
+  });
+});
+
+describe("bankCode no confunde otros bancos con 'chile'", () => {
+  it("Santander Chile → santander, no bancochile", () => {
+    expect(bankCode("Banco Santander Chile")).toBe("santander");
+    expect(bankCode("Scotiabank Chile")).toBe("scotiabank");
+  });
 });

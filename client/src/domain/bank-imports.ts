@@ -191,6 +191,7 @@ export function applyMovementRule(movement: ImportedMovement, rule: MovementRule
     suggestedPaymentMethod: rule.paymentMethod,
     accountId: rule.accountId ?? movement.accountId,
     creditCardName: rule.creditCardName ?? movement.creditCardName,
+    cardAccountId: (rule as { cardAccountId?: string | null }).cardAccountId ?? movement.cardAccountId,
     matchedRuleId: rule.id,
     confidence: Math.max(currentConfidence, ruleConfidence),
   };
