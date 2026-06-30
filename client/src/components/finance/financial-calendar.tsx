@@ -15,9 +15,10 @@ import {
   usePayCommitmentInstance,
   useAccounts,
   useTransactions,
+  useClients,
 } from "@/lib/hooks";
 import { useMonthlyBalances } from "@/lib/monthly-balances";
-import type { CommitmentInstance, ClientPayment, Account, Transaction } from "@shared/schema";
+import type { CommitmentInstance, ClientPayment, Account, Transaction, Client } from "@shared/schema";
 
 const LIME = "#cdfa46";
 const GRAY = "#cfcfd8";
@@ -63,6 +64,8 @@ type CalEvent = {
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const dayOf = (s: string) => Number((s || "").slice(8, 10)) || 0;
+/** Normaliza un RUT a dígitos+K sin puntos/guion/ceros a la izquierda, para matchear formatos. */
+const normRut = (s: string) => (s || "").toUpperCase().replace(/[^0-9K]/g, "").replace(/^0+/, "");
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
 
 /** "$1.234.567" con signo y sin decimales (formatCLP ya da el formato CLP). */
@@ -130,6 +133,7 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
   const clientPayments = useClientPayments();
   const transactions = useTransactions();
   const accounts = useAccounts();
+  const clients = useClients();
   const pay = usePayCommitmentInstance();
   const { balances: openingMap, update: updateOpening } = useMonthlyBalances();
   const { toast } = useToast();
@@ -178,6 +182,27 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
     return "pendiente";
   };
 
+  // Mapa RUT→nombre de cliente (clients es la fuente canónica; clientPayments de respaldo).
+  // El banco nombra los ingresos con el RUT del que transfiere; lo cambiamos por el nombre.
+  const rutToName = useMemo(() => {
+    const m = new Map<string, string>();
+    const add = (rut?: string | null, name?: string | null) => {
+      if (!rut || !name) return;
+      const k = normRut(rut);
+      if (k && !m.has(k)) m.set(k, name);
+    };
+    for (const c of (clients.data ?? []) as Client[]) add(c.rut, c.name);
+    for (const p of (clientPayments.data ?? []) as ClientPayment[]) add(p.rut, p.clientName);
+    return m;
+  }, [clients.data, clientPayments.data]);
+
+  // Si el primer token del nombre es un RUT conocido, lo reemplaza por el nombre (match exacto
+  // normalizado; si no hay match, deja el nombre original — nunca muestra un cliente equivocado).
+  const displayName = (raw: string) => {
+    const k = normRut((raw || "").trim().split(/\s+/)[0]);
+    return (k && rutToName.get(k)) || raw;
+  };
+
   // Construye todos los eventos del mes (sin filtrar).
   const allEvents = useMemo<CalEvent[]>(() => {
     const out: CalEvent[] = [];
@@ -215,7 +240,7 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
         kind: "in",
         day: dayOf(d),
         dateStr: d,
-        name: p.clientName || "Pago de cliente",
+        name: displayName(p.clientName || "Pago de cliente"),
         cat: p.serviceItem || "Ventas",
         ambito: (p.workspace as Ambito) in AMB ? (p.workspace as Ambito) : "business",
         amount: Number(p.totalAmount) || 0,
@@ -243,7 +268,7 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
         kind: "in",
         day: dayOf(d),
         dateStr: d,
-        name: t.name || "Ingreso",
+        name: displayName(t.name || "Ingreso"),
         cat: t.category || "Ventas",
         ambito: (t.workspace as Ambito) in AMB ? (t.workspace as Ambito) : "business",
         amount: Number(t.amount) || 0,
@@ -253,7 +278,8 @@ export function FinancialCalendar({ className = "" }: { className?: string }) {
       });
     }
     return out;
-  }, [commitments.data, clientPayments.data, transactions.data, monthKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commitments.data, clientPayments.data, transactions.data, monthKey, rutToName]);
 
   const events = useMemo(() => {
     return allEvents.filter((e) => {
