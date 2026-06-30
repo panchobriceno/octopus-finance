@@ -2645,6 +2645,10 @@ async function ensureCategoryExists(
 function assertCompleteTransfer(transactionPayload: Omit<Transaction, "id">) {
   if (transactionPayload.movementType !== "transfer") return;
 
+  if (!transactionPayload.accountId) {
+    throw new Error("El traspaso necesita cuenta de origen antes de convertirse.");
+  }
+
   if (!transactionPayload.destinationWorkspace || !transactionPayload.destinationAccountId) {
     throw new Error("El traspaso necesita workspace y cuenta destino antes de convertirse.");
   }

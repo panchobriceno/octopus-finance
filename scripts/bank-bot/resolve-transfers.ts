@@ -8,8 +8,14 @@ const db=getFirestore(initializeApp({apiKey:process.env.VITE_FIREBASE_API_KEY!,a
 const APPLY=process.argv.includes("--apply"); const NOW=new Date().toISOString();
 const digits=(s:any)=>String(s||"").replace(/\D/g,"");
 const norm=(s:any)=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
-// Candidatos: corridas de dígitos/separadores con >=8 dígitos. Solo se RESUELVE si matchea una cuenta conocida.
-function candidates(desc:string):string[]{ const m=String(desc||"").match(/\d[\d.\-\s]{6,}\d/g)??[]; return Array.from(new Set(m.map(digits).filter(d=>d.length>=8))); }
+// Candidatos: SOLO corridas de dígitos cercanas a contexto de cuenta (cuenta/cta/n°/nro), para no
+// agarrar fechas, RUTs ni números de operación. >=8 dígitos. Solo se RESUELVE si matchea una cuenta.
+function candidates(desc:string):string[]{
+  const n=norm(desc); const out=new Set<string>();
+  const re=/(?:cuenta|cta|n[°º]|nro)[^0-9]{0,15}(\d[\d.\-\s]{5,}\d)/g; let m:RegExpExecArray|null;
+  while((m=re.exec(n))!==null){ const d=digits(m[1]); if(d.length>=8) out.add(d); }
+  return Array.from(out);
+}
 (async()=>{
   const accts=(await getDocs(collection(db,"accounts"))).docs.map(d=>({id:d.id,...(d.data() as any)}));
   const withNum=accts.filter(a=>digits(a.accountNumber).length>=6);
@@ -32,8 +38,8 @@ function candidates(desc:string):string[]{ const m=String(desc||"").match(/\d[\d
     const cands=candidates(`${m.description} ${m.rawDescription??""}`);
     let hit=matchAcct(cands); let method=hit?.method;
     if(!hit && /linea de credito/.test(norm(m.description)) && stmt){
-      const line=accts.find(a=>a.type==="credit_line" && a.bank===stmt.bank && a.id!==stmt.id);
-      if(line){ hit={a:line,method:"same-bank-line"}; method="same-bank-line"; }
+      const lines=accts.filter(a=>a.type==="credit_line" && a.bank===stmt.bank && a.id!==stmt.id);
+      if(lines.length===1){ hit={a:lines[0],method:"same-bank-line"}; method="same-bank-line"; } // único, si no -> manual
     }
     if(!hit){ console.log(`  ✗ "${String(m.description).slice(0,42)}" [${m.direction}] cands=${cands.join(",")||"-"} -> sin match (queda manual)`); unresolved++; continue; }
     if(!stmt){ console.log(`  ✗ "${String(m.description).slice(0,42)}" -> sin cuenta de extracto (accountId)`); unresolved++; continue; }
