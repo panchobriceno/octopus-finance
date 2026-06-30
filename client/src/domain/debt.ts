@@ -14,7 +14,7 @@ const norm = (s: unknown) =>
  * (ej. "Banco Edwards" y "Banco de Chile" son el mismo). Agrupa por código + last4. */
 export function bankCode(bank: unknown): string {
   const b = norm(bank);
-  if (b.includes("edwards") || b.includes("chile")) return "bancochile";
+  if (b.includes("edward") || b.includes("chile")) return "bancochile";
   if (b.includes("santander")) return "santander";
   if (b.includes("itau")) return "itau";
   if (b.includes("bci")) return "bci";

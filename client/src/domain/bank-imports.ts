@@ -33,6 +33,7 @@ export type ImportedMovementOverride = {
   paymentMethod?: string;
   accountId?: string | null;
   creditCardName?: string | null;
+  cardAccountId?: string | null;
   destinationWorkspace?: string | null;
   destinationAccountId?: string | null;
 };
@@ -56,6 +57,7 @@ export type MovementSeedInput = {
   destinationWorkspace?: string | null;
   destinationAccountId?: string | null;
   sourceAccountId?: string | null;
+  cardAccountId?: string | null;
   installmentCount?: number | null;
   confidence?: number;
   matchedRuleId?: string | null;
@@ -234,6 +236,7 @@ export function buildImportedMovement(input: MovementSeedInput): Omit<ImportedMo
     suggestedDestinationWorkspace: input.destinationWorkspace ?? null,
     suggestedDestinationAccountId: input.destinationAccountId ?? null,
     suggestedSourceAccountId: input.sourceAccountId ?? null,
+    cardAccountId: input.cardAccountId ?? null,
     installmentCount: input.installmentCount ?? null,
     confidence: input.confidence ?? 72,
     matchedRuleId: input.matchedRuleId ?? null,
@@ -285,6 +288,10 @@ export function buildTransactionFromImportedMovement(
     creditCardName:
       override.creditCardName ??
       movement.creditCardName ??
+      null,
+    cardAccountId:
+      override.cardAccountId ??
+      movement.cardAccountId ??
       null,
     installmentCount: movement.installmentCount ?? null,
     // origen del traspaso: usa la cuenta ORIGEN sugerida (no pisa accountId/procedencia del import)

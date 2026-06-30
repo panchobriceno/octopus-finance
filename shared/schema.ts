@@ -23,6 +23,7 @@ export interface Transaction {
   destinationWorkspace?: string | null;
   destinationAccountId?: string | null;
   creditCardName?: string | null;
+  cardAccountId?: string | null; // cuenta-tarjeta canónica (la tarjeta usada/pagada); accountId = cuenta que paga
   installmentCount?: number | null;
   accountId?: string | null;
   sourceClientPaymentId?: string | null;
@@ -49,6 +50,7 @@ export interface InsertTransaction {
   destinationWorkspace?: string | null;
   destinationAccountId?: string | null;
   creditCardName?: string | null;
+  cardAccountId?: string | null; // cuenta-tarjeta canónica (la tarjeta usada/pagada); accountId = cuenta que paga
   installmentCount?: number | null;
   accountId?: string | null;
   sourceClientPaymentId?: string | null;
@@ -365,6 +367,7 @@ export interface CommitmentTemplate {
   accountId: string | null;
   destinationAccountId?: string | null;
   creditCardName: string | null;
+  cardAccountId?: string | null;
   dayOfMonth: number;
   frequency: string; // "monthly"
   matchingKeywords: string[];
@@ -388,6 +391,7 @@ export interface InsertCommitmentTemplate {
   accountId?: string | null;
   destinationAccountId?: string | null;
   creditCardName?: string | null;
+  cardAccountId?: string | null; // cuenta-tarjeta canónica (la tarjeta usada/pagada); accountId = cuenta que paga
   dayOfMonth: number;
   frequency?: string;
   matchingKeywords?: string[];
@@ -415,6 +419,7 @@ export interface CommitmentInstance {
   accountId: string | null;
   destinationAccountId?: string | null;
   creditCardName: string | null;
+  cardAccountId?: string | null;
   status: string; // "pending" | "paid" | "skipped"
   matchedTransactionId: string | null;
   matchedAt: string | null;
@@ -438,6 +443,7 @@ export interface InsertCommitmentInstance {
   accountId?: string | null;
   destinationAccountId?: string | null;
   creditCardName?: string | null;
+  cardAccountId?: string | null; // cuenta-tarjeta canónica (la tarjeta usada/pagada); accountId = cuenta que paga
   status?: string;
   matchedTransactionId?: string | null;
   matchedAt?: string | null;
@@ -457,6 +463,7 @@ export interface ImportBatch {
   bankName: string | null;
   accountId: string | null;
   creditCardName: string | null;
+  cardAccountId?: string | null;
   workspace: string; // "business" | "family" | "dentist" | "shared"
   periodStart: string | null;
   periodEnd: string | null;
@@ -481,6 +488,7 @@ export interface InsertImportBatch {
   bankName?: string | null;
   accountId?: string | null;
   creditCardName?: string | null;
+  cardAccountId?: string | null; // cuenta-tarjeta canónica (la tarjeta usada/pagada); accountId = cuenta que paga
   workspace?: string;
   periodStart?: string | null;
   periodEnd?: string | null;
@@ -508,6 +516,7 @@ export interface ImportedMovement {
   bankName: string | null;
   accountId: string | null;
   creditCardName: string | null;
+  cardAccountId?: string | null;
   date: string;
   description: string;
   rawDescription: string;
@@ -548,6 +557,7 @@ export interface InsertImportedMovement {
   bankName?: string | null;
   accountId?: string | null;
   creditCardName?: string | null;
+  cardAccountId?: string | null; // cuenta-tarjeta canónica (la tarjeta usada/pagada); accountId = cuenta que paga
   date: string;
   description: string;
   rawDescription?: string;
@@ -588,6 +598,7 @@ export interface MovementRule {
   paymentMethod: string;
   accountId: string | null;
   creditCardName: string | null;
+  cardAccountId?: string | null;
   amountDirection: string; // "any" | "income" | "expense"
   priority: number;
   isActive: boolean;
@@ -605,6 +616,7 @@ export interface InsertMovementRule {
   paymentMethod?: string;
   accountId?: string | null;
   creditCardName?: string | null;
+  cardAccountId?: string | null; // cuenta-tarjeta canónica (la tarjeta usada/pagada); accountId = cuenta que paga
   amountDirection?: string;
   priority?: number;
   isActive?: boolean;
@@ -630,6 +642,7 @@ export const insertTransactionSchema = z.object({
   destinationWorkspace: z.string().nullable().optional(),
   destinationAccountId: z.string().nullable().optional(),
   creditCardName: z.string().nullable().optional(),
+  cardAccountId: z.string().nullable().optional(),
   installmentCount: z.number().int().nullable().optional(),
   accountId: z.string().nullable().optional(),
   sourceClientPaymentId: z.string().nullable().optional(),
@@ -787,6 +800,7 @@ export const insertCommitmentTemplateSchema = z.object({
   accountId: z.string().nullable().optional(),
   destinationAccountId: z.string().nullable().optional(),
   creditCardName: z.string().nullable().optional(),
+  cardAccountId: z.string().nullable().optional(),
   dayOfMonth: z.number().int().min(1).max(31),
   frequency: z.enum(["monthly"]).optional(),
   matchingKeywords: z.array(z.string()).optional(),
@@ -813,6 +827,7 @@ export const insertCommitmentInstanceSchema = z.object({
   accountId: z.string().nullable().optional(),
   destinationAccountId: z.string().nullable().optional(),
   creditCardName: z.string().nullable().optional(),
+  cardAccountId: z.string().nullable().optional(),
   status: z.enum(["pending", "paid", "skipped"]).optional(),
   matchedTransactionId: z.string().nullable().optional(),
   matchedAt: z.string().nullable().optional(),
@@ -830,6 +845,7 @@ export const insertImportBatchSchema = z.object({
   bankName: z.string().nullable().optional(),
   accountId: z.string().nullable().optional(),
   creditCardName: z.string().nullable().optional(),
+  cardAccountId: z.string().nullable().optional(),
   workspace: z.enum(["business", "family", "dentist", "shared"]).optional(),
   periodStart: z.string().nullable().optional(),
   periodEnd: z.string().nullable().optional(),
@@ -856,6 +872,7 @@ export const insertImportedMovementSchema = z.object({
   bankName: z.string().nullable().optional(),
   accountId: z.string().nullable().optional(),
   creditCardName: z.string().nullable().optional(),
+  cardAccountId: z.string().nullable().optional(),
   date: z.string().min(1),
   description: z.string().min(1),
   rawDescription: z.string().optional(),
@@ -895,6 +912,7 @@ export const insertMovementRuleSchema = z.object({
   paymentMethod: z.enum(["bank_account", "credit_card", "cash"]).optional(),
   accountId: z.string().nullable().optional(),
   creditCardName: z.string().nullable().optional(),
+  cardAccountId: z.string().nullable().optional(),
   amountDirection: z.enum(["any", "income", "expense"]).optional(),
   priority: z.number().int().optional(),
   isActive: z.boolean().optional(),
