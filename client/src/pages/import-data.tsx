@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { useAccounts, useCategories, useBulkDeleteTransactions, useCreateCategory, useCreateImportedMovementBatch, useCreditCardSettings, useImportBatches, useTransactions, useUpdateTransaction } from "@/lib/hooks";
+import { useAccounts, useCategories, useItems, useBulkDeleteTransactions, useCreateCategory, useCreateImportedMovementBatch, useCreditCardSettings, useImportBatches, useTransactions, useUpdateTransaction } from "@/lib/hooks";
 import type { Account, ImportBatch, Transaction } from "@shared/schema";
 import { getCreditCards } from "@/lib/credit-cards";
 // pdfjs (~1.4MB) se carga on-demand solo cuando hay que descifrar un PDF con
@@ -142,6 +142,7 @@ export default function ImportDataPage({
   const { toast } = useToast();
 
   const { data: categories = [] } = useCategories();
+  const { data: items = [] } = useItems();
   const { data: transactions = [] } = useTransactions();
   const { data: accounts = [] } = useAccounts();
   const { data: creditCardSettings = [] } = useCreditCardSettings();
@@ -403,6 +404,8 @@ export default function ImportDataPage({
           ),
         notes: importDueDate ? `Vence: ${importDueDate}` : null,
         workspace: row.workspace,
+        // solo persistimos la subcategoría si pertenece a la categoría resuelta de la fila (consistencia item↔categoría)
+        itemId: row.itemId && itemsForRow(row).some((item) => item.id === row.itemId) ? row.itemId : null,
         movementType: effectiveMovementType,
         installmentCount: row.installmentCount,
         paymentMethod:
@@ -691,9 +694,29 @@ export default function ImportDataPage({
     [handleFile, toast],
   );
 
+  // Resuelve la categoría (por nombre+tipo+ámbito) a su id, y de ahí los items (subcategorías) disponibles.
+  const resolveCategoryId = (row: ParsedPreviewRow) => {
+    const catType = row.type === "income" ? "income" : "expense";
+    const byWs = categories.find(
+      (c) => normalizeText(c.name) === normalizeText(row.category) && c.type === catType && (!c.workspace || c.workspace === row.workspace),
+    );
+    return (byWs ?? categories.find((c) => normalizeText(c.name) === normalizeText(row.category) && c.type === catType))?.id ?? null;
+  };
+  const itemsForRow = (row: ParsedPreviewRow) => {
+    const catId = resolveCategoryId(row);
+    return catId ? items.filter((item) => item.categoryId === catId) : [];
+  };
+
   const updateRowCategory = (index: number, category: string) => {
     setPreviewRows((prev) => prev.map((row, rowIndex) => (
-      rowIndex === index ? { ...row, category, workspace: suggestWorkspace(row.name, category, row.type, accountType, defaultImportWorkspace) } : row
+      // al cambiar la categoría se resetea la subcategoría (ya no aplica)
+      rowIndex === index ? { ...row, category, itemId: null, workspace: suggestWorkspace(row.name, category, row.type, accountType, defaultImportWorkspace) } : row
+    )));
+  };
+
+  const updateRowItem = (index: number, itemId: string | null) => {
+    setPreviewRows((prev) => prev.map((row, rowIndex) => (
+      rowIndex === index ? { ...row, itemId } : row
     )));
   };
 
@@ -702,7 +725,7 @@ export default function ImportDataPage({
       const next = prev.map((row, rowIndex) => {
         if (rowIndex !== index) return row;
         const category = suggestRowCategory(row.name, type, categories);
-        return { ...row, type, category, workspace: suggestWorkspace(row.name, category, type, accountType, defaultImportWorkspace) };
+        return { ...row, type, category, itemId: null, workspace: suggestWorkspace(row.name, category, type, accountType, defaultImportWorkspace) };
       });
       const seenInFile = new Set<string>();
 
@@ -1512,6 +1535,7 @@ export default function ImportDataPage({
                     {accountType === "credit" ? <TableHead>Tipo TC</TableHead> : null}
                     <TableHead>Tipo</TableHead>
                     <TableHead>Categoría</TableHead>
+                    <TableHead>Subcategoría</TableHead>
                     <TableHead>Ámbito</TableHead>
                     <TableHead>Validación</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
@@ -1639,6 +1663,31 @@ export default function ImportDataPage({
                             ))}
                           </SelectContent>
                           </Select>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const rowItems = itemsForRow(row);
+                          if (rowItems.length === 0) {
+                            return <span className="text-xs text-muted-foreground">—</span>;
+                          }
+                          return (
+                            <Select
+                              value={row.itemId ?? "__none__"}
+                              onValueChange={(value) => updateRowItem(index, value === "__none__" ? null : value)}
+                              disabled={Boolean(row.error)}
+                            >
+                              <SelectTrigger className="w-44 h-8 text-xs">
+                                <SelectValue placeholder="Subcategoría" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">Sin subcategoría</SelectItem>
+                                {rowItems.map((item) => (
+                                  <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           );
                         })()}
                       </TableCell>

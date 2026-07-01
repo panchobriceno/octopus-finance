@@ -531,6 +531,7 @@ export interface ImportedMovement {
   suggestedDestinationWorkspace: string | null;
   suggestedDestinationAccountId: string | null;
   suggestedSourceAccountId: string | null; // cuenta ORIGEN sugerida para traspasos (no pisa accountId/procedencia)
+  suggestedItemId?: string | null; // subcategoría (item) sugerida al importar → viaja a transaction.itemId
   installmentCount: number | null;
   confidence: number;
   matchedRuleId: string | null;
@@ -572,6 +573,7 @@ export interface InsertImportedMovement {
   suggestedDestinationWorkspace?: string | null;
   suggestedDestinationAccountId?: string | null;
   suggestedSourceAccountId?: string | null;
+  suggestedItemId?: string | null;
   installmentCount?: number | null;
   confidence?: number;
   matchedRuleId?: string | null;

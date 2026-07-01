@@ -14,6 +14,7 @@ export interface ParsedPreviewRow {
   amount: number;
   type: "income" | "expense" | "credit_card_payment";
   category: string;
+  itemId?: string | null; // subcategoría elegida en el wizard (opcional)
   workspace: "business" | "family" | "dentist";
   installmentsLabel: string;
   installmentCount: number | null;

@@ -36,6 +36,7 @@ export type ImportedMovementOverride = {
   cardAccountId?: string | null;
   destinationWorkspace?: string | null;
   destinationAccountId?: string | null;
+  itemId?: string | null;
 };
 
 export type MovementSeedInput = {
@@ -58,6 +59,7 @@ export type MovementSeedInput = {
   destinationAccountId?: string | null;
   sourceAccountId?: string | null;
   cardAccountId?: string | null;
+  itemId?: string | null;
   installmentCount?: number | null;
   confidence?: number;
   matchedRuleId?: string | null;
@@ -183,9 +185,12 @@ export function applyMovementRule(movement: ImportedMovement, rule: MovementRule
   const keywordCount = rule.keywords.map(normalizeImportText).filter(Boolean).length;
   const ruleConfidence = Math.min(88, 76 + keywordCount * 4 + Math.max(Number(rule.priority) || 0, 0));
 
+  // Si la regla cambia la categoría, la subcategoría (item) elegida antes ya no aplica → se limpia.
+  const categoryChanged = normalizeImportText(rule.category) !== normalizeImportText(movement.suggestedCategory);
   return {
     ...movement,
     suggestedCategory: rule.category,
+    suggestedItemId: categoryChanged ? null : (movement.suggestedItemId ?? null),
     suggestedWorkspace: rule.workspace,
     suggestedMovementType: rule.movementType,
     suggestedPaymentMethod: rule.paymentMethod,
@@ -237,6 +242,7 @@ export function buildImportedMovement(input: MovementSeedInput): Omit<ImportedMo
     suggestedDestinationWorkspace: input.destinationWorkspace ?? null,
     suggestedDestinationAccountId: input.destinationAccountId ?? null,
     suggestedSourceAccountId: input.sourceAccountId ?? null,
+    suggestedItemId: input.itemId ?? null,
     cardAccountId: input.cardAccountId ?? null,
     installmentCount: input.installmentCount ?? null,
     confidence: input.confidence ?? 72,
@@ -274,7 +280,7 @@ export function buildTransactionFromImportedMovement(
     notes: movement.notes,
     subtype: "actual",
     status,
-    itemId: null,
+    itemId: override.itemId ?? movement.suggestedItemId ?? null,
     workspace: override.workspace ?? movement.suggestedWorkspace,
     movementType,
     paymentMethod,
