@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { PieChart as PieIcon } from "lucide-react";
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCLP } from "@/lib/utils";
 import { useTransactions } from "@/lib/hooks";
 import { buildSpendingAnalysis, type SpendingAnalysis } from "@/domain/spending";
@@ -15,12 +16,20 @@ const monthKeyLocal = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 const mkLabel = (mk: string) => `${MESES[Number(mk.slice(5, 7)) - 1] ?? mk}`;
+const mkLabelYear = (mk: string) => `${mkLabel(mk)} ${mk.slice(0, 4)}`;
 
 export default function AnalisisPage() {
   const transactions = useTransactions();
+  const [selectedMonth, setSelectedMonth] = useState(monthKeyLocal());
+  // Meses disponibles a partir de las transacciones (siempre incluye el mes actual), desc.
+  const months = useMemo(() => {
+    const set = new Set<string>([monthKeyLocal()]);
+    for (const t of transactions.data ?? []) if (t.date) set.add(t.date.slice(0, 7));
+    return Array.from(set).sort((x, y) => y.localeCompare(x));
+  }, [transactions.data]);
   const a = useMemo<SpendingAnalysis>(
-    () => buildSpendingAnalysis(transactions.data ?? [], { monthKey: monthKeyLocal(), monthsBack: 6 }),
-    [transactions.data],
+    () => buildSpendingAnalysis(transactions.data ?? [], { monthKey: selectedMonth, monthsBack: 6 }),
+    [transactions.data, selectedMonth],
   );
   const loading = !transactions.data;
   const trendData = a.trend.map((t) => ({ name: mkLabel(t.monthKey), monto: t.monto, current: t.monthKey === a.monthKey }));
@@ -30,12 +39,22 @@ export default function AnalisisPage() {
 
   return (
     <div className="h-full space-y-5 overflow-y-auto p-4 sm:p-6">
-      <div className="flex items-center gap-3">
-        <span className="flex size-9 items-center justify-center rounded-xl border border-card-border bg-secondary text-[#cdfa46]"><PieIcon className="size-4" /></span>
-        <div>
-          <h2 className="text-xl font-extrabold tracking-tight">Análisis de gastos</h2>
-          <p className="mt-0.5 text-xs text-[#9a9aa6]">En qué se va la plata este mes ({mkLabel(a.monthKey)}) y cómo viene la tendencia.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex size-9 items-center justify-center rounded-xl border border-card-border bg-secondary text-[#cdfa46]"><PieIcon className="size-4" /></span>
+          <div>
+            <h2 className="text-xl font-extrabold tracking-tight">Análisis de gastos</h2>
+            <p className="mt-0.5 text-xs text-[#9a9aa6]">En qué se va la plata en {mkLabelYear(a.monthKey)} y cómo viene la tendencia.</p>
+          </div>
         </div>
+        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Mes" /></SelectTrigger>
+          <SelectContent>
+            {months.map((m) => (
+              <SelectItem key={m} value={m} className="capitalize">{mkLabelYear(m)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* total + tendencia */}
