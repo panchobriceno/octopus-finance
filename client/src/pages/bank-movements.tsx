@@ -10,6 +10,7 @@ import {
   ListChecks,
   RotateCw,
   Search,
+  Sparkles,
   Upload,
   XCircle,
 } from "lucide-react";
@@ -19,6 +20,8 @@ import {
   useAccounts,
   useBulkConvertImportedMovements,
   useCategories,
+  useItems,
+  useMovementRules,
   useCloseImportBatch,
   useConvertImportedMovement,
   useCreditCardStatements,
@@ -30,6 +33,9 @@ import {
   useSeedDemoImportedMovements,
 } from "@/lib/hooks";
 import { buildImportedMovementDashboard, normalizeImportText } from "@/domain/bank-imports";
+import { itemsForRuleCategory, sanitizeRuleItemId } from "@/domain/movement-rules";
+import { extractRuleKeywords } from "@/domain/rule-keywords";
+import { LearnRuleDialog, type LearnRuleTarget } from "@/components/finance/learn-rule-dialog";
 import { categoryMatchesWorkspace } from "@/domain/categories";
 import { openImportWizard, closeImportWizard } from "@/lib/import-wizard";
 import { formatCLP } from "@/lib/utils";
@@ -58,6 +64,7 @@ type StatusFilter = "active" | "pending" | "duplicate" | "converted" | "reconcil
 
 type RowOverride = {
   category?: string;
+  itemId?: string | null; // subcategoría (F2 paso 5); null explícito = "sin subcategoría"
   workspace?: string;
   accountId?: string;
   destinationWorkspace?: string;
@@ -167,6 +174,7 @@ export default function BankMovementsPage({
   const [bulkPreflight, setBulkPreflight] = useState<BulkImportedMovementConversionPreflight | null>(null);
   const [search, setSearch] = useState("");
   const [overrides, setOverrides] = useState<Record<string, RowOverride>>({});
+  const [learnTarget, setLearnTarget] = useState<LearnRuleTarget | null>(null);
 
   const { data: batches = [], isLoading: batchesLoading } = useImportBatches();
   const latestBatchId = batches[0]?.id ?? null;
@@ -182,6 +190,8 @@ export default function BankMovementsPage({
     enabled: movementsQueryEnabled,
   });
   const { data: categories = [] } = useCategories();
+  const { data: items = [] } = useItems();
+  const { data: movementRules = [] } = useMovementRules();
   const { data: accounts = [] } = useAccounts();
   const { data: cardStatements = [] } = useCreditCardStatements();
   // Tarjetas conocidas (de los estados de cuenta), distinct por last4, para asignar un pago a su tarjeta.
@@ -344,6 +354,11 @@ export default function BankMovementsPage({
     const rowOverride = overrides[movement.id] ?? {};
     const accountId = rowOverride.accountId === "none" ? null : rowOverride.accountId;
     const destinationAccountId = rowOverride.destinationAccountId === "none" ? null : rowOverride.destinationAccountId;
+    // Subcategoría: override explícito (incl. null) gana sobre la sugerida; se sanea contra la categoría final.
+    const effectiveCategory = rowOverride.category ?? movement.suggestedCategory;
+    const effectiveWorkspace = rowOverride.workspace ?? movement.suggestedWorkspace;
+    const effectiveItemId = rowOverride.itemId !== undefined ? rowOverride.itemId : (movement.suggestedItemId ?? null);
+    const itemId = sanitizeRuleItemId(categories, items, effectiveCategory, movement.suggestedMovementType, effectiveWorkspace, effectiveItemId);
 
     setConvertingId(movement.id);
     try {
@@ -351,6 +366,7 @@ export default function BankMovementsPage({
         id: movement.id,
         override: {
           category: rowOverride.category,
+          itemId,
           workspace: rowOverride.workspace,
           accountId,
           destinationWorkspace: rowOverride.destinationWorkspace,
@@ -770,6 +786,7 @@ export default function BankMovementsPage({
                       <TableHead className="min-w-[150px]">Monto</TableHead>
                       <TableHead className="min-w-[170px]">Clasificacion</TableHead>
                       <TableHead className="min-w-[190px]">Categoria</TableHead>
+                      <TableHead className="min-w-[180px]">Subcategoria</TableHead>
                       <TableHead className="min-w-[160px]">Ambito</TableHead>
                       <TableHead className="min-w-[220px]">Cuenta</TableHead>
                       <TableHead className="min-w-[130px]">Estado</TableHead>
@@ -787,6 +804,10 @@ export default function BankMovementsPage({
                         selectedWorkspace,
                         selectedCategory,
                       );
+                      // Subcategoría: override explícito (incl. null) gana; se saneada contra la categoría.
+                      const rowItems = itemsForRuleCategory(categories, items, selectedCategory, movement.suggestedMovementType, selectedWorkspace);
+                      const effectiveItemId = rowOverride.itemId !== undefined ? rowOverride.itemId : (movement.suggestedItemId ?? null);
+                      const selectedItemId = sanitizeRuleItemId(categories, items, selectedCategory, movement.suggestedMovementType, selectedWorkspace, effectiveItemId);
                       const isTransfer = movement.suggestedMovementType === "transfer";
                       const isCardPayment = movement.suggestedMovementType === "credit_card_payment";
                       const selectedCardName = rowOverride.creditCardName ?? movement.creditCardName ?? "";
@@ -837,7 +858,7 @@ export default function BankMovementsPage({
                           <TableCell className="align-top">
                             <Select
                               value={selectedCategory}
-                              onValueChange={(value) => setRowOverride(movement.id, { category: value })}
+                              onValueChange={(value) => setRowOverride(movement.id, { category: value, itemId: null })}
                               disabled={!canReview}
                             >
                               <SelectTrigger className="h-9">
@@ -851,6 +872,27 @@ export default function BankMovementsPage({
                                 ))}
                               </SelectContent>
                             </Select>
+                          </TableCell>
+                          <TableCell className="align-top">
+                            {rowItems.length === 0 || isTransfer || isCardPayment ? (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            ) : (
+                              <Select
+                                value={selectedItemId ?? "__none__"}
+                                onValueChange={(value) => setRowOverride(movement.id, { itemId: value === "__none__" ? null : value })}
+                                disabled={!canReview}
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue placeholder="Subcategoria" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">Sin subcategoria</SelectItem>
+                                  {rowItems.map((item) => (
+                                    <SelectItem key={`${movement.id}-${item.id}`} value={item.id}>{item.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
                           </TableCell>
                           <TableCell className="align-top">
                             <Select
@@ -963,6 +1005,36 @@ export default function BankMovementsPage({
                           </TableCell>
                           <TableCell className="align-top">
                             <div className="flex justify-end gap-2">
+                              {(() => {
+                                // "Corregido" = el valor final difiere de la sugerencia (no basta con tocar el select).
+                                const corrected =
+                                  selectedCategory !== movement.suggestedCategory ||
+                                  selectedItemId !== (movement.suggestedItemId ?? null);
+                                const isIncomeOrExpense = movement.suggestedMovementType === "income" || movement.suggestedMovementType === "expense";
+                                const canLearn =
+                                  canReview && corrected && isIncomeOrExpense &&
+                                  selectedCategory && selectedCategory !== "Sin categoría" && selectedCategory !== "Sin categoria" &&
+                                  extractRuleKeywords(movement.description).length > 0;
+                                return canLearn ? (
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="size-9 text-primary/80 hover:text-primary"
+                                    title="Aprender una regla de esta corrección"
+                                    onClick={() => setLearnTarget({
+                                      id: movement.id,
+                                      name: movement.description,
+                                      category: selectedCategory,
+                                      itemId: selectedItemId,
+                                      workspace: selectedWorkspace,
+                                      type: movement.suggestedMovementType === "income" ? "income" : "expense",
+                                      accountType: movement.suggestedPaymentMethod === "credit_card" ? "credit" : "bank",
+                                    })}
+                                  >
+                                    <Sparkles className="size-4" />
+                                  </Button>
+                                ) : null;
+                              })()}
                               <Button
                                 size="sm"
                                 onClick={() => handleConvert(movement)}
@@ -1004,6 +1076,14 @@ export default function BankMovementsPage({
         </Card>
       </div>
     </div>
+    <LearnRuleDialog
+      open={learnTarget !== null}
+      onOpenChange={(open) => { if (!open) setLearnTarget(null); }}
+      target={learnTarget}
+      rules={movementRules}
+      categories={categories}
+      items={items}
+    />
     <AlertDialog open={Boolean(rollbackBatchId)} onOpenChange={(open) => {
       if (!open) setRollbackBatchId(null);
     }}>

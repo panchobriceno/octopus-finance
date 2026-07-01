@@ -317,7 +317,8 @@ export function buildTransactionFromImportedMovement(
     notes: movement.notes,
     subtype: "actual",
     status,
-    itemId: override.itemId ?? movement.suggestedItemId ?? null,
+    // Un override explícito (incluido null = "sin subcategoría") gana; si no viene, cae al sugerido.
+    itemId: override.itemId !== undefined ? override.itemId : (movement.suggestedItemId ?? null),
     workspace: override.workspace ?? movement.suggestedWorkspace,
     movementType,
     paymentMethod,

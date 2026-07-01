@@ -52,6 +52,7 @@ import {
   type ImportedMovementOverride,
   type MovementSeedInput,
 } from "@/domain/bank-imports";
+import { sanitizeRuleItemId } from "@/domain/movement-rules";
 import {
   buildTransactionFromCommitmentPayment,
   buildMissingCommitmentInstances,
@@ -2698,9 +2699,16 @@ function assertCompleteTransfer(transactionPayload: Omit<Transaction, "id">) {
 export async function convertImportedMovementToTransaction(
   id: string,
   override: ImportedMovementOverride = {},
-  options: { forceDuplicate?: boolean; categoryKeys?: Set<string>; accounts?: Account[] } = {},
+  options: { forceDuplicate?: boolean; categoryKeys?: Set<string>; accounts?: Account[]; categories?: Category[]; items?: Item[] } = {},
 ) {
   const accounts = options.accounts ?? snapToArray<Account>(await getDocs(accountsCol()));
+  // Catálogos para sanear la subcategoría: nunca persistir un itemId huérfano o de otra categoría.
+  const [saneCategories, saneItems] = await Promise.all([
+    options.categories ? Promise.resolve(options.categories) : getDocs(categoriesCol()).then((s) => snapToArray<Category>(s)),
+    options.items ? Promise.resolve(options.items) : getDocs(itemsCol()).then((s) => snapToArray<Item>(s)),
+  ]);
+  const saneItemId = (payload: { category: string; movementType?: string; workspace?: string | null; itemId?: string | null }) =>
+    sanitizeRuleItemId(saneCategories, saneItems, payload.category, payload.movementType, payload.workspace, payload.itemId ?? null);
   const movementRef = doc(db, "importedMovements", id);
   const movementSnapshot = await getDoc(movementRef);
   if (!movementSnapshot.exists()) {
@@ -2717,8 +2725,10 @@ export async function convertImportedMovementToTransaction(
   const batchLabel = batchSnapshot.exists()
     ? ((batchSnapshot.data() as Partial<ImportBatch>).label ?? movement.sourceName)
     : movement.sourceName;
+  const builtPayload = buildTransactionFromImportedMovement(movement, override);
   const transactionPayload = {
-    ...buildTransactionFromImportedMovement(movement, override),
+    ...builtPayload,
+    itemId: saneItemId(builtPayload),
     importBatchLabel: batchLabel,
   };
   assertCompleteTransfer(transactionPayload);
@@ -2759,8 +2769,10 @@ export async function convertImportedMovementToTransaction(
     const freshBatchLabel = freshBatchSnapshot.exists()
       ? ((freshBatchSnapshot.data() as Partial<ImportBatch>).label ?? freshMovement.sourceName)
       : freshMovement.sourceName;
+    const freshBuiltPayload = buildTransactionFromImportedMovement(freshMovement, override);
     const freshTransactionPayload = {
-      ...buildTransactionFromImportedMovement(freshMovement, override),
+      ...freshBuiltPayload,
+      itemId: saneItemId(freshBuiltPayload),
       importBatchLabel: freshBatchLabel,
     };
     assertCompleteTransfer(freshTransactionPayload);
@@ -2795,6 +2807,10 @@ export async function bulkConvertImportedMovements(ids: string[]) {
   const failed: Array<{ id: string; error: string }> = [];
   const categoryKeys = await getExistingCategoryKeys();
   const accounts = snapToArray<Account>(await getDocs(accountsCol())); // una sola lectura para el lote
+  const [categories, items] = await Promise.all([
+    getDocs(categoriesCol()).then((s) => snapToArray<Category>(s)),
+    getDocs(itemsCol()).then((s) => snapToArray<Item>(s)),
+  ]);
   const preflight = await previewBulkImportedMovementConversion(ids);
 
   for (const duplicate of preflight.duplicates) {
@@ -2829,7 +2845,7 @@ export async function bulkConvertImportedMovements(ids: string[]) {
 
   for (const id of preflight.readyIds) {
     try {
-      await convertImportedMovementToTransaction(id, {}, { categoryKeys, accounts });
+      await convertImportedMovementToTransaction(id, {}, { categoryKeys, accounts, categories, items });
       converted += 1;
     } catch (error) {
       skipped += 1;

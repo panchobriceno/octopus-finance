@@ -38,6 +38,24 @@ describe("bank import domain", () => {
     expect(buildTransactionFromImportedMovement(movement).installmentCount).toBe(12);
   });
 
+  it("itemId del override explícito gana sobre el sugerido (incluido null = sin subcategoría)", () => {
+    const movement = {
+      id: "m",
+      ...buildImportedMovement({
+        batchId: "b", source: "manual_file", sourceName: "s", sourceType: "bank_account",
+        date: "2026-06-23", description: "x", amount: 1000, direction: "expense",
+        category: "Comida", workspace: "family", movementType: "expense",
+        itemId: "item-sugerido", createdAt: "2026-06-23T00:00:00.000Z",
+      }),
+    };
+    // sin override → usa el sugerido
+    expect(buildTransactionFromImportedMovement(movement).itemId).toBe("item-sugerido");
+    // override con item → gana el override
+    expect(buildTransactionFromImportedMovement(movement, { itemId: "item-humano" }).itemId).toBe("item-humano");
+    // override null explícito → sin subcategoría (NO vuelve al sugerido)
+    expect(buildTransactionFromImportedMovement(movement, { itemId: null }).itemId).toBeNull();
+  });
+
   it("finds an existing transaction that matches the imported movement payload", () => {
     const movement = {
       id: "movement-1",

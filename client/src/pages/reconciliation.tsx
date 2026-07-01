@@ -215,6 +215,7 @@ export default function ReconciliationPage() {
           movementType: "credit_card_payment",
           paymentMethod: "bank_account",
           category: "Tarjeta de credito",
+          itemId: null, // un pago de tarjeta no lleva subcategoría; no arrastrar la sugerida
         },
       });
       toast({
