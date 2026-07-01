@@ -68,11 +68,20 @@ export function buildCardDebt(
   opts: { asOf: string },
 ): CardDebt[] {
   const asOf = opts.asOf;
-  // Agrupa por last4 (identidad estable del plástico): el banco Y el titular se imprimen
-  // distinto entre cartolas, así que partirían la misma tarjeta en dos y netearían doble.
+  // Clave canónica: bankCode + last4, tomando el banco de la CUENTA-tarjeta (no de la cartola, que
+  // imprime el banco/titular distinto entre períodos → partiría la misma tarjeta y netearía doble).
+  // El bankCode desambigua el caso (raro) de dos tarjetas de bancos distintos con el mismo last4.
+  const cardByLast4 = new Map<string, Account>();
+  const accById = new Map(accounts.map((a) => [a.id, a]));
+  for (const a of accounts) {
+    if (a.type !== "credit_card") continue;
+    const l4 = digits(a.accountNumber).slice(-4);
+    if (l4.length === 4) cardByLast4.set(l4, a);
+  }
   const byCard = new Map<string, CreditCardStatement[]>();
   for (const s of statements) {
-    const key = s.last4;
+    const acc = cardByLast4.get(s.last4);
+    const key = `${bankCode(acc?.bank ?? s.bank)}:${s.last4}`;
     const arr = byCard.get(key) ?? [];
     arr.push(s);
     byCard.set(key, arr);
@@ -84,16 +93,20 @@ export function buildCardDebt(
     const latest = sorted[sorted.length - 1];
     const montoFacturado = Number(latest.montoFacturado) || 0;
 
-    // Netea por LAST4: pagos de tarjeta ejecutados, entre el cierre y asOf, cuya tarjeta == este estado.
+    // Netea pagos de tarjeta ejecutados, entre el cierre y asOf, cuya tarjeta == este estado.
+    // Prefiere cardAccountId (identidad estructural del relink); si no, cae al last4 del nombre.
     const pagos: CardPayment[] = transactions
       .filter((t) => {
         const n = normalizeTransaction(t);
+        const payL4 = n.cardAccountId
+          ? digits(accById.get(n.cardAccountId)?.accountNumber).slice(-4)
+          : paymentCardLast4(t.creditCardName, accounts);
         return (
           n.movementType === "credit_card_payment" &&
           isExecutedTransaction(t) &&
           String(t.date) > String(latest.periodEnd) &&
           String(t.date) <= asOf &&
-          paymentCardLast4(t.creditCardName, accounts) === latest.last4
+          payL4 === latest.last4
         );
       })
       .map((t) => ({ date: t.date, amount: Number(t.amount) || 0, name: t.name }))
