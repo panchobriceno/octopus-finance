@@ -3,10 +3,9 @@ import { CreditCard, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCLP } from "@/lib/utils";
 import { useCreditCardStatements, useTransactions, useAccounts } from "@/lib/hooks";
-import { buildCardDebt, type CardDebt } from "@/domain/debt";
+import { buildCardDebt, USD_CLP, type CardDebt } from "@/domain/debt";
 
 const LIME = "#cdfa46";
-const USD_CLP = 960; // tipo de cambio referencial para mostrar la deuda en dólares en pesos
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const fmtDate = (s: string) => {
   const m = (s || "").match(/(\d{4})-(\d{2})-(\d{2})/);

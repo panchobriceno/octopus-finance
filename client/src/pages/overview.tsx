@@ -114,7 +114,7 @@ import {
   summarizeClientPaymentsByMonth,
   summarizeWorkspaceTransactions,
 } from "@/lib/finance";
-import { buildCardDebt } from "@/domain/debt";
+import { buildCardDebt, USD_CLP } from "@/domain/debt";
 import { useMonthlyBalances } from "@/lib/monthly-balances";
 import { getCreditCards } from "@/lib/credit-cards";
 import { buildTransactionPayload, getTransactionFormInitialValues } from "@/lib/transaction-form";
@@ -1474,7 +1474,6 @@ export default function OverviewPage() {
   const currentMonthKey = getCurrentMonthKey();
   const todayKey = getTodayLocalDateKey();
   // Deuda de tarjetas REAL (misma fuente que Centro de Deuda / asesor): cartola − pagos + dólares.
-  const USD_CLP = 960; // tipo de cambio referencial (igual que Centro de Deuda)
   const cardDebts = useMemo(
     () => buildCardDebt(creditCardStatements, transactions, accounts, { asOf: todayKey }),
     [creditCardStatements, transactions, accounts, todayKey],

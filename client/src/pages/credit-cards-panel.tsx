@@ -26,12 +26,16 @@ import {
   useCategories,
   useCreateCreditCardSetting,
   useCreditCardSettings,
+  useCreditCardStatements,
   useDeleteTransaction,
   useTransactions,
   useUpdateCreditCardSetting,
   useUpdateTransaction,
 } from "@/lib/hooks";
 import { buildCreditCardInstallmentProjectionTransactions, getMonthKeyFromDate, isExecutedTransaction, normalizeTransaction } from "@/lib/finance";
+import { buildCardDebt, bankCode, USD_CLP, type CardDebt } from "@/domain/debt";
+import { resolveCardAccount } from "@/domain/account-identity";
+import type { Account } from "@shared/schema";
 import { getCreditCards } from "@/lib/credit-cards";
 import { openImportWizard } from "@/lib/import-wizard";
 import { cn, formatCLP } from "@/lib/utils";
@@ -42,9 +46,17 @@ const MONTH_NAMES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
+const digits = (value: unknown) => String(value ?? "").replace(/\D/g, "");
+const todayLocal = () => {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
 type CardSummary = {
   cardName: string;
-  debt: number;
+  debt: number | null; // deuda REAL de cartola (buildCardDebt); null si no hay cartola/cuenta inequívoca
+  debtCardKey: string | null; // clave canónica para deduplicar el total
   monthlyPurchases: number;
   monthlyPayments: number;
   installmentsDueThisMonth: number;
@@ -132,6 +144,7 @@ export default function CreditCardsPanelPage() {
   const { data: categories = [] } = useCategories();
   const { data: accounts = [] } = useAccounts();
   const { data: creditCardSettings = [] } = useCreditCardSettings();
+  const { data: statements = [] } = useCreditCardStatements();
   const updateMutation = useUpdateTransaction();
   const deleteMutation = useDeleteTransaction();
   const bulkDeleteMutation = useBulkDeleteTransactions();
@@ -165,6 +178,23 @@ export default function CreditCardsPanelPage() {
     () => new Map(accounts.map((account) => [account.id, account])),
     [accounts],
   );
+
+  // Deuda REAL por tarjeta desde el mismo motor que Centro de Deuda (cartola − pagos post-cierre).
+  const cardDebts = useMemo<CardDebt[]>(
+    () => buildCardDebt(statements, transactions, accounts, { asOf: todayLocal() }),
+    [statements, transactions, accounts],
+  );
+  const debtByCardKey = useMemo(() => new Map(cardDebts.map((d) => [d.cardKey, d])), [cardDebts]);
+  // last4 compartido por dos tarjetas → ambiguo, no resolvemos deuda por ese last4.
+  const collidingLast4 = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const a of accounts) {
+      if (a.type !== "credit_card") continue;
+      const l4 = digits(a.accountNumber).slice(-4);
+      if (l4.length === 4) seen.set(l4, (seen.get(l4) ?? 0) + 1);
+    }
+    return new Set(Array.from(seen.entries()).filter(([, n]) => n > 1).map(([l4]) => l4));
+  }, [accounts]);
 
   const creditCardTransactions = useMemo(
     () =>
@@ -202,6 +232,38 @@ export default function CreditCardsPanelPage() {
       left.localeCompare(right, "es"),
     );
   }, [creditCardTransactions, savedCards]);
+
+  // Resuelve cada nombre de tarjeta a su deuda REAL. Regla robusta (revisada por Codex):
+  // 1) cuenta por cardAccountId de las tx con ese nombre, aceptando SOLO si hay una única cuenta consistente;
+  // 2) si no hay cardAccountId, fallback a resolveCardAccount (last4 del nombre / nombre exacto, único).
+  // Si el mapeo es ambiguo, no hay cartola, o el last4 colisiona → null (mostramos "—", no el número viejo).
+  const debtByCardName = useMemo(() => {
+    const map = new Map<string, { debt: number; cardKey: string } | null>();
+    for (const cardName of cardNames) {
+      const ids = new Set<string>();
+      for (const t of normalizedTransactions) {
+        if (t.creditCardName === cardName && t.cardAccountId) {
+          const acc = accountById.get(t.cardAccountId);
+          if (acc && acc.type === "credit_card") ids.add(acc.id);
+        }
+      }
+      let account: Account | null = null;
+      if (ids.size === 1) {
+        account = accountById.get(Array.from(ids)[0]) ?? null;
+      } else if (ids.size === 0) {
+        const resolved = resolveCardAccount({ creditCardName: cardName }, accounts);
+        account = resolved && resolved.type === "credit_card" ? resolved : null;
+      } // ids.size > 1 → ambiguo → account queda null
+      if (!account) { map.set(cardName, null); continue; }
+      const l4 = digits(account.accountNumber).slice(-4);
+      if (l4.length !== 4 || collidingLast4.has(l4)) { map.set(cardName, null); continue; }
+      const key = `${bankCode(account.bank)}:${l4}`;
+      const d = debtByCardKey.get(key);
+      if (!d) { map.set(cardName, null); continue; }
+      map.set(cardName, { debt: d.pendienteReal + Math.round((d.deudaInternacionalUsd ?? 0) * USD_CLP), cardKey: key });
+    }
+    return map;
+  }, [cardNames, normalizedTransactions, accountById, accounts, collidingLast4, debtByCardKey]);
 
   useEffect(() => {
     const nextDrafts = Object.fromEntries(
@@ -258,19 +320,9 @@ export default function CreditCardsPanelPage() {
       const cardTransactions = creditCardTransactions.filter((transaction) => transaction.creditCardName === cardName);
       const cardInstallments = projectedInstallments.filter((transaction) => transaction.creditCardName === cardName);
 
-      const debt = cardTransactions.reduce((sum, transaction) => {
-        if (!isExecutedTransaction(transaction)) return sum;
-
-        if (transaction.movementType === "expense" && transaction.paymentMethod === "credit_card") {
-          return sum + transaction.amount;
-        }
-
-        if (transaction.movementType === "credit_card_payment") {
-          return sum - transaction.amount;
-        }
-
-        return sum;
-      }, 0);
+      const realDebt = debtByCardName.get(cardName) ?? null;
+      const debt = realDebt ? realDebt.debt : null;
+      const debtCardKey = realDebt ? realDebt.cardKey : null;
 
       const monthlyPurchases = cardTransactions.reduce((sum, transaction) => {
         if (
@@ -314,6 +366,7 @@ export default function CreditCardsPanelPage() {
       return {
         cardName,
         debt,
+        debtCardKey,
         monthlyPurchases,
         monthlyPayments,
         installmentsDueThisMonth,
@@ -322,7 +375,7 @@ export default function CreditCardsPanelPage() {
         futureInstallmentsCount,
       };
     });
-  }, [cardNames, creditCardTransactions, projectedInstallments, selectedMonthKey]);
+  }, [cardNames, creditCardTransactions, projectedInstallments, selectedMonthKey, debtByCardName]);
 
   const visibleSummaries = selectedCard === "all"
     ? summaries
@@ -539,9 +592,14 @@ export default function CreditCardsPanelPage() {
     });
   };
 
+  const countedDebtKeys = new Set<string>();
   const totals = visibleSummaries.reduce(
     (acc, summary) => {
-      acc.debt += summary.debt;
+      // Deduplica: dos nombres que apuntan a la misma tarjeta no suman su deuda dos veces.
+      if (summary.debt != null && summary.debtCardKey && !countedDebtKeys.has(summary.debtCardKey)) {
+        acc.debt += summary.debt;
+        countedDebtKeys.add(summary.debtCardKey);
+      }
       acc.monthlyPurchases += summary.monthlyPurchases;
       acc.monthlyPayments += summary.monthlyPayments;
       acc.installmentsDueThisMonth += summary.installmentsDueThisMonth;
@@ -718,11 +776,11 @@ export default function CreditCardsPanelPage() {
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-[18px] border border-card-border bg-gradient-to-br from-[#17171f] to-[#131319] p-4">
-                <p className="text-xs text-[#9a9aa6]">Saldo TC calculado</p>
-                <p className={cn("mt-1.5 font-mono text-2xl font-bold tabular-nums", totals.debt < 0 ? "text-[#cdfa46]" : "text-[#f4f4f7]")}>
+                <p className="text-xs text-[#9a9aa6]">Deuda real TC</p>
+                <p className="mt-1.5 font-mono text-2xl font-bold tabular-nums text-[#f4f4f7]">
                   {formatCLP(totals.debt)}
                 </p>
-                <p className="mt-1 text-xs text-[#6c6c78]">Histórico menos pagos cargados.</p>
+                <p className="mt-1 text-xs text-[#6c6c78]">Cartola menos pagos, igual que Centro de Deuda.</p>
               </div>
               <div className="rounded-[18px] border border-card-border bg-gradient-to-br from-[#17171f] to-[#131319] p-4">
                 <p className="text-xs text-[#9a9aa6]">Compromiso del mes</p>
@@ -783,9 +841,9 @@ export default function CreditCardsPanelPage() {
                           </div>
                           <div className="mt-4 space-y-1.5 text-xs">
                             <div className="flex items-center justify-between">
-                              <span className="text-[#9a9aa6]">Saldo</span>
-                              <span className={cn("font-mono tabular-nums", summary.debt < 0 ? "text-[#cdfa46]" : "text-[#e3e3ea]")}>
-                                {formatCLP(summary.debt)}
+                              <span className="text-[#9a9aa6]">Deuda</span>
+                              <span className="font-mono tabular-nums text-[#e3e3ea]">
+                                {summary.debt == null ? "—" : formatCLP(summary.debt)}
                               </span>
                             </div>
                             <div className="flex items-center justify-between">
@@ -960,7 +1018,7 @@ export default function CreditCardsPanelPage() {
                       ) : null}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{formatCLP(summary.debt)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{summary.debt == null ? "—" : formatCLP(summary.debt)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatCLP(summary.installmentsDueThisMonth)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatCLP(summary.monthlyPurchases)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatCLP(summary.monthlyPayments)}</TableCell>

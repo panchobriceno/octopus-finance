@@ -6,6 +6,10 @@
 import { isExecutedTransaction, normalizeTransaction } from "@/lib/finance";
 import type { CreditCardStatement, Transaction, Account } from "@shared/schema";
 
+/** Tipo de cambio referencial USD→CLP. Fuente única: la usan Centro de Deuda, Panel de Tarjetas
+ * y Resumen para convertir la deuda en dólares. Si se cambia acá, cambia en las 3 superficies a la vez. */
+export const USD_CLP = 960;
+
 const digits = (s: unknown) => String(s ?? "").replace(/\D/g, "");
 const norm = (s: unknown) =>
   String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
