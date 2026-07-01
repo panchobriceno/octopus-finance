@@ -118,7 +118,7 @@ import { buildCardDebt } from "@/domain/debt";
 import { useMonthlyBalances } from "@/lib/monthly-balances";
 import { getCreditCards } from "@/lib/credit-cards";
 import { buildTransactionPayload, getTransactionFormInitialValues } from "@/lib/transaction-form";
-import { getOperatingCashBalance, getSavingsBalance } from "@/domain/accounts";
+import { getOperatingCashBalance, getSavingsBalance, getAvailableCashBalance } from "@/domain/accounts";
 import { categoryMatchesWorkspace } from "@/domain/categories";
 
 function workspaceLabel(workspace: "business" | "family" | "dentist") {
@@ -1696,6 +1696,19 @@ export default function OverviewPage() {
     () => cardDebts.reduce((s, d) => s + d.pendienteReal + Math.round((d.deudaInternacionalUsd || 0) * USD_CLP), 0),
     [cardDebts],
   );
+  // Deuda TC real por ambiente (mapea cada tarjeta a su cuenta → workspace).
+  const cardDebtByWorkspace = useMemo(() => {
+    const wsByLast4 = new Map(
+      accounts.filter((a) => a.type === "credit_card")
+        .map((a) => [String(a.accountNumber ?? "").replace(/\D/g, "").slice(-4), (a.workspace as string) || "business"]),
+    );
+    const m: Record<string, number> = {};
+    for (const d of cardDebts) {
+      const ws = wsByLast4.get(d.last4) || "business";
+      m[ws] = (m[ws] || 0) + d.pendienteReal + Math.round((d.deudaInternacionalUsd || 0) * USD_CLP);
+    }
+    return m;
+  }, [cardDebts, accounts]);
   const totalIncome = filteredFinancialTransactions.reduce((sum, tx) => sum + getTransactionIncomeImpact(tx, "all"), 0);
   const totalExpenses = filteredFinancialTransactions.reduce((sum, tx) => sum + getTransactionExpenseImpact(tx, "all"), 0);
   const balance = totalIncome - totalExpenses;
@@ -1714,8 +1727,10 @@ export default function OverviewPage() {
   const currentMonthPaidVat = clientPaymentsByMonth[currentMonthKey]?.paidVat ?? 0;
   const globalCurrentMonthPaidVat = globalClientPaymentsByMonth[currentMonthKey]?.paidVat ?? 0;
   const nextVatDueDate = getVatProjectionDateForMonth(currentMonthKey);
-  const businessAvailableAfterVat = businessMetrics.cashFlow - currentMonthPaidVat;
-  const globalBusinessAvailableAfterVat = globalBusinessMetrics.cashFlow - globalCurrentMonthPaidVat;
+  // Caja REAL de Octopus (saldo de cuentas business) − IVA cobrado, en vez del flujo acumulado.
+  const businessCashBalance = useMemo(() => getAvailableCashBalance(accounts, "business"), [accounts]);
+  const businessAvailableAfterVat = businessCashBalance - currentMonthPaidVat;
+  const globalBusinessAvailableAfterVat = businessCashBalance - globalCurrentMonthPaidVat;
   const currentMonthRealIncome = useMemo(() => {
     const paidClientIncome = filteredClientPayments.reduce((sum, payment) => {
       const referenceDate = payment.paymentDate ?? payment.expectedDate ?? payment.dueDate ?? payment.issueDate ?? "";
@@ -2577,15 +2592,12 @@ export default function OverviewPage() {
     0,
   );
   const dashboardCreditCardDebt = overviewScope === "family"
-    ? Math.max(0, globalFamilyMetrics.creditCardDebt)
+    ? (cardDebtByWorkspace.family || 0)
     : overviewScope === "business"
-      ? Math.max(0, globalBusinessMetrics.creditCardDebt)
+      ? (cardDebtByWorkspace.business || 0)
       : globalTotalCreditCardDebt;
-  const dashboardCash = overviewScope === "family"
-    ? globalFamilyMetrics.cashFlow
-    : overviewScope === "business"
-      ? globalBusinessMetrics.cashFlow
-      : openingBalance;
+  // Caja REAL (saldo de cuentas) por ambiente, no el flujo acumulado.
+  const dashboardCash = getAvailableCashBalance(accounts, overviewScope === "all" ? "all" : overviewScope);
   const expenseMovementCount = dashboardCurrentMonthFinancialTransactions.filter(
     (tx) => getTransactionExpenseImpact(tx, "all") > 0,
   ).length;
@@ -3125,9 +3137,9 @@ export default function OverviewPage() {
 
       {!isConfigMode ? (
         <DecisionHeader
-          availableCash={openingBalance}
+          availableCash={dashboardCash}
           totalCreditCardDebt={globalTotalCreditCardDebt}
-          netAfterCards={openingBalance - globalTotalCreditCardDebt}
+          netAfterCards={dashboardCash - globalTotalCreditCardDebt}
           currentMonthRealIncome={globalCurrentMonthRealIncome}
           currentMonthProjectedIncome={globalCurrentMonthProjectedIncome}
           currentMonthExpenseTotal={globalCurrentMonthExpenseTotal}
