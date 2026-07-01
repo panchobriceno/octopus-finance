@@ -16,6 +16,10 @@ export interface ParsedPreviewRow {
   category: string;
   itemId?: string | null; // subcategoría elegida en el wizard (opcional)
   workspace: "business" | "family" | "dentist";
+  // Locks de corrección humana (F2 paso 3): true = el humano lo fijó, la regla no lo pisa.
+  categoryTouched?: boolean;
+  itemTouched?: boolean;
+  workspaceTouched?: boolean;
   installmentsLabel: string;
   installmentCount: number | null;
   duplicate: boolean;

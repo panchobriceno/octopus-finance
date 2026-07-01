@@ -42,8 +42,8 @@ async function main() {
     const rule = findBestMovementRule(m as ImportedMovement, rulesForDirection(rules, m.direction));
     if (!rule) continue; // no matchea -> NO tocar (no resetear)
     const r = applyMovementRule(m as ImportedMovement, rule);
-    if (r.suggestedCategory === m.suggestedCategory && r.suggestedWorkspace === m.suggestedWorkspace && r.matchedRuleId === m.matchedRuleId) continue; // sin cambios
-    ups.push({ id: m.id, patch: { suggestedCategory: r.suggestedCategory, suggestedWorkspace: r.suggestedWorkspace, suggestedMovementType: r.suggestedMovementType, suggestedPaymentMethod: r.suggestedPaymentMethod, accountId: r.accountId ?? null, creditCardName: r.creditCardName ?? null, matchedRuleId: r.matchedRuleId, confidence: r.confidence, updatedAt: NOW } });
+    if (r.suggestedCategory === m.suggestedCategory && (r.suggestedItemId ?? null) === (m.suggestedItemId ?? null) && r.suggestedWorkspace === m.suggestedWorkspace && r.matchedRuleId === m.matchedRuleId) continue; // sin cambios
+    ups.push({ id: m.id, patch: { suggestedCategory: r.suggestedCategory, suggestedItemId: r.suggestedItemId ?? null, suggestedWorkspace: r.suggestedWorkspace, suggestedMovementType: r.suggestedMovementType, suggestedPaymentMethod: r.suggestedPaymentMethod, accountId: r.accountId ?? null, creditCardName: r.creditCardName ?? null, matchedRuleId: r.matchedRuleId, confidence: r.confidence, updatedAt: NOW } });
     console.log(`  ${m.date} $${Number(m.amount).toLocaleString("es-CL")} ${String(m.description).slice(0, 40)} -> ${r.suggestedCategory} / ${r.suggestedWorkspace} [conf ${r.confidence}]`);
   }
   console.log(`\n${DRY ? "[DRY] " : ""}Movimientos a actualizar por regla: ${ups.length} (de ${movs.length} pendientes)`);

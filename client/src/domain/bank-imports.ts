@@ -60,6 +60,9 @@ export type MovementSeedInput = {
   sourceAccountId?: string | null;
   cardAccountId?: string | null;
   itemId?: string | null;
+  categoryTouched?: boolean;
+  itemTouched?: boolean;
+  workspaceTouched?: boolean;
   installmentCount?: number | null;
   confidence?: number;
   matchedRuleId?: string | null;
@@ -195,17 +198,28 @@ export function applyMovementRule(movement: ImportedMovement, rule: MovementRule
   const keywordCount = rule.keywords.map(normalizeImportText).filter(Boolean).length;
   const ruleConfidence = Math.min(88, 76 + keywordCount * 4 + Math.max(Number(rule.priority) || 0, 0));
 
-  // Subcategoría (item): la regla es la autoridad. Si la regla trae itemId, lo aplica.
-  // Si no trae y cambia la categoría, la subcategoría elegida antes ya no aplica → se limpia.
-  // Si no trae y la categoría no cambia, se conserva la elección previa.
-  const categoryChanged = normalizeImportText(rule.category) !== normalizeImportText(movement.suggestedCategory);
+  // Locks de corrección humana (F2 paso 3): un campo tocado por el humano no se pisa.
+  // Tocar la categoría bloquea también su item (el "sin subcategoría" es parte de la corrección).
+  const categoryLocked = movement.categoryTouched === true;
+  const itemLocked = movement.itemTouched === true || categoryLocked;
+  const workspaceLocked = movement.workspaceTouched === true;
+
+  // Categoría: la regla es autoridad salvo que el humano la haya fijado.
+  const nextCategory = categoryLocked ? movement.suggestedCategory : rule.category;
+
+  // Subcategoría (item): si está bloqueada, se conserva la del humano. Si no, la regla es autoridad:
+  // trae itemId → lo aplica; si no trae y cambia la categoría, la subcategoría previa ya no aplica.
+  const categoryChanged = normalizeImportText(nextCategory) !== normalizeImportText(movement.suggestedCategory);
   const ruleItemId = (rule as { itemId?: string | null }).itemId ?? null;
-  const nextItemId = ruleItemId ?? (categoryChanged ? null : (movement.suggestedItemId ?? null));
+  const nextItemId = itemLocked
+    ? (movement.suggestedItemId ?? null)
+    : (ruleItemId ?? (categoryChanged ? null : (movement.suggestedItemId ?? null)));
+
   return {
     ...movement,
-    suggestedCategory: rule.category,
+    suggestedCategory: nextCategory,
     suggestedItemId: nextItemId,
-    suggestedWorkspace: rule.workspace,
+    suggestedWorkspace: workspaceLocked ? movement.suggestedWorkspace : rule.workspace,
     suggestedMovementType: rule.movementType,
     suggestedPaymentMethod: rule.paymentMethod,
     accountId: rule.accountId ?? movement.accountId,
@@ -263,6 +277,9 @@ export function buildImportedMovement(input: MovementSeedInput): Omit<ImportedMo
     suggestedDestinationAccountId: input.destinationAccountId ?? null,
     suggestedSourceAccountId: input.sourceAccountId ?? null,
     suggestedItemId: input.itemId ?? null,
+    categoryTouched: input.categoryTouched ?? false,
+    itemTouched: input.itemTouched ?? false,
+    workspaceTouched: input.workspaceTouched ?? false,
     cardAccountId: input.cardAccountId ?? null,
     installmentCount: input.installmentCount ?? null,
     confidence: input.confidence ?? 72,

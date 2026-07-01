@@ -38,13 +38,14 @@ async function main() {
       if (!DRY) {
         await updateDoc(doc(db, "importedMovements", m.id), {
           suggestedCategory: updated.suggestedCategory,
+          suggestedItemId: updated.suggestedItemId ?? null,
           suggestedWorkspace: updated.suggestedWorkspace,
           suggestedMovementType: updated.suggestedMovementType,
           matchedRuleId: updated.matchedRuleId,
         });
       }
-    } else if (m.suggestedCategory !== "Sin categoría") {
-      // limpiar matches ruidosos previos -> volver a Sin categoria
+    } else if (m.suggestedCategory !== "Sin categoría" && (m as { categoryTouched?: boolean }).categoryTouched !== true) {
+      // limpiar matches ruidosos previos -> volver a Sin categoria (NUNCA si el humano lo fijó: categoryTouched)
       if (!DRY) await updateDoc(doc(db, "importedMovements", m.id), { suggestedCategory: "Sin categoría", matchedRuleId: null });
       console.log(`  · ${m.description.slice(0, 40).padEnd(40)} -> Sin categoría (reset)`);
     }

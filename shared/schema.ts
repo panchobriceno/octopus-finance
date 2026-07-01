@@ -532,6 +532,10 @@ export interface ImportedMovement {
   suggestedDestinationAccountId: string | null;
   suggestedSourceAccountId: string | null; // cuenta ORIGEN sugerida para traspasos (no pisa accountId/procedencia)
   suggestedItemId?: string | null; // subcategoría (item) sugerida al importar → viaja a transaction.itemId
+  // Locks de corrección humana (F2 paso 3): si están en true, applyMovementRule NO pisa ese campo.
+  categoryTouched?: boolean; // el humano fijó la categoría (bloquea también el item)
+  itemTouched?: boolean;     // el humano fijó la subcategoría
+  workspaceTouched?: boolean; // el humano fijó el ámbito
   installmentCount: number | null;
   confidence: number;
   matchedRuleId: string | null;

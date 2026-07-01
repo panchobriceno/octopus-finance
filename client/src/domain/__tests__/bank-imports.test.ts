@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyBestMovementRule,
+  applyMovementRule,
   findBestMovementRule,
   buildImportedMovement,
   buildTransactionFromImportedMovement,
@@ -182,6 +183,57 @@ describe("applyBestMovementRule + subcategoría (item)", () => {
   it("sin regla que matchee, conserva la subcategoría elegida", () => {
     const out = applyBestMovementRule(mkMov("item-bencina"), [mkRule({ keywords: ["falabella"] })]);
     expect(out.suggestedItemId).toBe("item-bencina");
+  });
+});
+
+describe("applyMovementRule + locks de corrección humana (F2 paso 3)", () => {
+  const mkRule = (p: Partial<MovementRule>): MovementRule => ({
+    id: "r", name: "r", keywords: ["copec"], category: "Auto", itemId: "item-bencina",
+    workspace: "family", movementType: "expense", paymentMethod: "bank_account",
+    accountId: null, creditCardName: null, cardAccountId: null, amountDirection: "any",
+    priority: 0, isActive: true, notes: null, createdAt: "", updatedAt: "", ...p,
+  });
+  const mkMov = (over: Partial<ImportedMovement>): ImportedMovement => ({
+    id: "m",
+    ...buildImportedMovement({
+      batchId: "b", source: "manual_file", sourceName: "s", sourceType: "bank_account",
+      accountId: "a", date: "2026-06-23", description: "Compra COPEC bencina", amount: 30000,
+      direction: "expense", category: "Comida", workspace: "business", movementType: "expense",
+      paymentMethod: "bank_account", createdAt: "2026-06-23T00:00:00.000Z",
+    }),
+    ...over,
+  });
+
+  it("sin locks, la regla pisa categoría, item y workspace", () => {
+    const out = applyMovementRule(mkMov({}), mkRule({}));
+    expect(out.suggestedCategory).toBe("Auto");
+    expect(out.suggestedItemId).toBe("item-bencina");
+    expect(out.suggestedWorkspace).toBe("family");
+  });
+
+  it("categoryTouched: la regla NO pisa la categoría ni el item (item bloqueado por categoría)", () => {
+    const out = applyMovementRule(mkMov({ suggestedCategory: "Comida", suggestedItemId: null, categoryTouched: true }), mkRule({}));
+    expect(out.suggestedCategory).toBe("Comida");
+    expect(out.suggestedItemId).toBeNull(); // el "sin subcategoría" humano se respeta
+  });
+
+  it("itemTouched: la regla pisa la categoría pero NO el item", () => {
+    const out = applyMovementRule(mkMov({ suggestedItemId: "item-humano", itemTouched: true }), mkRule({}));
+    expect(out.suggestedCategory).toBe("Auto"); // categoría no bloqueada
+    expect(out.suggestedItemId).toBe("item-humano"); // item humano preservado
+  });
+
+  it("workspaceTouched: la regla NO pisa el ámbito", () => {
+    const out = applyMovementRule(mkMov({ suggestedWorkspace: "business", workspaceTouched: true }), mkRule({}));
+    expect(out.suggestedWorkspace).toBe("business");
+    expect(out.suggestedCategory).toBe("Auto"); // lo no bloqueado sí cambia
+  });
+
+  it("el batch de persistencia respeta el lock (no revierte la corrección humana)", () => {
+    // Simula: humano corrigió a Comida/null en el preview; la regla 'copec' matchea el texto.
+    const corrected = mkMov({ suggestedCategory: "Comida", suggestedItemId: null, categoryTouched: true });
+    const out = applyBestMovementRule(corrected, [mkRule({})]);
+    expect(out.suggestedCategory).toBe("Comida");
   });
 });
 

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { useAccounts, useCategories, useItems, useBulkDeleteTransactions, useCreateCategory, useCreateImportedMovementBatch, useCreditCardSettings, useImportBatches, useTransactions, useUpdateTransaction } from "@/lib/hooks";
-import type { Account, ImportBatch, Transaction } from "@shared/schema";
+import { useAccounts, useCategories, useItems, useBulkDeleteTransactions, useCreateCategory, useCreateImportedMovementBatch, useCreditCardSettings, useImportBatches, useMovementRules, useTransactions, useUpdateTransaction } from "@/lib/hooks";
+import type { Account, Category, ImportBatch, ImportedMovement, MovementRule, Transaction } from "@shared/schema";
+import { applyMovementRule, findBestMovementRule } from "@/domain/bank-imports";
 import { getCreditCards } from "@/lib/credit-cards";
 // pdfjs (~1.4MB) se carga on-demand solo cuando hay que descifrar un PDF con
 // contraseña (import dinámico abajo), para no pesar en el bundle de toda la app.
@@ -63,6 +64,58 @@ import {
 } from "@/lib/parsers/credit-cards";
 import { resolveParser } from "@/lib/parsers";
 
+const IMPORT_WORKSPACES: ImportWorkspace[] = ["business", "family", "dentist"];
+function clampWorkspace(value: string, fallback: ImportWorkspace): ImportWorkspace {
+  return (IMPORT_WORKSPACES as string[]).includes(value) ? (value as ImportWorkspace) : fallback;
+}
+
+/**
+ * Clasifica una fila del preview con las reglas de categorización (F2 paso 3), reusando la MISMA
+ * lógica de dominio que el import batch (`applyMovementRule`) para no divergir. Respeta los locks
+ * de corrección humana: un campo tocado (categoryTouched/itemTouched/workspaceTouched) no se pisa.
+ * Sin regla que matchee y sin lock → heurística (suggestRowCategory / suggestWorkspace).
+ */
+function classifyPreviewRow(params: {
+  name: string;
+  type: "income" | "expense" | "credit_card_payment";
+  amount: number;
+  category?: string;
+  itemId?: string | null;
+  workspace?: ImportWorkspace;
+  categoryTouched?: boolean;
+  itemTouched?: boolean;
+  workspaceTouched?: boolean;
+  rules: MovementRule[];
+  categories: Category[];
+  accountType: "bank" | "credit";
+  defaultImportWorkspace: ImportWorkspace;
+}): { category: string; itemId: string | null; workspace: ImportWorkspace } {
+  const direction: "income" | "expense" = params.type === "income" ? "income" : "expense";
+  const heuristicCategory = suggestRowCategory(params.name, params.type, params.categories);
+  const heuristicWorkspace = suggestWorkspace(params.name, heuristicCategory, params.type, params.accountType, params.defaultImportWorkspace);
+  const movementLike = {
+    description: params.name,
+    rawDescription: params.name,
+    sourceName: "",
+    bankName: "",
+    creditCardName: "",
+    direction,
+    amount: params.amount,
+    suggestedCategory: params.categoryTouched ? (params.category || heuristicCategory) : heuristicCategory,
+    suggestedItemId: (params.itemTouched || params.categoryTouched) ? (params.itemId ?? null) : null,
+    suggestedWorkspace: params.workspaceTouched ? (params.workspace || heuristicWorkspace) : heuristicWorkspace,
+    categoryTouched: params.categoryTouched,
+    itemTouched: params.itemTouched,
+    workspaceTouched: params.workspaceTouched,
+  } as unknown as ImportedMovement;
+  const rule = findBestMovementRule(movementLike, params.rules);
+  const applied = rule ? applyMovementRule(movementLike, rule) : movementLike;
+  return {
+    category: applied.suggestedCategory,
+    itemId: applied.suggestedItemId ?? null,
+    workspace: clampWorkspace(applied.suggestedWorkspace, heuristicWorkspace),
+  };
+}
 
 type ImportBatchSummary = {
   id: string;
@@ -143,6 +196,7 @@ export default function ImportDataPage({
 
   const { data: categories = [] } = useCategories();
   const { data: items = [] } = useItems();
+  const { data: movementRules = [] } = useMovementRules();
   const { data: transactions = [] } = useTransactions();
   const { data: accounts = [] } = useAccounts();
   const { data: creditCardSettings = [] } = useCreditCardSettings();
@@ -269,14 +323,18 @@ export default function ImportDataPage({
           isSimilarCreditCardPayment(tx, selectedCard.trim(), amount, date),
         );
 
+      const classified = classifyPreviewRow({
+        name, type, amount, rules: movementRules, categories, accountType, defaultImportWorkspace,
+      });
       return {
         id: rowId,
         date,
         name,
         amount,
         type,
-        category: suggestRowCategory(name, type, categories),
-        workspace: suggestWorkspace(name, suggestRowCategory(name, type, categories), type, accountType, defaultImportWorkspace),
+        category: classified.category,
+        itemId: classified.itemId,
+        workspace: classified.workspace,
         installmentsLabel: installments.label,
         installmentCount: installments.count,
         duplicate: existingKeys.has(key) || duplicateTcPayment,
@@ -323,20 +381,28 @@ export default function ImportDataPage({
         const duplicate = existingKeys.has(
           `${row.date}__${row.name.trim().toLowerCase()}__${preservedStorageType}__${row.amount}`,
         ) || duplicateTcPayment;
-        const shouldResuggestCategory =
-          previous.type !== preservedType ||
-          !previous.category ||
-          previous.category === "Sin categoría" ||
-          !categoryMatchesType(previous.category, preservedType, categories);
+        // Si cambia el tipo (income↔expense), la categoría tocada ya no aplica → se sueltan los locks
+        // para que reglas/heurística re-sugieran limpio (evita conservar una categoría inválida).
+        const typeChanged = previous.type !== preservedType;
+        const categoryTouched = typeChanged ? false : (previous.categoryTouched ?? false);
+        const itemTouched = typeChanged ? false : (previous.itemTouched ?? false);
+        const workspaceTouched = typeChanged ? false : (previous.workspaceTouched ?? false);
 
-        const nextCategory = shouldResuggestCategory
-          ? suggestRowCategory(row.name, preservedType, categories)
-          : (previous.category || suggestRowCategory(row.name, preservedType, categories));
+        const classified = classifyPreviewRow({
+          name: row.name, type: preservedType, amount: row.amount,
+          category: previous.category, itemId: previous.itemId ?? null, workspace: previous.workspace,
+          categoryTouched, itemTouched, workspaceTouched,
+          rules: movementRules, categories, accountType, defaultImportWorkspace,
+        });
 
         return {
           ...row,
-          category: nextCategory,
-          workspace: previous.workspace ?? suggestWorkspace(row.name, nextCategory, preservedType, accountType, defaultImportWorkspace),
+          category: classified.category,
+          itemId: classified.itemId,
+          workspace: classified.workspace,
+          categoryTouched,
+          itemTouched,
+          workspaceTouched,
           installmentsLabel: previous.installmentsLabel || row.installmentsLabel,
           installmentCount: previous.installmentCount ?? row.installmentCount,
           type: preservedType,
@@ -345,7 +411,7 @@ export default function ImportDataPage({
         };
       }),
     );
-  }, [csvRows, mapping, accountType, existingKeys, existingCreditCardPayments, ignoredRowIds, categories, defaultImportWorkspace, selectedCard]);
+  }, [csvRows, mapping, accountType, existingKeys, existingCreditCardPayments, ignoredRowIds, categories, movementRules, defaultImportWorkspace, selectedCard]);
 
   const handleImport = async () => {
     const queueableRows = previewRows.filter(
@@ -406,6 +472,10 @@ export default function ImportDataPage({
         workspace: row.workspace,
         // solo persistimos la subcategoría si pertenece a la categoría resuelta de la fila (consistencia item↔categoría)
         itemId: row.itemId && itemsForRow(row).some((item) => item.id === row.itemId) ? row.itemId : null,
+        // Locks de corrección humana (F2 paso 3): la persistencia re-aplica reglas pero NO pisa lo tocado.
+        categoryTouched: row.categoryTouched ?? false,
+        itemTouched: row.itemTouched ?? false,
+        workspaceTouched: row.workspaceTouched ?? false,
         movementType: effectiveMovementType,
         installmentCount: row.installmentCount,
         paymentMethod:
@@ -709,14 +779,21 @@ export default function ImportDataPage({
 
   const updateRowCategory = (index: number, category: string) => {
     setPreviewRows((prev) => prev.map((row, rowIndex) => (
-      // al cambiar la categoría se resetea la subcategoría (ya no aplica)
-      rowIndex === index ? { ...row, category, itemId: null, workspace: suggestWorkspace(row.name, category, row.type, accountType, defaultImportWorkspace) } : row
+      // al cambiar la categoría a mano: se bloquea (categoryTouched) y se resetea la subcategoría.
+      // El ámbito se re-sugiere solo si el humano no lo fijó antes.
+      rowIndex === index ? {
+        ...row,
+        category,
+        itemId: null,
+        categoryTouched: true,
+        workspace: row.workspaceTouched ? row.workspace : suggestWorkspace(row.name, category, row.type, accountType, defaultImportWorkspace),
+      } : row
     )));
   };
 
   const updateRowItem = (index: number, itemId: string | null) => {
     setPreviewRows((prev) => prev.map((row, rowIndex) => (
-      rowIndex === index ? { ...row, itemId } : row
+      rowIndex === index ? { ...row, itemId, itemTouched: true } : row
     )));
   };
 
@@ -724,8 +801,11 @@ export default function ImportDataPage({
     setPreviewRows((prev) => {
       const next = prev.map((row, rowIndex) => {
         if (rowIndex !== index) return row;
-        const category = suggestRowCategory(row.name, type, categories);
-        return { ...row, type, category, itemId: null, workspace: suggestWorkspace(row.name, category, type, accountType, defaultImportWorkspace) };
+        // Cambiar el tipo re-clasifica desde cero (suelta los locks: la categoría anterior ya no aplica).
+        const classified = classifyPreviewRow({
+          name: row.name, type, amount: row.amount, rules: movementRules, categories, accountType, defaultImportWorkspace,
+        });
+        return { ...row, type, category: classified.category, itemId: classified.itemId, workspace: classified.workspace, categoryTouched: false, itemTouched: false, workspaceTouched: false };
       });
       const seenInFile = new Set<string>();
 
@@ -744,6 +824,7 @@ export default function ImportDataPage({
   const applyDefaultWorkspaceToAllRows = () => {
     setPreviewRows((prev) => prev.map((row) => ({
       ...row,
+      workspaceTouched: true,
       workspace:
         row.type === "income"
           ? "business"
@@ -759,7 +840,7 @@ export default function ImportDataPage({
 
   const updateRowWorkspace = (index: number, workspace: "business" | "family" | "dentist") => {
     setPreviewRows((prev) => prev.map((row, rowIndex) => (
-      rowIndex === index ? { ...row, workspace } : row
+      rowIndex === index ? { ...row, workspace, workspaceTouched: true } : row
     )));
   };
 
@@ -770,13 +851,20 @@ export default function ImportDataPage({
         const cycle: CcMovementType[] = ["purchase", "tc_payment", "reversal"];
         const next = cycle[(cycle.indexOf(row.ccMovementType) + 1) % cycle.length];
         const newType = getCreditPreviewType(next);
-        const category = suggestRowCategory(row.name, newType, categories);
+        // Cambiar el tipo del cargo re-clasifica desde cero (suelta los locks).
+        const classified = classifyPreviewRow({
+          name: row.name, type: newType, amount: row.amount, rules: movementRules, categories, accountType, defaultImportWorkspace,
+        });
         return {
           ...row,
           ccMovementType: next,
           type: newType,
-          category,
-          workspace: suggestWorkspace(row.name, category, newType, accountType, defaultImportWorkspace),
+          category: classified.category,
+          itemId: classified.itemId,
+          workspace: classified.workspace,
+          categoryTouched: false,
+          itemTouched: false,
+          workspaceTouched: false,
         };
       }),
     );
