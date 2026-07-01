@@ -71,8 +71,14 @@ Orden de bloques fuertes. **No abrir frentes nuevos en paralelo.**
      - (a) selector de subcategoría en el importador (import-data.tsx).
      - (b) **motor de auto-sugerencia de item** por comercio + categoría (IA/reglas, que aprende). Es el corazón del bloque.
      - (c) **puesta al día de los ~247 históricos = automática por IA, Pancho SOLO acepta el lote** (NO revisa uno a uno). La categoría ya está puesta → la IA solo elige el item dentro de esa categoría; alta cobertura esperable. Se corre como script asistido por IA (patrón categorize-ai de bank-bot) con dry-run → Pancho aprueba → apply con backup/manifest. Lo que la IA no logre con confianza queda sin item (no se inventa).
-   - **Cartola sin duplicados:** que la plata entre sola y bien, sin duplicados que revisar a mano.
-   - Antes de tocar código: diagnóstico read-only + plan verificado con Codex.
+   - **Cartola sin duplicados:** que la plata entre sola y bien, sin duplicados que revisar a mano. Dedup actual = `buildMovementDedupeKey` (sourceKey[accountId??creditCardName??bankName??sourceType]+date+direction+amount+description). Falla cuando accountId no se resuelve al importar (sourceKey inestable) o el banco cambia el texto.
+   - **Orden verificado por Codex (2026-06-30) + reglas de seguridad:**
+     1. **F4-diagnóstico** primero: por qué accountId llega vacío + medir duplicados reales (sin fuzzy aún).
+     2. **F1** selector de subcategoría en importador + persistir itemId al convertir.
+     3. **F2** `MovementRule.itemId?` (aditivo, schemaless; revisar tipos/validadores/export-import/UI de reglas) + `suggestedItemId` + aprende al aceptar/corregir.
+     4. **F3** catch-up IA (después de que itemId esté soportado end-to-end): backup+dry-run+manifest {movementId, categoría, item, confianza, modelo/version}, idempotente, NO pisa itemId existente, umbral de confianza (bajo → sin item), nunca sugiere item fuera de la categoría fija.
+     5. **F4-hardening**: estabilizar sourceKey (resolver accountId siempre) ANTES; fuzzy solo como "posible duplicado" con señales fuertes, NO auto-descarte (riesgo de falsos positivos: 2 compras iguales el mismo día, cuotas, comisiones).
+     - **Prioridad del motor único:** regla manual con itemId > IA/lote > sugerencia por keyword > vacío. La categoría fija manda.
 3. **Sobrante/faltante consolidado.**
 4. **"Mes Financiero"** (recién después de 2 y 3).
 - Los 2 follow-ups de IVA (simetría de proyección Resumen/P&L + opening neto estricto) quedan **estacionados como decisión fina, NO como bloqueo**.
