@@ -3,6 +3,8 @@ import { useLocation } from "wouter";
 import { useAccounts, useCategories, useItems, useBulkDeleteTransactions, useCreateCategory, useCreateImportedMovementBatch, useCreditCardSettings, useImportBatches, useMovementRules, useTransactions, useUpdateTransaction } from "@/lib/hooks";
 import type { Account, Category, ImportBatch, ImportedMovement, MovementRule, Transaction } from "@shared/schema";
 import { applyMovementRule, findBestMovementRule } from "@/domain/bank-imports";
+import { extractRuleKeywords } from "@/domain/rule-keywords";
+import { LearnRuleDialog, type LearnRuleTarget } from "@/components/finance/learn-rule-dialog";
 import { getCreditCards } from "@/lib/credit-cards";
 // pdfjs (~1.4MB) se carga on-demand solo cuando hay que descifrar un PDF con
 // contraseña (import dinámico abajo), para no pesar en el bundle de toda la app.
@@ -22,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Upload, FileText, CheckCircle2, AlertCircle, X } from "lucide-react";
+import { Upload, FileText, CheckCircle2, AlertCircle, X, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCLP } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -172,6 +174,7 @@ export default function ImportDataPage({
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
   const [previewRows, setPreviewRows] = useState<ParsedPreviewRow[]>([]);
+  const [learnTarget, setLearnTarget] = useState<LearnRuleTarget | null>(null);
   const [ignoredRowIds, setIgnoredRowIds] = useState<Set<string>>(new Set());
   const [fileName, setFileName] = useState("");
   // Contraseña opcional para cartolas protegidas (ej. Banco Edwards). Si se ingresa,
@@ -1815,6 +1818,33 @@ export default function ImportDataPage({
                         {formatCLP(row.amount)}
                       </TableCell>
                       <TableCell className="text-right pr-5">
+                        {(() => {
+                          const corrected = Boolean(row.categoryTouched || row.itemTouched);
+                          const isPurchase = accountType === "credit" ? row.ccMovementType === "purchase" : row.type !== "credit_card_payment";
+                          const canLearn =
+                            corrected && !row.error && isPurchase &&
+                            effectiveCategory && effectiveCategory !== "Sin categoría" &&
+                            extractRuleKeywords(row.name).length > 0;
+                          return canLearn ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-primary/80 hover:text-primary"
+                              title="Aprender una regla de esta corrección"
+                              onClick={() => setLearnTarget({
+                                id: row.id,
+                                name: row.name,
+                                category: effectiveCategory,
+                                itemId: row.itemId ?? null,
+                                workspace: row.workspace,
+                                type: row.type,
+                                accountType,
+                              })}
+                            >
+                              <Sparkles className="size-3.5" />
+                            </Button>
+                          ) : null;
+                        })()}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1835,6 +1865,15 @@ export default function ImportDataPage({
           </CardContent>
         </Card>
       )}
+
+      <LearnRuleDialog
+        open={learnTarget !== null}
+        onOpenChange={(open) => { if (!open) setLearnTarget(null); }}
+        target={learnTarget}
+        rules={movementRules}
+        categories={categories}
+        items={items}
+      />
 
       <Card>
         <CardHeader className="pb-3">

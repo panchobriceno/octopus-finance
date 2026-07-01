@@ -21,6 +21,7 @@ import { initializeApp } from "firebase/app";
 import { addDoc, collection, deleteDoc, doc, getDocs, getFirestore } from "firebase/firestore/lite";
 import { getAuthedDb } from "./_db";
 import type { Transaction, MovementRule } from "../../shared/schema";
+import { normalizeRuleText as norm, tokenizeRuleText as toks } from "../../client/src/domain/rule-keywords";
 
 const DRY = process.argv.includes("--dry");
 function loadEnv(fp: string) { if (!fs.existsSync(fp)) return; for (const l of fs.readFileSync(fp, "utf8").split(/\r?\n/)) { const t = l.trim(); if (!t || t.startsWith("#")) continue; const s = t.indexOf("="); if (s === -1) continue; const k = t.slice(0, s).trim(); const v = t.slice(s + 1).trim().replace(/^['"]|['"]$/g, ""); if (k && process.env[k] === undefined) process.env[k] = v; } }
@@ -29,9 +30,6 @@ loadEnv(path.join(process.cwd(), ".env.local"));
 loadEnv(path.join(process.cwd(), "client", ".env.local"));
 const db = await getAuthedDb();
 
-const STOP = new Set(["pago", "pagos", "compra", "compras", "comp", "nacional", "internacional", "transf", "transferencia", "de", "del", "la", "el", "con", "por", "en", "linea", "automatico", "automatica", "tarjeta", "credito", "cuenta", "spa", "ltda", "limitada", "limit", "plan", "mantencion", "sociedad", "monto", "cancelado", "traspaso", "deuda", "cargo", "abono", "com", "mp", "payu", "pat", "servicio", "uso", "marc", "asistido", "tasa", "int", "santiago", "condes", "las", "plaza", "mall", "trebo", "pcs", "inc", "centro", "chile", "sa", "eirl", "dl", "admin", "mensual", "corriente", "corr", "pap"]);
-const norm = (s: string) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
-const toks = (s: string) => norm(s).split(" ").filter((w) => w.length >= 4 && !STOP.has(w) && !/^\d+$/.test(w));
 
 // Categorias que NO sirven para autoconversion (la conversion las manda a revision igual).
 const isRealCategory = (c: string) => {
