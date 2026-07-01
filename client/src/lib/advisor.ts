@@ -3,6 +3,7 @@
  * la IA solo prioriza, explica y alerta referenciando los "id" de estos hechos.
  * El endpoint /api/advisor es read-only (nunca escribe). Ver server/routes.ts.
  */
+import { authedFetch } from "@/lib/api";
 import type {
   Account,
   ClientPayment,
@@ -161,7 +162,7 @@ export function buildAdvisorFacts(input: {
 export type ResolveDuplicateResult = { deletedTransactionId: string; revertedMovementId: string | null };
 
 export async function fetchAdvisor(facts: AdvisorFacts): Promise<AdvisorReport> {
-  const res = await fetch("/api/advisor", {
+  const res = await authedFetch("/api/advisor", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ facts }),

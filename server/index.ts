@@ -4,6 +4,9 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 
 const app = express();
+// Detrás del proxy de Railway: confiar 1 hop para que req.ip sea la IP real del cliente
+// (el rate limiter por IP la necesita). No usar `true` (demasiado permisivo).
+app.set("trust proxy", 1);
 const httpServer = createServer(app);
 
 const defaultFirebaseConfig = {
@@ -21,14 +24,14 @@ declare module "http" {
   }
 }
 
-app.use(
-  express.json({
-    limit: "25mb",
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    },
-  }),
-);
+// Los endpoints IA parsean su body (hasta 25mb) DESPUÉS de auth (ver server/routes.ts), para NO
+// bufferear cuerpos grandes de requests sin autenticar (vector DoS). El resto usa un límite chico.
+const AI_BODY_PATHS = new Set(["/api/extract-pdf", "/api/extract-receipt", "/api/advisor"]);
+const jsonSmall = express.json({ limit: "1mb" });
+app.use((req, res, next) => {
+  if (AI_BODY_PATHS.has(req.path)) return next();
+  return jsonSmall(req, res, next);
+});
 
 app.use(express.urlencoded({ extended: false }));
 

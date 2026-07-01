@@ -1,7 +1,12 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertTransactionSchema, insertCategorySchema, insertItemSchema, insertBudgetSchema } from "@shared/schema";
+import { requireAuth, preAuthIpLimiter, aiLimiter } from "./auth";
+
+// Parser de body grande SOLO para los endpoints IA, montado DESPUÉS de auth (el body no se
+// bufferea hasta que el request pasó IP-limiter + auth + user-limiter). Cierra el DoS de 25mb sin token.
+const aiBodyParser = express.json({ limit: "25mb" });
 
 const PDF_EXTRACTION_PROMPT = `Eres un extractor de datos financieros. Se te entrega un estado de cuenta bancario chileno en PDF.
 Extrae TODOS los movimientos del período actual y devuelve ÚNICAMENTE un JSON válido con este formato exacto, sin texto adicional, sin markdown, sin explicaciones:
@@ -319,7 +324,7 @@ export async function registerRoutes(
     res.json({ imported: imported.length, total: rows.length });
   });
 
-  app.post("/api/extract-pdf", async (req, res) => {
+  app.post("/api/extract-pdf", preAuthIpLimiter, requireAuth, aiLimiter, aiBodyParser, async (req, res) => {
     const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
     if (!anthropicApiKey) {
       return res.status(500).json({ error: "ANTHROPIC_API_KEY no está configurada en el servidor." });
@@ -400,7 +405,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/extract-receipt", async (req, res) => {
+  app.post("/api/extract-receipt", preAuthIpLimiter, requireAuth, aiLimiter, aiBodyParser, async (req, res) => {
     const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
     if (!anthropicApiKey) {
       return res.status(500).json({ error: "ANTHROPIC_API_KEY no está configurada en el servidor." });
@@ -472,7 +477,7 @@ export async function registerRoutes(
   });
 
   // === ASESOR IA (solo sugiere; read-only, no escribe datos) ===
-  app.post("/api/advisor", async (req, res) => {
+  app.post("/api/advisor", preAuthIpLimiter, requireAuth, aiLimiter, aiBodyParser, async (req, res) => {
     const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
     if (!anthropicApiKey) {
       return res.status(500).json({ error: "ANTHROPIC_API_KEY no está configurada en el servidor." });

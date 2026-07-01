@@ -4,6 +4,7 @@ import { useAccounts, useCategories, useItems, useBulkDeleteTransactions, useCre
 import type { Account, Category, ImportBatch, ImportedMovement, MovementRule, Transaction } from "@shared/schema";
 import { applyMovementRule, findBestMovementRule } from "@/domain/bank-imports";
 import { extractRuleKeywords } from "@/domain/rule-keywords";
+import { authedFetch } from "@/lib/api";
 import { LearnRuleDialog, type LearnRuleTarget } from "@/components/finance/learn-rule-dialog";
 import { getCreditCards } from "@/lib/credit-cards";
 // pdfjs (~1.4MB) se carga on-demand solo cuando hay que descifrar un PDF con
@@ -648,7 +649,7 @@ export default function ImportDataPage({
       requestBody = { pdfBase64: arrayBufferToBase64(await file.arrayBuffer()) };
     }
 
-    const response = await fetch("/api/extract-pdf", {
+    const response = await authedFetch("/api/extract-pdf", {
       method: "POST",
       headers: {
         "content-type": "application/json",

@@ -1,3 +1,5 @@
+import { authedFetch } from "@/lib/api";
+
 export type ReceiptOcrResult = {
   merchantName: string | null;
   description: string | null;
@@ -34,7 +36,7 @@ export async function extractReceiptFromImage(file: File): Promise<ReceiptOcrRes
     throw new Error("La imagen no se pudo preparar para OCR.");
   }
 
-  const response = await fetch("/api/extract-receipt", {
+  const response = await authedFetch("/api/extract-receipt", {
     method: "POST",
     headers: {
       "content-type": "application/json",

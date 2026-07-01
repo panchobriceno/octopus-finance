@@ -32,10 +32,12 @@
 - [ ] **Follow-ups IVA**: (1) simetría de proyección en Resumen/P&L (`combineFinancialTransactions` resta IVA en `projectedEndingBalance`); (2) opening neto estricto en el semanal.
 - [ ] **4 importaciones pendientes** en la bandeja + **1 cartola cosmética** (7232 mayo: cupoUtilizado>cupoTotal).
 
-## 🗺️ Roadmap grande (después de F1-F3, ya completos)
+## 🗺️ Roadmap grande
 
+- [x] **F5 seguridad** ✅ (2026-07-01) — endpoints IA protegidos con **verificación de ID token de Firebase + allowlist de uid + rate limit** (`server/auth.ts`). Body de 25mb se parsea solo post-auth (cierra DoS). Cliente manda el token vía `authedFetch`. Revisor: 0 P1.
+  - ⚠️ **Confirmar en prod (Pancho):** entrá a la app, disparás el asesor/OCR/importar-PDF. Si da **"Cuenta no autorizada" (403)**, tu uid de login difiere del hardcodeado — revisá el log del server en Railway (imprime tu uid real) y ponelo en la env **`ALLOWED_FIREBASE_UIDS`** (coma-separado). El default asume uid `AKgiLAeRImfeGKg1N18MxmgV28q2` (francisco@octopusmedia.cl).
+- [ ] **Cerrar/404 los endpoints Express muertos** (`/api/transactions|categories|items|budgets` sobre MemStorage en memoria) — el cliente no los usa (Firestore directo), no exponen datos reales, pero son APIs mutables abiertas. Sloppy, no crítico. *(P3 revisor F5.)*
 - [ ] **F4-hardening** — estabilizar `sourceKey` (accountId vacío al importar); fuzzy solo como "posible duplicado", no auto-descarte. Preventivo, baja urgencia.
-- [ ] **F5 seguridad** — proteger endpoints IA (`/api/extract-pdf`, `/api/extract-receipt`, `/api/advisor`) con token + rate limit.
 
 ---
 
