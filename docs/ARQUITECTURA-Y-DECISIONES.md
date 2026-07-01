@@ -67,7 +67,10 @@ Estaba SIN seguridad: cliente escribía a Firestore directo, sin login, sin `fir
 Orden de bloques fuertes. **No abrir frentes nuevos en paralelo.**
 1. **DATOS (en curso ahora):** limpiar categorías duplicadas + transferencias incompletas. Baja ruido antes de construir métrica nueva.
 2. **Captura diaria + cartola sin duplicados** (el próximo bloque fuerte tras DATOS). Alcance decidido 2026-06-30:
-   - **Subcategoría (item) en la captura — decisión de Pancho: COMPLETO.** Hoy el importador solo captura ámbito + categoría, NO subcategoría; la captura manual (quick-expense) sí. Resultado: 1% de los gastos tiene itemId (0% de los 243 importados). Como los presupuestos se llevan a nivel item, el "sobrante/faltante" por subcategoría está ciego. Plan: (a) agregar selector de subcategoría al importador (import-data.tsx), (b) auto-sugerir item por comercio vía reglas (extender suggestRowCategory/movementRules para también sugerir itemId, que aprenda), (c) pantalla de puesta al día en bloque para los ~247 gastos históricos sin item.
+   - **Subcategoría (item) en la captura — decisión de Pancho: COMPLETO.** Hoy el importador solo captura ámbito + categoría, NO subcategoría; la captura manual (quick-expense) sí. Resultado: 1% de los gastos tiene itemId (0% de los 243 importados). Como los presupuestos se llevan a nivel item, el "sobrante/faltante" por subcategoría está ciego. Plan (el MOTOR de sugerencia es uno solo, sirve para ambos sentidos):
+     - (a) selector de subcategoría en el importador (import-data.tsx).
+     - (b) **motor de auto-sugerencia de item** por comercio + categoría (IA/reglas, que aprende). Es el corazón del bloque.
+     - (c) **puesta al día de los ~247 históricos = automática por IA, Pancho SOLO acepta el lote** (NO revisa uno a uno). La categoría ya está puesta → la IA solo elige el item dentro de esa categoría; alta cobertura esperable. Se corre como script asistido por IA (patrón categorize-ai de bank-bot) con dry-run → Pancho aprueba → apply con backup/manifest. Lo que la IA no logre con confianza queda sin item (no se inventa).
    - **Cartola sin duplicados:** que la plata entre sola y bien, sin duplicados que revisar a mano.
    - Antes de tocar código: diagnóstico read-only + plan verificado con Codex.
 3. **Sobrante/faltante consolidado.**
