@@ -64,6 +64,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { MovementRulesEditor } from "@/components/finance/movement-rules-editor";
 
 type SeverityFilter = "all" | AuditSeverity;
 type IssueTarget = {
@@ -1123,6 +1124,8 @@ export default function DataHealthPage() {
             </Card>
           </div>
         </div>
+
+        <MovementRulesEditor categories={categories} items={items} />
       </div>
       <AlertDialog
         open={Boolean(pendingMergeGroup)}
