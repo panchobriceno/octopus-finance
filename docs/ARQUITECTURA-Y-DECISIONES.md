@@ -46,7 +46,7 @@ Estaba SIN seguridad: cliente escribía a Firestore directo, sin login, sin `fir
 - **Railway:** CLI disponible; `railway variables --set` para env. `VITE_FIREBASE_API_KEY` ya actualizada allí.
 - **Reglas:** `firestore.rules` en el repo; deploy MANUAL (pegar en consola Firebase). No hay firebase CLI configurado.
 - **Workspaces (ambientes):** `business` (Empresa/Octopus), `family` (personal Pancho+Javi), `dentist` (consulta Javi), `shared` (en desuso tras mover OM a business).
-- **USD_CLP = 960** (tipo de cambio referencial para mostrar deuda en dólares; duplicado en `debt.tsx` + `overview.tsx` — pendiente centralizar).
+- **USD_CLP = 960** (tipo de cambio referencial para deuda en dólares). Fuente única: exportado desde `@/domain/debt`; lo consumen `debt.tsx`, `credit-cards-panel.tsx` y `overview.tsx`.
 
 ## Convenciones de scripts (`scripts/bank-bot/`)
 - Los que corren con reglas cerradas usan `const db = await getAuthedDb()` (de `_db.ts`). El pipeline diario (`run-daily.sh`) y auditorías ya migrados.
@@ -55,7 +55,10 @@ Estaba SIN seguridad: cliente escribía a Firestore directo, sin login, sin `fir
 - One-off ya aplicados (backfill, relink, tag, fix-*, retag-om-business, etc.): no re-correr.
 
 ## Pendientes
-- **MEDIOS:** Centro de Deuda/Panel de Tarjetas por `cardAccountId` (hoy last4/nombre); Flujo de Caja semanal usa monto bruto (debería neto+IVA como el mensual); fechas UTC → local en varios lados; `buildCardDebt` agrupa por last4 (frágil si dos tarjetas comparten last4 → usar bankCode:last4).
+- **MEDIOS: ✅ HECHO (2026-06-30).** (#1) `buildCardDebt` agrupa por clave canónica `bankCode:last4` del ACCOUNT + neteo por `cardAccountId`. (#2) Panel de Tarjetas muestra la deuda REAL (`buildCardDebt`), casada por identidad, total deduplicado por `cardKey`; sin cartola/ambiguo → "—". `USD_CLP` centralizado en `@/domain/debt`. (#3) Modelo IVA "neto + aparte": el flujo va en NETO, el IVA nunca se resta (se quitó `buildVatProjectionTransactions` de `buildCashFlowFinancialTransactions`, mataba el doble-descuento), semanal usa `netAmount`, tarjeta "IVA a separar", fechas TZ-safe con `toLocalIsoDate`.
+- **Follow-ups del modelo IVA (decisión de Pancho pendiente):**
+  - **Simetría de proyección:** Flujo de Caja ya es neto puro, pero la PROYECCIÓN mensual de Resumen/P&L (`combineFinancialTransactions` → `projectedEndingBalance`) todavía resta el IVA como `plannedExpense`. El saldo REAL de Resumen ya lo excluye (isExecutedTransaction filtra planned). Definir si la proyección mensual también deja de restar IVA (toca `combineFinancialTransactions`, blast radius overview+pnl+monthly-balances).
+  - **Opening neto estricto:** el semanal parte del saldo bancario real (bruto). Si se quiere "caja usable neta" estricta, el opening de business/all debería descontar el IVA a separar. Diferido.
 - **DATOS a limpiar:** 10 categorías duplicadas (items referencian `categoryId`, cuidado al deduplicar); 3 transferencias incompletas (sin origen/destino); 8 tx ejecutadas sin cuenta; 1 pago de tarjeta sin `cardAccountId`.
 - **F5 (seguridad, opcional):** proteger endpoints IA (`/api/extract-pdf`, `/api/extract-receipt`, `/api/advisor`) con token Firebase + UID + rate limit (hoy sin auth → riesgo de costo, no de datos porque la base ya está cerrada).
 - **Saldo Cuenta Corriente OM en $0** (real o desactualizado): si Octopus tiene caja, actualizarlo en Cuentas para que la alerta sea fiel.
