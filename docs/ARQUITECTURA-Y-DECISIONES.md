@@ -97,8 +97,9 @@ Orden de bloques fuertes. **No abrir frentes nuevos en paralelo.**
 ## Estado al cierre de sesión (2026-07-01) — cómo retomar
 
 ### En producción (deployado)
-- **Seguridad** (login + reglas Firestore), **Resumen unificado**, **MEDIOS** (deuda real + modelo IVA neto + fechas TZ-safe + USD_CLP centralizado), **DATOS** (limpieza de 15 movimientos + Consulta Javi→dentist, es data, ya visible), **F1** (subcategoría en el importador).
-- Última verificación: P0 de integridad = 0; 0 duplicados de transacciones activos.
+- **Seguridad** (login + reglas Firestore), **Resumen unificado**, **MEDIOS** (deuda real + modelo IVA neto + fechas TZ-safe + USD_CLP centralizado), **DATOS** (limpieza de 15 movimientos + Consulta Javi→dentist, es data, ya visible), **F1** (subcategoría en el importador), **F2 paso 1** (base auto-sugerencia).
+- **Fix post-cierre (2026-07-01):** los cobros semilla `recurring-seed-*-2026-06` tenían expectedDate mal en 2026-07-05 → duplicaban el ingreso de julio ($8.26M→$4.13M). Se BORRARON los 9 de junio (decisión de Pancho: "junio ya se gastó, empezar limpios"), backup en `_manifest-del-june-*.json`. Julio = $4.130.000 (9 cobros). Label "Gastos del mes"→"Movimientos del mes". OJO: el generador de proyecciones recurrentes crea cobros con expectedDate mal fechado — revisar cuando se toque ese generador (para que agosto no vuelva a duplicar).
+- Última verificación: P0 de integridad = 0; 0 duplicados de transacciones activos; ingreso julio $4.13M.
 
 ### Bloque CAPTURA — progreso (plan completo + orden más arriba en "Roadmap acordado")
 - ✅ **F4-diagnóstico**: 0 duplicados activos; riesgo latente = accountId vacío al importar (sourceKey inestable). F4-hardening es preventivo, baja urgencia.
