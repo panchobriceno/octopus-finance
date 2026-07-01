@@ -111,6 +111,12 @@ export function getCurrentMonthKey() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+export function getTodayLocalDateKey() {
+  // Fecha LOCAL YYYY-MM-DD (no UTC): evita el corrimiento de día en Chile de noche.
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
 export function getNextMonthKey(monthKey: string) {
   const [year, month] = monthKey.split("-").map(Number);
   const next = new Date(year, month, 1); // month es 0-based del mes siguiente
