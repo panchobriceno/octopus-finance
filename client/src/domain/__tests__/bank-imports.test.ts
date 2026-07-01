@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyBestMovementRule,
   buildImportedMovement,
   buildTransactionFromImportedMovement,
   findMatchingTransactionForPayload,
   getImportBatchLifecycleStatus,
   summarizeImportBatchLifecycle,
 } from "../bank-imports";
+import type { MovementRule } from "@shared/schema";
 
 describe("bank import domain", () => {
   it("preserves installment count from imported movement to transaction", () => {
@@ -139,5 +141,45 @@ describe("bank import domain", () => {
     expect(getImportBatchLifecycleStatus(summarizeImportBatchLifecycle([
       { ...baseMovement, id: "converted", status: "converted" },
     ]), "closed")).toBe("closed");
+  });
+});
+
+describe("applyBestMovementRule + subcategoría (item)", () => {
+  const mkRule = (p: Partial<MovementRule>): MovementRule => ({
+    id: "r", name: "r", keywords: ["copec"], category: "Auto", itemId: null,
+    workspace: "family", movementType: "expense", paymentMethod: "bank_account",
+    accountId: null, creditCardName: null, cardAccountId: null, amountDirection: "any",
+    priority: 0, isActive: true, notes: null, createdAt: "", updatedAt: "", ...p,
+  });
+  const mkMov = (itemId: string | null, category = "Auto") => ({
+    id: "m",
+    ...buildImportedMovement({
+      batchId: "b", source: "manual_file", sourceName: "s", sourceType: "bank_account",
+      accountId: "a", date: "2026-06-23", description: "Compra COPEC bencina", amount: 30000,
+      direction: "expense", category, workspace: "family", movementType: "expense",
+      paymentMethod: "bank_account", itemId, createdAt: "2026-06-23T00:00:00.000Z",
+    }),
+  });
+
+  it("una regla con itemId setea la subcategoría", () => {
+    const out = applyBestMovementRule(mkMov(null), [mkRule({ category: "Auto", itemId: "item-bencina" })]);
+    expect(out.suggestedCategory).toBe("Auto");
+    expect(out.suggestedItemId).toBe("item-bencina");
+  });
+
+  it("si la regla cambia la categoría y no trae item, limpia la subcategoría previa", () => {
+    const out = applyBestMovementRule(mkMov("item-viejo", "Auto"), [mkRule({ category: "Comida", itemId: null })]);
+    expect(out.suggestedCategory).toBe("Comida");
+    expect(out.suggestedItemId).toBeNull();
+  });
+
+  it("si la regla no cambia la categoría y no trae item, conserva la subcategoría previa", () => {
+    const out = applyBestMovementRule(mkMov("item-bencina", "Auto"), [mkRule({ category: "Auto", itemId: null })]);
+    expect(out.suggestedItemId).toBe("item-bencina");
+  });
+
+  it("sin regla que matchee, conserva la subcategoría elegida", () => {
+    const out = applyBestMovementRule(mkMov("item-bencina"), [mkRule({ keywords: ["falabella"] })]);
+    expect(out.suggestedItemId).toBe("item-bencina");
   });
 });

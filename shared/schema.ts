@@ -595,6 +595,7 @@ export interface MovementRule {
   name: string;
   keywords: string[];
   category: string;
+  itemId?: string | null; // subcategoría sugerida por la regla → viaja a suggestedItemId (F2)
   workspace: string;
   movementType: string;
   paymentMethod: string;
@@ -613,6 +614,7 @@ export interface InsertMovementRule {
   name: string;
   keywords?: string[];
   category: string;
+  itemId?: string | null;
   workspace?: string;
   movementType?: string;
   paymentMethod?: string;
@@ -889,6 +891,7 @@ export const insertImportedMovementSchema = z.object({
   suggestedDestinationWorkspace: z.string().nullable().optional(),
   suggestedDestinationAccountId: z.string().nullable().optional(),
   suggestedSourceAccountId: z.string().nullable().optional(),
+  suggestedItemId: z.string().nullable().optional(),
   installmentCount: z.number().int().positive().nullable().optional(),
   confidence: z.number().min(0).max(100).optional(),
   matchedRuleId: z.string().nullable().optional(),
@@ -909,6 +912,7 @@ export const insertMovementRuleSchema = z.object({
   name: z.string().min(1),
   keywords: z.array(z.string()).optional(),
   category: z.string().min(1),
+  itemId: z.string().nullable().optional(),
   workspace: z.enum(["business", "family", "dentist", "shared"]).optional(),
   movementType: z.enum(["income", "expense", "transfer", "credit_card_payment"]).optional(),
   paymentMethod: z.enum(["bank_account", "credit_card", "cash"]).optional(),

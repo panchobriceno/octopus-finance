@@ -185,12 +185,16 @@ export function applyMovementRule(movement: ImportedMovement, rule: MovementRule
   const keywordCount = rule.keywords.map(normalizeImportText).filter(Boolean).length;
   const ruleConfidence = Math.min(88, 76 + keywordCount * 4 + Math.max(Number(rule.priority) || 0, 0));
 
-  // Si la regla cambia la categoría, la subcategoría (item) elegida antes ya no aplica → se limpia.
+  // Subcategoría (item): la regla es la autoridad. Si la regla trae itemId, lo aplica.
+  // Si no trae y cambia la categoría, la subcategoría elegida antes ya no aplica → se limpia.
+  // Si no trae y la categoría no cambia, se conserva la elección previa.
   const categoryChanged = normalizeImportText(rule.category) !== normalizeImportText(movement.suggestedCategory);
+  const ruleItemId = (rule as { itemId?: string | null }).itemId ?? null;
+  const nextItemId = ruleItemId ?? (categoryChanged ? null : (movement.suggestedItemId ?? null));
   return {
     ...movement,
     suggestedCategory: rule.category,
-    suggestedItemId: categoryChanged ? null : (movement.suggestedItemId ?? null),
+    suggestedItemId: nextItemId,
     suggestedWorkspace: rule.workspace,
     suggestedMovementType: rule.movementType,
     suggestedPaymentMethod: rule.paymentMethod,
@@ -200,6 +204,12 @@ export function applyMovementRule(movement: ImportedMovement, rule: MovementRule
     matchedRuleId: rule.id,
     confidence: Math.max(currentConfidence, ruleConfidence),
   };
+}
+
+/** Motor de sugerencia ÚNICO: encuentra la mejor regla y la aplica. Usar en preview del wizard,
+ * import batch, demo y scripts para que todos sugieran igual (sin drift entre preview e import). */
+export function applyBestMovementRule(movement: ImportedMovement, rules: MovementRule[]): ImportedMovement {
+  return applyMovementRule(movement, findBestMovementRule(movement, rules));
 }
 
 export function buildImportedMovement(input: MovementSeedInput): Omit<ImportedMovement, "id"> {

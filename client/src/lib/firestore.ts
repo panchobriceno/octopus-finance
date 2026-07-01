@@ -47,8 +47,7 @@ import {
   buildTransactionMatchKey,
   findMatchingTransactionForPayload,
   getImportBatchLifecycleStatus,
-  findBestMovementRule,
-  applyMovementRule,
+  applyBestMovementRule,
   summarizeImportBatchLifecycle,
   type ImportedMovementOverride,
   type MovementSeedInput,
@@ -1948,6 +1947,7 @@ export async function createMovementRule(data: Record<string, any>) {
   const now = nowIso();
   const payload = {
     keywords: [],
+    itemId: null,
     workspace: "family",
     movementType: "expense",
     paymentMethod: "bank_account",
@@ -2415,10 +2415,7 @@ export async function seedDemoImportedMovements() {
   const movements = buildDemoMovementInputs(batchId, accounts, monthKey, now).map((input) => {
     const base = buildImportedMovement(input);
     const tempMovement = { id: "", ...base } as ImportedMovement;
-    const ruledMovement = applyMovementRule(
-      tempMovement,
-      findBestMovementRule(tempMovement, rules),
-    );
+    const ruledMovement = applyBestMovementRule(tempMovement, rules);
     const transactionKey = buildTransactionMatchKey({
       date: ruledMovement.date,
       name: ruledMovement.suggestedName,
@@ -2557,10 +2554,7 @@ export async function createImportedMovementBatch(input: CreateImportedMovementB
       createdAt: now,
     });
     const tempMovement = { id: "", ...base } as ImportedMovement;
-    const ruledMovement = applyMovementRule(
-      tempMovement,
-      findBestMovementRule(tempMovement, rules),
-    );
+    const ruledMovement = applyBestMovementRule(tempMovement, rules);
     const transactionKey = buildTransactionMatchKey({
       date: ruledMovement.date,
       name: ruledMovement.suggestedName,
