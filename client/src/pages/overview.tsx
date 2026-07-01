@@ -2801,7 +2801,7 @@ export default function OverviewPage() {
               onDetail={() => navigate("/cash-flow")}
             />
             <OverviewMetricCard
-              label="Gastos del mes"
+              label="Movimientos del mes"
               value={formatCLP(dashboardCurrentMonthExpenses)}
               icon={<ArrowDown className="size-4" />}
               detail={
