@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { initializeApp } from "firebase/app";
 import { collection, doc, getDocs, getFirestore, updateDoc } from "firebase/firestore/lite";
+import { getAuthedDb } from "./_db";
 import type { ImportedMovement, ImportBatch, MovementRule } from "../../shared/schema";
 import { findBestMovementRule, applyMovementRule } from "../../client/src/domain/bank-imports";
 
@@ -18,7 +19,7 @@ function loadEnv(fp: string) { if (!fs.existsSync(fp)) return; for (const l of f
 function req(n: string) { const v = process.env[n]; if (!v) throw new Error(`Falta ${n}`); return v; }
 loadEnv(path.join(process.cwd(), ".env.local"));
 loadEnv(path.join(process.cwd(), "client", ".env.local"));
-const db = getFirestore(initializeApp({ apiKey: req("VITE_FIREBASE_API_KEY"), authDomain: req("VITE_FIREBASE_AUTH_DOMAIN"), projectId: req("VITE_FIREBASE_PROJECT_ID"), storageBucket: req("VITE_FIREBASE_STORAGE_BUCKET"), messagingSenderId: req("VITE_FIREBASE_MESSAGING_SENDER_ID"), appId: req("VITE_FIREBASE_APP_ID") }));
+const db = await getAuthedDb();
 
 async function main() {
   const rules = (await getDocs(collection(db, "movementRules"))).docs.map((d) => ({ id: d.id, ...(d.data() as MovementRule) }));

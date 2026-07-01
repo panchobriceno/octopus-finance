@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { initializeApp } from "firebase/app";
 import { collection, doc, getDocs, getFirestore, query, where, writeBatch } from "firebase/firestore/lite";
+import { getAuthedDb } from "./_db";
 import type { ImportBatch, ImportedMovement, MovementRule, Transaction } from "../../shared/schema";
 import type { MovementSeedInput } from "./parse-edwards";
 import { buildImportedMovement, findBestMovementRule, applyMovementRule } from "../../client/src/domain/bank-imports";
@@ -41,7 +42,7 @@ function cardIdentity(text: string): CardId {
 function loadEnv(fp: string) { if (!fs.existsSync(fp)) return; for (const l of fs.readFileSync(fp, "utf8").split(/\r?\n/)) { const t = l.trim(); if (!t || t.startsWith("#")) continue; const s = t.indexOf("="); if (s === -1) continue; const k = t.slice(0, s).trim(); const v = t.slice(s + 1).trim().replace(/^['"]|['"]$/g, ""); if (k && process.env[k] === undefined) process.env[k] = v; } }
 function req(n: string) { const v = process.env[n]; if (!v) throw new Error(`Falta ${n}`); return v; }
 loadEnv(path.join(process.cwd(), ".env.local")); loadEnv(path.join(process.cwd(), "client", ".env.local"));
-const db = getFirestore(initializeApp({ apiKey: req("VITE_FIREBASE_API_KEY"), authDomain: req("VITE_FIREBASE_AUTH_DOMAIN"), projectId: req("VITE_FIREBASE_PROJECT_ID"), storageBucket: req("VITE_FIREBASE_STORAGE_BUCKET"), messagingSenderId: req("VITE_FIREBASE_MESSAGING_SENDER_ID"), appId: req("VITE_FIREBASE_APP_ID") }));
+const db = await getAuthedDb();
 const detId = (k: string) => "eeccai_" + createHash("sha1").update(k).digest("hex").slice(0, 20);
 
 function pdftext(p: string): string {

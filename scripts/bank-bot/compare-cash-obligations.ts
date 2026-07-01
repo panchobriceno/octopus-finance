@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { initializeApp } from "firebase/app";
 import { collection, getDocs, getFirestore } from "firebase/firestore/lite";
+import { getAuthedDb } from "./_db";
 import { buildCardDebt } from "@/domain/debt";
 import { buildCashObligations } from "@/domain/cash-obligations";
 import type { CommitmentInstance, Transaction, Account, CreditCardStatement } from "@shared/schema";
@@ -21,11 +22,7 @@ function le(fp: string) {
 }
 le(path.join(process.cwd(), ".env.local"));
 le(path.join(process.cwd(), "client", ".env.local"));
-const db = getFirestore(initializeApp({
-  apiKey: process.env.VITE_FIREBASE_API_KEY!, authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN!,
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID!, storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET!,
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID!, appId: process.env.VITE_FIREBASE_APP_ID!,
-}));
+const db = await getAuthedDb();
 const clp = (n: any) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CL");
 const arr = async <T,>(c: string) => (await getDocs(collection(db, c))).docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as T[];
 const daysBetween = (target: string, asOf: string) => Math.round((new Date(`${target}T00:00:00Z`).getTime() - new Date(`${asOf}T00:00:00Z`).getTime()) / 86400000);

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { initializeApp } from "firebase/app";
 import { collection, getDocs, getFirestore } from "firebase/firestore/lite";
+import { getAuthedDb } from "./_db";
 import type { ImportBatch, ImportedMovement } from "../../shared/schema";
 
 function loadEnvFile(fp: string) {
@@ -16,11 +17,7 @@ function loadEnvFile(fp: string) {
 function req(n: string) { const v = process.env[n]; if (!v) throw new Error(`Falta ${n}`); return v; }
 loadEnvFile(path.join(process.cwd(), ".env.local"));
 loadEnvFile(path.join(process.cwd(), "client", ".env.local"));
-const db = getFirestore(initializeApp({
-  apiKey: req("VITE_FIREBASE_API_KEY"), authDomain: req("VITE_FIREBASE_AUTH_DOMAIN"),
-  projectId: req("VITE_FIREBASE_PROJECT_ID"), storageBucket: req("VITE_FIREBASE_STORAGE_BUCKET"),
-  messagingSenderId: req("VITE_FIREBASE_MESSAGING_SENDER_ID"), appId: req("VITE_FIREBASE_APP_ID"),
-}));
+const db = await getAuthedDb();
 
 async function main() {
   console.log("Proyecto:", process.env.VITE_FIREBASE_PROJECT_ID);

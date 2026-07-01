@@ -19,6 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { initializeApp } from "firebase/app";
 import { addDoc, collection, deleteDoc, doc, getDocs, getFirestore } from "firebase/firestore/lite";
+import { getAuthedDb } from "./_db";
 import type { Transaction, MovementRule } from "../../shared/schema";
 
 const DRY = process.argv.includes("--dry");
@@ -26,7 +27,7 @@ function loadEnv(fp: string) { if (!fs.existsSync(fp)) return; for (const l of f
 function req(n: string) { const v = process.env[n]; if (!v) throw new Error(`Falta ${n}`); return v; }
 loadEnv(path.join(process.cwd(), ".env.local"));
 loadEnv(path.join(process.cwd(), "client", ".env.local"));
-const db = getFirestore(initializeApp({ apiKey: req("VITE_FIREBASE_API_KEY"), authDomain: req("VITE_FIREBASE_AUTH_DOMAIN"), projectId: req("VITE_FIREBASE_PROJECT_ID"), storageBucket: req("VITE_FIREBASE_STORAGE_BUCKET"), messagingSenderId: req("VITE_FIREBASE_MESSAGING_SENDER_ID"), appId: req("VITE_FIREBASE_APP_ID") }));
+const db = await getAuthedDb();
 
 const STOP = new Set(["pago", "pagos", "compra", "compras", "comp", "nacional", "internacional", "transf", "transferencia", "de", "del", "la", "el", "con", "por", "en", "linea", "automatico", "automatica", "tarjeta", "credito", "cuenta", "spa", "ltda", "limitada", "limit", "plan", "mantencion", "sociedad", "monto", "cancelado", "traspaso", "deuda", "cargo", "abono", "com", "mp", "payu", "pat", "servicio", "uso", "marc", "asistido", "tasa", "int", "santiago", "condes", "las", "plaza", "mall", "trebo", "pcs", "inc", "centro", "chile", "sa", "eirl", "dl", "admin", "mensual", "corriente", "corr", "pap"]);
 const norm = (s: string) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
