@@ -138,4 +138,20 @@ describe("buildObligationProjectionTransactions / buildCashFlowFinancialTransact
     expect(cf.some((t) => t.id === "real")).toBe(true);
     expect(cf.some((t) => t.id.startsWith("obligation-"))).toBe(true);
   });
+
+  it("cash-flow: ingreso de cliente en NETO y sin IVA en el flujo (no doble-descuento)", () => {
+    const cf = buildCashFlowFinancialTransactions({
+      transactions: [],
+      clientPayments: [
+        { id: "p1", clientName: "Cliente A", netAmount: 100, vatAmount: 19, totalAmount: 119,
+          status: "paid", dueDate: "2026-06-10", expectedDate: "2026-06-10", issueDate: "2026-06-10",
+          workspace: "business", serviceItem: null, notes: null } as any,
+      ],
+      commitments: [], cardDebts: [], asOf,
+    });
+    const income = cf.find((t) => t.id === "client-payment-p1");
+    expect(income?.amount).toBe(100); // NETO, no 119
+    expect(cf.some((t) => String(t.id).startsWith("vat-projection"))).toBe(false);
+    expect(cf.some((t) => t.category === "IVA por pagar")).toBe(false);
+  });
 });

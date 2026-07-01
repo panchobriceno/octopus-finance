@@ -9,7 +9,7 @@
  */
 import type { CommitmentInstance, Account, Transaction, ClientPayment } from "@shared/schema";
 import type { CardDebt } from "./debt";
-import { clientPaymentToIncomeTransaction, buildVatProjectionTransactions } from "@/lib/finance";
+import { clientPaymentToIncomeTransaction } from "@/lib/finance";
 
 const norm = (s: unknown) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 const digits = (s: unknown) => String(s ?? "").replace(/\D/g, "");
@@ -207,9 +207,11 @@ export function buildObligationProjectionTransactions(input: {
 }
 
 /**
- * Universo de transacciones para Flujo de Caja: SOLO lo real (no planned) + ingresos cliente + IVA
+ * Universo de transacciones para Flujo de Caja: SOLO lo real (no planned) + ingresos cliente (NETO)
  * + obligaciones (commitments + pago de tarjeta de cartola). NO incluye cuotas proyectadas de tarjeta
  * (el pago real viene de la cartola) ni planned legacy/manual → evita doble-conteo. Misma fuente que el asesor.
+ * Modelo IVA (decisión del dueño): la caja se mueve en NETO; el IVA NO entra al flujo (iba doble-restado
+ * sobre el ingreso ya neteado). El IVA se informa aparte (tarjeta "IVA a separar" + Resumen).
  */
 export function buildCashFlowFinancialTransactions(input: {
   transactions: Transaction[];
@@ -224,7 +226,6 @@ export function buildCashFlowFinancialTransactions(input: {
   const income = input.clientPayments
     .map(clientPaymentToIncomeTransaction)
     .filter((t): t is Transaction => t !== null);
-  const vat = buildVatProjectionTransactions(input.clientPayments);
   const obligations = buildObligationProjectionTransactions({
     commitments: input.commitments,
     cardDebts: input.cardDebts,
@@ -232,5 +233,5 @@ export function buildCashFlowFinancialTransactions(input: {
     asOf: input.asOf,
     monthsAhead: input.monthsAhead,
   });
-  return [...base, ...income, ...vat, ...obligations];
+  return [...base, ...income, ...obligations];
 }

@@ -72,6 +72,13 @@ function toStartOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+// Fecha local YYYY-MM-DD sin depender del huso: siempre el día calendario local.
+// (toISOString() sobre medianoche local puede devolver otro día según la zona; esto no.)
+function toLocalIsoDate(date: Date) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
+}
+
 function parseIsoDate(value: string | null | undefined) {
   if (!value) return null;
   const [year, month, day] = value.split("-").map(Number);
@@ -125,7 +132,7 @@ function buildCurrentMonthWeeks(monthKey: string) {
     const start = new Date(cursor);
     const end = endOfWeekSunday(start);
     columns.push({
-      key: `${start.toISOString().slice(0, 10)}_${end.toISOString().slice(0, 10)}`,
+      key: `${toLocalIsoDate(start)}_${toLocalIsoDate(end)}`,
       start,
       end,
       label: `${formatShortDate(start)} - ${formatShortDate(end)}`,
@@ -142,7 +149,7 @@ function buildNextFourWeeks() {
     const start = addWeeks(firstWeek, index);
     const end = endOfWeekSunday(start);
     return {
-      key: `${start.toISOString().slice(0, 10)}_${end.toISOString().slice(0, 10)}`,
+      key: `${toLocalIsoDate(start)}_${toLocalIsoDate(end)}`,
       start,
       end,
       label: `${formatShortDate(start)} - ${formatShortDate(end)}`,
@@ -268,7 +275,7 @@ export default function CashFlowPage() {
           id: payment.id,
           label: payment.clientName,
           date: payment.expectedDate ?? payment.dueDate ?? null,
-          amount: payment.totalAmount,
+          amount: payment.netAmount, // NETO: la caja se mueve en lo tuyo usable; el IVA va aparte (tarjeta "IVA a separar")
           meta: payment.serviceItem ?? payment.status,
         }));
 
@@ -321,7 +328,7 @@ export default function CashFlowPage() {
           {
             id: `opening-${column.key}`,
             label: "Saldo sumado de cuentas",
-            date: column.start.toISOString().slice(0, 10),
+            date: toLocalIsoDate(column.start),
             amount: openingBalanceValue,
             meta: "Cuentas corrientes y de ahorro; tarjetas excluidas",
           },
@@ -333,7 +340,7 @@ export default function CashFlowPage() {
           {
             id: `ending-${column.key}-opening`,
             label: "Saldo inicial",
-            date: column.start.toISOString().slice(0, 10),
+            date: toLocalIsoDate(column.start),
             amount: openingBalanceValue,
           },
           ...clientIncomeItems.map((item) => ({ ...item, meta: `Ingreso cliente${item.meta ? ` · ${item.meta}` : ""}` })),
@@ -539,8 +546,9 @@ export default function CashFlowPage() {
               <p className="mt-2 font-mono text-[22px] font-bold tabular-nums text-[#f4f4f7]">{fmt(workspaceMetrics.creditCardDebt)}</p>
             </div>
             <div className="rounded-[18px] border border-card-border bg-card p-4">
-              <p className="text-xs text-[#9a9aa6]">IVA proyectado · {selectedMonthVatDueDate}</p>
+              <p className="text-xs text-[#9a9aa6]">IVA a separar · vence {selectedMonthVatDueDate}</p>
               <p className="mt-2 font-mono text-[22px] font-bold tabular-nums text-[#8a8a94]">{fmt(selectedMonthPaidVat)}</p>
+              <p className="mt-1 text-[10px] text-[#6c6c78]">Aparte de tu caja: es plata de impuestos, no se descuenta del flujo.</p>
             </div>
             <div className="rounded-[18px] border border-card-border bg-card p-4">
               <p className="flex items-center gap-1.5 text-xs text-[#9a9aa6]">
