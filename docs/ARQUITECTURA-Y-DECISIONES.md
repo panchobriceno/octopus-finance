@@ -63,6 +63,14 @@ Estaba SIN seguridad: cliente escribía a Firestore directo, sin login, sin `fir
 - **F5 (seguridad, opcional):** proteger endpoints IA (`/api/extract-pdf`, `/api/extract-receipt`, `/api/advisor`) con token Firebase + UID + rate limit (hoy sin auth → riesgo de costo, no de datos porque la base ya está cerrada).
 - **Saldo Cuenta Corriente OM en $0** (real o desactualizado): si Octopus tiene caja, actualizarlo en Cuentas para que la alerta sea fiel.
 
+## Roadmap acordado (2026-06-30, dirección de Pancho)
+Orden de bloques fuertes. **No abrir frentes nuevos en paralelo.**
+1. **DATOS (en curso ahora):** limpiar categorías duplicadas + transferencias incompletas. Baja ruido antes de construir métrica nueva.
+2. **Captura diaria + cartola sin duplicados** (el próximo bloque fuerte tras DATOS).
+3. **Sobrante/faltante consolidado.**
+4. **"Mes Financiero"** (recién después de 2 y 3).
+- Los 2 follow-ups de IVA (simetría de proyección Resumen/P&L + opening neto estricto) quedan **estacionados como decisión fina, NO como bloqueo**.
+
 ## Gotchas
 - La apiKey web NO es secreto (viaja en el bundle); la seguridad son Auth + reglas.
 - El server NO lee `.env.local` → usa el default hardcodeado de `server/index.ts` (por eso el bug de la key). En prod manda el env de Railway.
