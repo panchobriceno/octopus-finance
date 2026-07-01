@@ -91,3 +91,33 @@ Orden de bloques fuertes. **No abrir frentes nuevos en paralelo.**
 - Firestore Lite adjunta el token si Auth está en la MISMA app + hay signIn.
 - `MarkdownRenderer` de otros proyectos OM no soporta tablas/blockquotes (no aplica acá, pero es patrón OM).
 - Reiniciar el dev server: matar TODO en el puerto (`lsof -ti :PORT | xargs kill -9`) antes de arrancar (EADDRINUSE si queda el viejo). El server NO recarga `.env`/`server/index.ts` sin reinicio.
+
+---
+
+## Estado al cierre de sesión (2026-07-01) — cómo retomar
+
+### En producción (deployado)
+- **Seguridad** (login + reglas Firestore), **Resumen unificado**, **MEDIOS** (deuda real + modelo IVA neto + fechas TZ-safe + USD_CLP centralizado), **DATOS** (limpieza de 15 movimientos + Consulta Javi→dentist, es data, ya visible), **F1** (subcategoría en el importador).
+- Última verificación: P0 de integridad = 0; 0 duplicados de transacciones activos.
+
+### Bloque CAPTURA — progreso (plan completo + orden más arriba en "Roadmap acordado")
+- ✅ **F4-diagnóstico**: 0 duplicados activos; riesgo latente = accountId vacío al importar (sourceKey inestable). F4-hardening es preventivo, baja urgencia.
+- ✅ **F1** (deployado): selector de subcategoría por fila en `import-data.tsx`; itemId viaja hasta `transaction.itemId`.
+- ✅ **F2 paso 1** (COMMIT LOCAL `18276cf`, ver abajo): base de auto-sugerencia. `MovementRule.itemId?` (schema + zod + default), `applyMovementRule` con la regla como autoridad del item, helper único `applyBestMovementRule(movement, rules)` usado en el import batch, 4 tests. Sin cambio visible.
+- ⏭️ **F2 paso 2 (PRÓXIMA ACCIÓN)**: **editor de reglas** (UI). Hoy NO existe editor (las reglas se crean por script `generate-rules.ts`/`add-manual-rules.ts`); los hooks `useCreateMovementRule`/`useUpdateMovementRule` existen en `client/src/lib/hooks.ts` pero NO se usan en ninguna página. Construir UI (en `data-health.tsx` o pantalla nueva) para crear/editar reglas con selector de subcategoría (item filtrado por la categoría de la regla). Validar consistencia item↔category al crear/editar.
+- **F2 paso 3**: pre-relleno del preview del wizard usando `applyBestMovementRule`, **preservando correcciones humanas** (no re-aplicar reglas sobre campos ya tocados; trackear categoryTouched/itemTouched).
+- **F2 paso 4**: aprendizaje en el wizard — al elegir/corregir subcategoría, ofrecer crear/actualizar regla con ese itemId. **Explícito, tú aceptas** (nunca silencioso; el falso positivo cuesta más con item). Keyword del comercio: reusar lógica de `generate-rules.ts` (normalizar, tokens ≥4, stopwords, excluir números/genéricos); dedupe por `keyword+amountDirection+movementType+paymentMethod`; `notes`="Aprendida desde wizard".
+- **F2 paso 5**: agregar override `itemId` + selector de subcategoría en la bandeja (`bank-movements.tsx`, hoy `RowOverride` no tiene itemId) + aprendizaje ahí.
+- Después de F2: **F3** (IA catch-up de los ~247 históricos, patrón `categorize-ai`, dry-run→aceptar lote→apply con backup) y **F4-hardening** (estabilizar sourceKey; fuzzy solo como "posible duplicado", no auto-descarte).
+
+### Git al cierre
+- `origin/main` = todo lo deployado. **1 commit LOCAL sin pushear: `18276cf` (F2 paso 1)** — se dejó local a propósito (no cambia nada visible; se sube junto con el paso 2). Verificar con `git log origin/main..HEAD --oneline`.
+
+### Estacionados (decisión fina, NO bloquean)
+- Follow-ups IVA: (1) simetría de proyección en Resumen/P&L (`combineFinancialTransactions` aún resta IVA en `projectedEndingBalance`); (2) opening neto estricto en el semanal.
+- 3 importaciones pendientes de categorizar en la bandeja.
+- 1 cartola cosmética (7232 mayo: cupoUtilizado>cupoTotal).
+- F5 seguridad: proteger endpoints IA (`/api/extract-pdf`, `/api/extract-receipt`, `/api/advisor`) con token + rate limit.
+
+### Cómo retomar (pegar en la próxima sesión)
+> "Retomamos octopus-finance. Lee `docs/ARQUITECTURA-Y-DECISIONES.md`, sección 'Estado al cierre de sesión (2026-07-01)'. Vamos con **F2 paso 2 (editor de reglas)**: construir la UI para crear/editar MovementRule con selector de subcategoría (item filtrado por su categoría), reusando los hooks `useCreateMovementRule`/`useUpdateMovementRule` ya existentes, validando consistencia item↔category. Primero pasa el plan por Codex, después implementá con dry-run/tests/revisor como siempre. Antes: `git log origin/main..HEAD` para ver que el commit local `18276cf` (F2 paso 1) siga ahí, y si no está deployado, subilo junto con el paso 2."
