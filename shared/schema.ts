@@ -603,6 +603,8 @@ export interface MovementRule {
   creditCardName: string | null;
   cardAccountId?: string | null;
   amountDirection: string; // "any" | "income" | "expense"
+  amountMin?: number | null; // rango de monto (absoluto) para desambiguar cargos de igual texto (F2)
+  amountMax?: number | null;
   priority: number;
   isActive: boolean;
   notes: string | null;
@@ -622,6 +624,8 @@ export interface InsertMovementRule {
   creditCardName?: string | null;
   cardAccountId?: string | null; // cuenta-tarjeta canónica (la tarjeta usada/pagada); accountId = cuenta que paga
   amountDirection?: string;
+  amountMin?: number | null;
+  amountMax?: number | null;
   priority?: number;
   isActive?: boolean;
   notes?: string | null;
@@ -920,6 +924,8 @@ export const insertMovementRuleSchema = z.object({
   creditCardName: z.string().nullable().optional(),
   cardAccountId: z.string().nullable().optional(),
   amountDirection: z.enum(["any", "income", "expense"]).optional(),
+  amountMin: z.number().nonnegative().nullable().optional(),
+  amountMax: z.number().nonnegative().nullable().optional(),
   priority: z.number().int().optional(),
   isActive: z.boolean().optional(),
   notes: z.string().nullable().optional(),

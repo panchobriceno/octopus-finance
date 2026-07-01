@@ -155,6 +155,16 @@ function movementRuleScore(rule: MovementRule, movement: ImportedMovement) {
   if (rule.isActive === false) return 0;
   if (rule.amountDirection !== "any" && rule.amountDirection !== movement.direction) return 0;
 
+  // Rango de monto (absoluto): desambigua cargos de igual texto por monto. Bordes inclusivos.
+  // Legacy sin estos campos (undefined) o null → no filtran (undefined/null != null === false).
+  const ruleAmountMin = (rule as { amountMin?: number | null }).amountMin;
+  const ruleAmountMax = (rule as { amountMax?: number | null }).amountMax;
+  if (ruleAmountMin != null || ruleAmountMax != null) {
+    const amt = Math.abs(Number(movement.amount) || 0);
+    if (ruleAmountMin != null && amt < ruleAmountMin) return 0;
+    if (ruleAmountMax != null && amt > ruleAmountMax) return 0;
+  }
+
   const haystack = normalizeImportText([
     movement.description,
     movement.rawDescription,

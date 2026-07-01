@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyBestMovementRule,
+  findBestMovementRule,
   buildImportedMovement,
   buildTransactionFromImportedMovement,
   findMatchingTransactionForPayload,
@@ -181,5 +182,50 @@ describe("applyBestMovementRule + subcategoría (item)", () => {
   it("sin regla que matchee, conserva la subcategoría elegida", () => {
     const out = applyBestMovementRule(mkMov("item-bencina"), [mkRule({ keywords: ["falabella"] })]);
     expect(out.suggestedItemId).toBe("item-bencina");
+  });
+});
+
+describe("findBestMovementRule + rango de monto (amountMin/amountMax)", () => {
+  const rule = (p: Partial<MovementRule>): MovementRule => ({
+    id: "r", name: "r", keywords: ["apple"], category: "Digital", itemId: null,
+    workspace: "family", movementType: "expense", paymentMethod: "credit_card",
+    accountId: null, creditCardName: null, cardAccountId: null, amountDirection: "any",
+    priority: 0, isActive: true, notes: null, createdAt: "", updatedAt: "", ...p,
+  });
+  const mov = (amount: number) => ({
+    id: "m",
+    ...buildImportedMovement({
+      batchId: "b", source: "manual_file", sourceName: "s", sourceType: "bank_account",
+      accountId: "a", date: "2026-06-23", description: "APPLE.COM/BILL", amount,
+      direction: "expense", category: "", workspace: "family", movementType: "expense",
+      paymentMethod: "credit_card", createdAt: "2026-06-23T00:00:00.000Z",
+    }),
+  });
+
+  it("sin bounds (legacy), matchea cualquier monto", () => {
+    expect(findBestMovementRule(mov(102990), [rule({})])?.id).toBe("r");
+    expect(findBestMovementRule(mov(9990), [rule({})])?.id).toBe("r");
+  });
+
+  it("amountMin excluye montos por debajo (borde inclusivo)", () => {
+    const r = rule({ amountMin: 80000 });
+    expect(findBestMovementRule(mov(79999), [r])).toBeNull();
+    expect(findBestMovementRule(mov(80000), [r])?.id).toBe("r"); // == min pasa
+    expect(findBestMovementRule(mov(102990), [r])?.id).toBe("r");
+  });
+
+  it("amountMax excluye montos por encima (borde inclusivo)", () => {
+    const r = rule({ amountMax: 79999 });
+    expect(findBestMovementRule(mov(80000), [r])).toBeNull();
+    expect(findBestMovementRule(mov(79999), [r])?.id).toBe("r"); // == max pasa
+    expect(findBestMovementRule(mov(19990), [r])?.id).toBe("r");
+  });
+
+  it("caso ChatGPT: dos reglas apple mutuamente excluyentes por monto", () => {
+    const digital = rule({ id: "digital", category: "Digital", amountMax: 79999, priority: 5 });
+    const chatgpt = rule({ id: "chatgpt", category: "Software Empresa", itemId: "item-gpt", workspace: "business", amountMin: 80000, priority: 10 });
+    const rules = [digital, chatgpt];
+    expect(findBestMovementRule(mov(19990), rules)?.id).toBe("digital");
+    expect(findBestMovementRule(mov(102990), rules)?.id).toBe("chatgpt");
   });
 });

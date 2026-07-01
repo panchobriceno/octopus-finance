@@ -1954,6 +1954,8 @@ export async function createMovementRule(data: Record<string, any>) {
     accountId: null,
     creditCardName: null,
     amountDirection: "any",
+    amountMin: null,
+    amountMax: null,
     priority: 0,
     isActive: true,
     notes: null,

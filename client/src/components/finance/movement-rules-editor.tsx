@@ -86,9 +86,20 @@ interface RuleFormState {
   paymentMethod: string;
   workspace: string;
   itemId: string | null;
+  amountMin: string;
+  amountMax: string;
   priority: string;
   isActive: boolean;
   notes: string;
+}
+
+/** Parsea un campo de monto: "" → null; inválido/negativo → símbolo de error (NaN). */
+function parseAmountField(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0) return Number.NaN; // NaN = inválido, lo caza handleSubmit
+  return n;
 }
 
 function emptyForm(): RuleFormState {
@@ -101,6 +112,8 @@ function emptyForm(): RuleFormState {
     paymentMethod: "bank_account",
     workspace: "family",
     itemId: null,
+    amountMin: "",
+    amountMax: "",
     priority: "0",
     isActive: true,
     notes: "",
@@ -117,6 +130,8 @@ function ruleToForm(rule: MovementRule): RuleFormState {
     paymentMethod: rule.paymentMethod ?? "bank_account",
     workspace: rule.workspace ?? "family",
     itemId: rule.itemId ?? null,
+    amountMin: rule.amountMin != null ? String(rule.amountMin) : "",
+    amountMax: rule.amountMax != null ? String(rule.amountMax) : "",
     priority: String(rule.priority ?? 0),
     isActive: rule.isActive !== false,
     notes: rule.notes ?? "",
@@ -245,6 +260,16 @@ export function MovementRulesEditor({
         description: "La subcategoría no pertenece a la categoría elegida, así que se guardó sin subcategoría.",
       });
     }
+    const amountMin = parseAmountField(form.amountMin);
+    const amountMax = parseAmountField(form.amountMax);
+    if (Number.isNaN(amountMin) || Number.isNaN(amountMax)) {
+      toast({ title: "Monto inválido", description: "El rango de monto debe ser un número no negativo.", variant: "destructive" });
+      return;
+    }
+    if (amountMin != null && amountMax != null && amountMin > amountMax) {
+      toast({ title: "Rango de monto al revés", description: "El monto \"desde\" no puede ser mayor que el \"hasta\".", variant: "destructive" });
+      return;
+    }
     const priority = Number.parseInt(form.priority, 10);
     const data = {
       name,
@@ -255,6 +280,8 @@ export function MovementRulesEditor({
       amountDirection: form.amountDirection,
       paymentMethod: form.paymentMethod,
       workspace: form.workspace,
+      amountMin,
+      amountMax,
       priority: Number.isFinite(priority) ? priority : 0,
       isActive: form.isActive,
       notes: form.notes.trim() ? form.notes.trim() : null,
@@ -515,6 +542,30 @@ export function MovementRulesEditor({
                 </div>
                 <Switch checked={form.isActive} onCheckedChange={(checked) => patch({ isActive: checked })} />
               </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Monto desde</Label>
+                <Input
+                  type="number"
+                  value={form.amountMin}
+                  onChange={(event) => patch({ amountMin: event.target.value })}
+                  placeholder="opcional"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Monto hasta</Label>
+                <Input
+                  type="number"
+                  value={form.amountMax}
+                  onChange={(event) => patch({ amountMax: event.target.value })}
+                  placeholder="opcional"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground sm:col-span-2">
+                Opcional. Limita la regla a un rango de monto — útil para separar cargos con el mismo texto pero distinto valor (ej. ChatGPT vía Apple).
+              </p>
             </div>
 
             <div className="space-y-1.5">
