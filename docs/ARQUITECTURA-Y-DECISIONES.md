@@ -66,7 +66,10 @@ Estaba SIN seguridad: cliente escribía a Firestore directo, sin login, sin `fir
 ## Roadmap acordado (2026-06-30, dirección de Pancho)
 Orden de bloques fuertes. **No abrir frentes nuevos en paralelo.**
 1. **DATOS (en curso ahora):** limpiar categorías duplicadas + transferencias incompletas. Baja ruido antes de construir métrica nueva.
-2. **Captura diaria + cartola sin duplicados** (el próximo bloque fuerte tras DATOS).
+2. **Captura diaria + cartola sin duplicados** (el próximo bloque fuerte tras DATOS). Alcance decidido 2026-06-30:
+   - **Subcategoría (item) en la captura — decisión de Pancho: COMPLETO.** Hoy el importador solo captura ámbito + categoría, NO subcategoría; la captura manual (quick-expense) sí. Resultado: 1% de los gastos tiene itemId (0% de los 243 importados). Como los presupuestos se llevan a nivel item, el "sobrante/faltante" por subcategoría está ciego. Plan: (a) agregar selector de subcategoría al importador (import-data.tsx), (b) auto-sugerir item por comercio vía reglas (extender suggestRowCategory/movementRules para también sugerir itemId, que aprenda), (c) pantalla de puesta al día en bloque para los ~247 gastos históricos sin item.
+   - **Cartola sin duplicados:** que la plata entre sola y bien, sin duplicados que revisar a mano.
+   - Antes de tocar código: diagnóstico read-only + plan verificado con Codex.
 3. **Sobrante/faltante consolidado.**
 4. **"Mes Financiero"** (recién después de 2 y 3).
 - Los 2 follow-ups de IVA (simetría de proyección Resumen/P&L + opening neto estricto) quedan **estacionados como decisión fina, NO como bloqueo**.
