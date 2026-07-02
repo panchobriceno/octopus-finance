@@ -4,6 +4,7 @@
  * Helper puro: `asOf` se inyecta (no usa new Date()). Revisado por Codex.
  */
 import { isExecutedTransaction, normalizeTransaction } from "@/lib/finance";
+import { resolveCardAccount } from "@/domain/account-identity";
 import type { CreditCardStatement, Transaction, Account } from "@shared/schema";
 
 /** Tipo de cambio referencial USD→CLP. Fuente única: la usan Centro de Deuda, Panel de Tarjetas
@@ -76,7 +77,6 @@ export function buildCardDebt(
   // imprime el banco/titular distinto entre períodos → partiría la misma tarjeta y netearía doble).
   // El bankCode desambigua el caso (raro) de dos tarjetas de bancos distintos con el mismo last4.
   const cardByLast4 = new Map<string, Account>();
-  const accById = new Map(accounts.map((a) => [a.id, a]));
   for (const a of accounts) {
     if (a.type !== "credit_card") continue;
     const l4 = digits(a.accountNumber).slice(-4);
@@ -102,8 +102,13 @@ export function buildCardDebt(
     const pagos: CardPayment[] = transactions
       .filter((t) => {
         const n = normalizeTransaction(t);
-        const payL4 = n.cardAccountId
-          ? digits(accById.get(n.cardAccountId)?.accountNumber).slice(-4)
+        // Resolución estructural de la tarjeta que pagó, usando el helper canónico (valida que la
+        // cuenta exista Y sea de crédito: cubre cuenta borrada, id reciclado y tipo cambiado, que
+        // antes dejaban el last4 en "" o en el de otra cuenta → el pago desaparecía y la deuda se
+        // inflaba). Si no resuelve, cae al last4 del nombre del pago.
+        const cardAcc = resolveCardAccount({ cardAccountId: n.cardAccountId, creditCardName: t.creditCardName }, accounts);
+        const payL4 = cardAcc
+          ? digits(cardAcc.accountNumber).slice(-4)
           : paymentCardLast4(t.creditCardName, accounts);
         return (
           n.movementType === "credit_card_payment" &&

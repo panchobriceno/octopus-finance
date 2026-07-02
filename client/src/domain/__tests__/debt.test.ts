@@ -104,4 +104,25 @@ describe("buildCardDebt — neteo de pagos post-cierre", () => {
     const [d] = buildCardDebt([stmt({ pagarHasta: "2026-06-08" })], [], [card()], { asOf });
     expect(d.vencido).toBe(true);
   });
+
+  it("pago con cardAccountId a una cuenta BORRADA cae al last4 del nombre y SÍ netea (no infla deuda)", () => {
+    // El pago apunta por cardAccountId a "cardacc", pero esa cuenta ya no existe en el arreglo de accounts.
+    // Antes: accById.get() undefined → payL4 "" → el pago desaparecía del neteo → deuda inflada.
+    // Ahora: cae al last4 del creditCardName ("…7232") y netea igual.
+    const p = pay({ cardAccountId: "cardacc", creditCardName: "Tarjeta …7232" });
+    const [d] = buildCardDebt([stmt()], [p], [], { asOf }); // accounts vacío = cuenta-tarjeta borrada
+    expect(d.pagado).toBe(1_520_000);
+    expect(d.pendienteReal).toBe(3_435_877 - 1_520_000);
+  });
+
+  it("cardAccountId apunta a una cuenta que NO es tarjeta (id reciclado/tipo cambiado) → no usa su last4, cae al nombre y netea", () => {
+    // "cardacc" existe pero es una cuenta corriente con last4 9999. Antes el fix ingenuo usaba
+    // digits("...9999") = 9999 ≠ 7232 → el pago no neteaba → deuda inflada. Ahora resolveCardAccount
+    // descarta la cuenta por no ser credit_card y cae al last4 del nombre del pago (…7232).
+    const bankAcc = card({ id: "cardacc", type: "checking", name: "Cuenta Corriente", accountNumber: "5555 5555 9999" });
+    const p = pay({ cardAccountId: "cardacc", creditCardName: "Tarjeta …7232" });
+    const [d] = buildCardDebt([stmt()], [p], [bankAcc], { asOf });
+    expect(d.pagado).toBe(1_520_000);
+    expect(d.pendienteReal).toBe(3_435_877 - 1_520_000);
+  });
 });
