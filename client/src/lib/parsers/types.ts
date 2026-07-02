@@ -5,7 +5,7 @@ export const IMPORT_CONFIDENCE_DUPLICATE = 65;
 
 export type AccountType = "bank" | "credit";
 
-export type CcMovementType = "purchase" | "tc_payment" | "reversal";
+export type CcMovementType = "purchase" | "tc_payment" | "reversal" | "credit_review";
 
 export interface ParsedPreviewRow {
   id: string;
