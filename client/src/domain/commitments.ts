@@ -1,5 +1,5 @@
 import type { CommitmentInstance, CommitmentTemplate, Transaction } from "@shared/schema";
-import { isExecutedTransaction, normalizeTransaction } from "@/lib/finance";
+import { getTodayLocalDateKey, isExecutedTransaction, normalizeTransaction } from "@/lib/finance";
 
 export type CommitmentMatch = {
   instance: CommitmentInstance;
@@ -293,7 +293,7 @@ export function findCommitmentMatches(
 
 export function buildCommitmentDashboard(
   instances: CommitmentInstance[],
-  today = new Date().toISOString().slice(0, 10),
+  today = getTodayLocalDateKey(),
 ): CommitmentDashboard {
   const total = instances.length;
   const paid = instances.filter((instance) => instance.status === "paid").length;

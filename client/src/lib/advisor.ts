@@ -16,9 +16,10 @@ import type {
 } from "@shared/schema";
 import { buildCardDebt } from "@/domain/debt";
 import { buildCashObligations, type MonthSummary } from "@/domain/cash-obligations";
+import { getTodayLocalDateKey } from "@/lib/finance";
 
 const DAY = 86400000;
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => getTodayLocalDateKey();
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / DAY);
 const monthKeyOf = (d: string) => (d || "").slice(0, 7);
 const prevMonthKey = (mk: string) => { const [y, m] = mk.split("-").map(Number); const d = new Date(y, m - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };

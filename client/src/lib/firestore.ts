@@ -40,7 +40,7 @@ import {
   type Transaction as FirestoreTransaction,
 } from "firebase/firestore/lite";
 import { db } from "./firebase";
-import { getCurrentMonthKey } from "./finance";
+import { getCurrentMonthKey, getTodayLocalDateKey } from "./finance";
 import {
   buildImportedMovement,
   buildTransactionFromImportedMovement,
@@ -1334,7 +1334,7 @@ export async function deleteCreditCardSetting(id: string) {
 // COMMITMENT AUTOMATION
 // ════════════════════════════════════════════════════════════════
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return getTodayLocalDateKey();
 }
 
 function nowIso() {
