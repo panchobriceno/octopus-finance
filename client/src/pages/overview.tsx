@@ -9,6 +9,7 @@ import {
   useTransactions,
   useClientPayments,
   useCategories,
+  useCommitmentInstances,
   useItems,
   useAccounts,
   useCreditCardStatements,
@@ -102,12 +103,12 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   buildMonthlySummaries,
-  combineFinancialTransactions,
   getCurrentMonthKey,
   getTodayLocalDateKey,
   getClientPaymentReferenceDate,
   getVatProjectionDateForMonth,
   getTransactionExpenseImpact,
+  getTransactionCashFlowImpact,
   getTransactionIncomeImpact,
   isExecutedTransaction,
   normalizeTransaction,
@@ -115,6 +116,7 @@ import {
   summarizeWorkspaceTransactions,
 } from "@/lib/finance";
 import { buildCardDebt, USD_CLP } from "@/domain/debt";
+import { buildCashFlowFinancialTransactions } from "@/domain/cash-obligations";
 import { useMonthlyBalances } from "@/lib/monthly-balances";
 import { getCreditCards } from "@/lib/credit-cards";
 import { buildTransactionPayload, getTransactionFormInitialValues } from "@/lib/transaction-form";
@@ -1467,6 +1469,7 @@ export default function OverviewPage() {
   const { data: categories = [] } = useCategories();
   const { data: items = [] } = useItems();
   const { data: accounts = [] } = useAccounts();
+  const { data: commitments = [] } = useCommitmentInstances();
   const { data: creditCardStatements = [] } = useCreditCardStatements();
   const { balances: openingBalancesMap } = useMonthlyBalances();
   const { data: dashboardPreferences } = useDashboardPreferences();
@@ -1639,8 +1642,16 @@ export default function OverviewPage() {
 
   // ── KPI calculations ──
   const financialTransactions = useMemo(
-    () => combineFinancialTransactions(transactions, clientPayments),
-    [transactions, clientPayments],
+    () =>
+      buildCashFlowFinancialTransactions({
+        transactions,
+        clientPayments,
+        commitments,
+        cardDebts,
+        cardAccounts: accounts.filter((account) => account.type === "credit_card"),
+        asOf: todayKey,
+      }),
+    [accounts, cardDebts, clientPayments, commitments, todayKey, transactions],
   );
   const filteredFinancialTransactions = useMemo(
     () =>
@@ -2653,7 +2664,7 @@ export default function OverviewPage() {
       const day = Number(tx.date.slice(8, 10));
       if (!Number.isFinite(day)) continue;
       const workspace = tx.workspace ?? "business";
-      const delta = getTransactionIncomeImpact(tx, "all") - getTransactionExpenseImpact(tx, "all");
+      const delta = getTransactionCashFlowImpact(tx, "all");
       const current = byDay.get(day) ?? { business: 0, family: 0 };
       if (workspace === "family") {
         current.family += delta;
@@ -2690,12 +2701,13 @@ export default function OverviewPage() {
   })();
   const categoryTotal = categorySpendData.reduce((sum, item) => sum + item.amount, 0);
   const categoryColors = ["#cdfa46", "#c8c8d2", "#9a9aa6", "#74747e", "#52525c"];
-  const upcomingCommitments = transactions
+  const upcomingCommitments = dashboardCurrentMonthFinancialTransactions
     .filter((tx) => {
       const normalized = normalizeTransaction(tx);
       return tx.date.startsWith(currentMonthKey) &&
         normalized.subtype === "planned" &&
         normalized.status === "pending" &&
+        getTransactionCashFlowImpact(normalized, "all") < 0 &&
         (overviewScope === "all" || normalized.workspace === overviewScope);
     })
     .sort((left, right) => left.date.localeCompare(right.date))

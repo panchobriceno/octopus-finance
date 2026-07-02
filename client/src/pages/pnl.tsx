@@ -1,8 +1,16 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { useClientPayments, useTransactions } from "@/lib/hooks";
-import { cn, formatCLP, getMonthName } from "@/lib/utils";
 import {
-  combineFinancialTransactions,
+  useAccounts,
+  useClientPayments,
+  useCommitmentInstances,
+  useCreditCardStatements,
+  useTransactions,
+} from "@/lib/hooks";
+import { cn, formatCLP, getMonthName } from "@/lib/utils";
+import { buildCardDebt } from "@/domain/debt";
+import { buildCashFlowFinancialTransactions } from "@/domain/cash-obligations";
+import {
+  getTodayLocalDateKey,
   getTransactionExpenseImpact,
   getTransactionIncomeImpact,
   isExecutedTransaction,
@@ -128,11 +136,28 @@ const STICKY = "sticky left-0 z-[1] bg-card";
 export default function PnLPage() {
   const { data: transactions = [], isLoading: txLoading } = useTransactions();
   const { data: clientPayments = [] } = useClientPayments();
+  const { data: accounts = [] } = useAccounts();
+  const { data: commitments = [] } = useCommitmentInstances();
+  const { data: creditCardStatements = [] } = useCreditCardStatements();
   const [workspace, setWorkspace] = useState<WorkspaceFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("mixto");
+  const asOf = getTodayLocalDateKey();
+  const cardDebts = useMemo(
+    () => buildCardDebt(creditCardStatements, transactions, accounts, { asOf }),
+    [accounts, asOf, creditCardStatements, transactions],
+  );
   const financialTransactions = useMemo(
-    () => combineFinancialTransactions(transactions, clientPayments),
-    [transactions, clientPayments],
+    () =>
+      buildCashFlowFinancialTransactions({
+        transactions,
+        clientPayments,
+        commitments,
+        cardDebts,
+        cardAccounts: accounts.filter((account) => account.type === "credit_card"),
+        asOf,
+        includeManualPlanned: true,
+      }),
+    [accounts, asOf, cardDebts, clientPayments, commitments, transactions],
   );
 
   const model = useMemo(() => {

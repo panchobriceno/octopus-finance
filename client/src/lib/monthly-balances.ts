@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { OpeningBalance } from "@shared/schema";
 import {
   getClientPayments,
+  getAccounts,
+  getCommitmentInstances,
+  getCreditCardStatements,
   getOpeningBalance as getStoredOpeningBalance,
   getTransactions,
   listOpeningBalances,
@@ -9,7 +12,9 @@ import {
 } from "./firestore";
 import { useOpeningBalances, useSetOpeningBalance } from "./hooks";
 import { queryClient } from "./queryClient";
-import { buildMonthlySummaries, combineFinancialTransactions } from "./finance";
+import { buildMonthlySummaries, getTodayLocalDateKey } from "./finance";
+import { buildCardDebt } from "@/domain/debt";
+import { buildCashFlowFinancialTransactions } from "@/domain/cash-obligations";
 
 const STORAGE_KEY = "octopus_monthly_balance";
 const MIGRATION_KEY = "octopus_monthly_balance_firestore_migrated_v1";
@@ -122,14 +127,34 @@ async function autoCarryForwardOpeningBalanceInternal(monthKey: string, visited:
   const currentOpeningBalance = await getStoredOpeningBalance(monthKey);
   if (currentOpeningBalance) return false;
 
-  const [transactions, clientPayments, openingBalances] = await Promise.all([
+  const [
+    transactions,
+    clientPayments,
+    openingBalances,
+    accounts,
+    commitments,
+    creditCardStatements,
+  ] = await Promise.all([
     getTransactions(),
     getClientPayments(),
     listOpeningBalances(),
+    getAccounts(),
+    getCommitmentInstances(),
+    getCreditCardStatements(),
   ]);
+  const asOf = getTodayLocalDateKey();
+  const cardDebts = buildCardDebt(creditCardStatements, transactions, accounts, { asOf });
+  const financialTransactions = buildCashFlowFinancialTransactions({
+    transactions,
+    clientPayments,
+    commitments,
+    cardDebts,
+    cardAccounts: accounts.filter((account) => account.type === "credit_card"),
+    asOf,
+  });
 
   const previousMonthSummary = buildMonthlySummaries(
-    combineFinancialTransactions(transactions, clientPayments),
+    financialTransactions,
     toBalanceMap(openingBalances),
   ).find((summary) => summary.monthKey === previousMonthKey);
 
