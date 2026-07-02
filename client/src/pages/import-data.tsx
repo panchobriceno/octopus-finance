@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Upload, FileText, CheckCircle2, AlertCircle, X, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { formatCLP } from "@/lib/utils";
+import { cn, formatCLP } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import type {
   AccountType,
@@ -63,6 +63,7 @@ import {
 import {
   detectMovementType,
   getCreditPreviewType,
+  isImportableCreditMovementType,
   isSimilarCreditCardPayment,
 } from "@/lib/parsers/credit-cards";
 import { resolveParser } from "@/lib/parsers";
@@ -309,7 +310,7 @@ export default function ImportDataPage({
 
       const ccMovementType: CcMovementType | undefined =
         accountType === "credit"
-          ? detectMovementType(name, rawAmount, date, allRawRows)
+          ? detectMovementType(name, rawAmount, date, allRawRows, index)
           : undefined;
 
       const type: "income" | "expense" | "credit_card_payment" =
@@ -419,13 +420,13 @@ export default function ImportDataPage({
 
   const handleImport = async () => {
     const queueableRows = previewRows.filter(
-      (row) => !row.error && row.ccMovementType !== "reversal",
+      (row) => !row.error && isImportableCreditMovementType(row.ccMovementType),
     );
 
     if (queueableRows.length === 0) {
       toast({
         title: "No hay movimientos para enviar",
-        description: "Corrige las filas inválidas o elimina reversas antes de continuar.",
+        description: "Corrige las filas inválidas o revisa reversas y abonos antes de continuar.",
         variant: "destructive",
       });
       return;
@@ -852,7 +853,7 @@ export default function ImportDataPage({
     setPreviewRows((prev) =>
       prev.map((row, rowIndex) => {
         if (rowIndex !== index || !row.ccMovementType) return row;
-        const cycle: CcMovementType[] = ["purchase", "tc_payment", "reversal"];
+        const cycle: CcMovementType[] = ["purchase", "tc_payment", "reversal", "credit_review"];
         const next = cycle[(cycle.indexOf(row.ccMovementType) + 1) % cycle.length];
         const newType = getCreditPreviewType(next);
         // Cambiar el tipo del cargo re-clasifica desde cero (suelta los locks).
@@ -925,10 +926,13 @@ export default function ImportDataPage({
   const reversalRows = accountType === "credit"
     ? previewRows.filter((row) => !row.error && row.ccMovementType === "reversal")
     : [];
+  const creditReviewRows = accountType === "credit"
+    ? previewRows.filter((row) => !row.error && row.ccMovementType === "credit_review")
+    : [];
   const purchaseTotal = purchaseRows.reduce((sum, row) => sum + row.amount, 0);
   const tcPaymentTotal = tcPaymentRows.reduce((sum, row) => sum + row.amount, 0);
   const importableCount = previewRows.filter(
-    (row) => !row.error && row.ccMovementType !== "reversal",
+    (row) => !row.error && isImportableCreditMovementType(row.ccMovementType),
   ).length;
   const expenseCategoryOptions = useMemo(() => {
     const names = new Set(
@@ -1607,6 +1611,10 @@ export default function ImportDataPage({
                   <span>{reversalRows.length} reversas detectadas <span className="text-muted-foreground text-xs">(no se enviarán)</span></span>
                   <span className="tabular-nums text-muted-foreground">—</span>
                 </div>
+                <div className="flex items-center justify-between">
+                  <span>{creditReviewRows.length} abonos por revisar <span className="text-muted-foreground text-xs">(no se enviarán)</span></span>
+                  <span className="tabular-nums text-muted-foreground">—</span>
+                </div>
                 {importDueDate && (
                   <div className="flex items-center justify-between pt-1 border-t mt-1">
                     <span className="font-medium">Fecha límite de pago</span>
@@ -1636,7 +1644,13 @@ export default function ImportDataPage({
                 </TableHeader>
                 <TableBody>
                   {previewRows.map((row, index) => (
-                    <TableRow key={row.id} className={row.ccMovementType === "reversal" ? "opacity-50 line-through" : ""}>
+                    <TableRow
+                      key={row.id}
+                      className={cn(
+                        row.ccMovementType === "reversal" && "opacity-50 line-through",
+                        row.ccMovementType === "credit_review" && "bg-yellow-50/60 dark:bg-yellow-950/20",
+                      )}
+                    >
                       {(() => {
                         const effectiveCategory = row.category || suggestRowCategory(row.name, row.type, categories);
                         return (
@@ -1665,6 +1679,9 @@ export default function ImportDataPage({
                           ) : null}
                           {row.ccMovementType === "reversal" && !row.error && (
                             <p className="text-xs text-yellow-600 dark:text-yellow-400">Reversa detectada — no se enviará</p>
+                          )}
+                          {row.ccMovementType === "credit_review" && !row.error && (
+                            <p className="text-xs text-yellow-700 dark:text-yellow-300">Abono por revisar — cámbialo a compra solo si corresponde</p>
                           )}
                         </div>
                       </TableCell>
@@ -1701,13 +1718,27 @@ export default function ImportDataPage({
                               Reversa
                             </button>
                           )}
+                          {row.ccMovementType === "credit_review" && (
+                            <button
+                              type="button"
+                              onClick={() => cycleCcMovementType(index)}
+                              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 cursor-pointer hover:opacity-80 transition-opacity"
+                              title="Clic para cambiar tipo"
+                            >
+                              Abono — revisar
+                            </button>
+                          )}
                           {!row.ccMovementType && null}
                         </TableCell>
                       ) : null}
                       <TableCell>
                         {accountType === "credit" ? (
                           <Badge variant="outline" className="h-8 px-3 text-xs font-medium">
-                            {row.ccMovementType === "tc_payment" ? "Pago tarjeta" : "Gasto"}
+                            {row.ccMovementType === "tc_payment"
+                              ? "Pago tarjeta"
+                              : row.ccMovementType === "credit_review"
+                                ? "Revisar"
+                                : "Gasto"}
                           </Badge>
                         ) : (
                           <Select
