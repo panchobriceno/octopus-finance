@@ -35,8 +35,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BudgetBar } from "@/components/finance/budget-bar";
 import { useToast } from "@/hooks/use-toast";
 import { Calculator, GripVertical, Save, TrendingUp, TrendingDown, Target, Trash2 } from "lucide-react";
-import { normalizeTransaction, summarizeClientPaymentsByMonth } from "@/lib/finance";
+import { getTransactionExpenseImpact, normalizeTransaction, summarizeClientPaymentsByMonth } from "@/lib/finance";
 import { getFamilyIncomeJaviMap, setFamilyIncomeJavi } from "@/lib/family-income";
+import { isExecutedBudgetExpenseTransaction } from "@/domain/budget";
 
 type BudgetWorkspace = "business" | "family";
 const ITEM_BUDGET_PREFIX = "item:";
@@ -324,21 +325,11 @@ export default function BudgetPage() {
     return map;
   }, [allBudgets, archivedGroups, budgetByGroup, draftGroupMap, groupNames, manualOrderMap, periodBudgets, selectedMonth, selectedScopeKey, selectedWorkspace, selectedYear]);
 
-  // Filter transactions: subtype = "actual", expense, matching year/month
+  // Filter executed expenses with the same canonical semantics used by analysis and close.
   const periodTransactions = useMemo(() => {
     const prefix = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
-    return transactions.filter(
-      (tx) => {
-        const normalized = normalizeTransaction(tx);
-        return (
-          normalized.subtype === "actual" &&
-          normalized.status !== "cancelled" &&
-          normalized.type === "expense" &&
-          normalized.movementType === "expense" &&
-          normalized.workspace === selectedWorkspace &&
-          normalized.date.startsWith(prefix)
-        );
-      }
+    return transactions.filter((tx) =>
+      isExecutedBudgetExpenseTransaction(tx, prefix, selectedWorkspace),
     );
   }, [transactions, selectedYear, selectedMonth, selectedWorkspace]);
 
@@ -653,7 +644,10 @@ export default function BudgetPage() {
     });
   }, [effectiveBudgetByGroup, orderedVisibleGroupNames, selectedMonthKey, selectedWorkspace]);
 
-  const buildAmountsByGroup = (sourceTransactions: Transaction[]) => {
+  const buildAmountsByGroup = (
+    sourceTransactions: Transaction[],
+    getAmount: (transaction: Transaction) => number = (transaction) => transaction.amount,
+  ) => {
     const map: Record<string, number> = {};
     const visibleItemBudgetIds = new Set(
       orderedVisibleGroupNames
@@ -675,15 +669,15 @@ export default function BudgetPage() {
         continue;
       }
 
-      map[group] = (map[group] ?? 0) + tx.amount;
+      map[group] = (map[group] ?? 0) + getAmount(tx);
     }
     return map;
   };
 
   // Calculate actuals and commitments per group
   const actualByGroup = useMemo(
-    () => buildAmountsByGroup(periodTransactions),
-    [orderedVisibleGroupNames, periodTransactions, getGroupForTransaction],
+    () => buildAmountsByGroup(periodTransactions, (tx) => getTransactionExpenseImpact(tx, selectedWorkspace)),
+    [orderedVisibleGroupNames, periodTransactions, getGroupForTransaction, selectedWorkspace],
   );
 
   const committedByGroup = useMemo(
