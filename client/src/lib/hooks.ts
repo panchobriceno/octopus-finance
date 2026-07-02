@@ -623,7 +623,7 @@ export function useImportBatches() {
 export function useImportedMovements(options: {
   batchId?: string | null;
   status?: string | null;
-  limitCount?: number;
+  limitCount?: number | null;
   enabled?: boolean;
 } = {}) {
   const { enabled = true, ...filters } = options;

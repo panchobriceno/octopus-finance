@@ -1,11 +1,19 @@
 import { useMemo, useState } from "react";
 import {
+  useBudgets,
   useCategories,
+  useCommitmentInstances,
+  useCommitmentTemplates,
   useCreateCategory,
   useUpdateCategory,
   useDeleteCategory,
+  useImportedMovements,
+  useItems,
+  useMovementRules,
+  useTransactions,
 } from "@/lib/hooks";
 import type { Category } from "@shared/schema";
+import { countCategoryDeleteImpact, sumDeleteImpact } from "@/domain/delete-impact";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +43,22 @@ const FAMILY_SUGGESTED_CATEGORIES = [
   { name: "Pago tarjeta", color: "#a9e028" },
 ];
 
+const DELETE_IMPACT_LABELS: Record<string, string> = {
+  items: "items",
+  transactions: "movimientos",
+  budgets: "presupuestos",
+  commitmentTemplates: "automatizaciones",
+  commitmentInstances: "compromisos",
+  movementRules: "reglas",
+  importedMovements: "cartolas",
+};
+
+function describeDeleteImpact(counts: Record<string, number>) {
+  return Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .map(([key, count]) => `${count} ${DELETE_IMPACT_LABELS[key] ?? key}`);
+}
+
 export default function CategoriesPage() {
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<"income" | "expense">("expense");
@@ -49,6 +73,13 @@ export default function CategoriesPage() {
   const { toast } = useToast();
 
   const { data: categories = [], isLoading } = useCategories();
+  const { data: items = [] } = useItems();
+  const { data: transactions = [] } = useTransactions();
+  const { data: budgets = [] } = useBudgets();
+  const { data: commitmentTemplates = [] } = useCommitmentTemplates();
+  const { data: commitmentInstances = [] } = useCommitmentInstances();
+  const { data: movementRules = [] } = useMovementRules();
+  const { data: importedMovements = [] } = useImportedMovements({ limitCount: null });
   const createMutation = useCreateCategory();
   const updateMutation = useUpdateCategory();
   const deleteMutation = useDeleteCategory();
@@ -120,6 +151,34 @@ export default function CategoriesPage() {
 
   const incomeCategories = categories.filter((c) => c.type === "income");
   const expenseCategories = categories.filter((c) => c.type === "expense");
+  const categoryDeleteImpacts = useMemo(
+    () =>
+      new Map(
+        categories.map((category) => {
+          const counts = countCategoryDeleteImpact({
+            category,
+            items,
+            transactions,
+            budgets,
+            commitmentTemplates,
+            commitmentInstances,
+            movementRules,
+            importedMovements,
+          });
+          return [category.id, { counts, total: sumDeleteImpact(counts), labels: describeDeleteImpact(counts) }];
+        }),
+      ),
+    [
+      budgets,
+      categories,
+      commitmentInstances,
+      commitmentTemplates,
+      importedMovements,
+      items,
+      movementRules,
+      transactions,
+    ],
+  );
 
   const toggleSort = (field: "name" | "workspace" | "color") => {
     setSortField((currentField) => {
@@ -191,7 +250,9 @@ export default function CategoriesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortCategories(cats).map((cat) => (
+            {sortCategories(cats).map((cat) => {
+              const deleteImpact = categoryDeleteImpacts.get(cat.id);
+              return (
               <TableRow key={cat.id}>
                 <TableCell className="pl-5">
                   {editingId === cat.id ? (
@@ -292,8 +353,19 @@ export default function CategoriesPage() {
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>¿Eliminar este elemento?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Se eliminará la categoría "{cat.name}" y esta acción no se puede deshacer.
+                            <AlertDialogDescription className="space-y-2">
+                              <span className="block">
+                                Se eliminará la categoría "{cat.name}" y esta acción no se puede deshacer.
+                              </span>
+                              {deleteImpact && deleteImpact.total > 0 ? (
+                                <span className="block rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                                  Referencias encontradas: {deleteImpact.labels.join(", ")}. Revísalas antes de borrar para no dejar reportes, reglas o cartolas sin catálogo.
+                                </span>
+                              ) : (
+                                <span className="block rounded-md border border-border bg-muted/40 p-3">
+                                  No se encontraron referencias directas en movimientos, presupuesto, automatizaciones, reglas ni cartolas cargadas.
+                                </span>
+                              )}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -314,7 +386,8 @@ export default function CategoriesPage() {
                   )}
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
             {cats.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="py-8">

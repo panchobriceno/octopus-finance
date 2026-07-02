@@ -1751,21 +1751,25 @@ export async function getImportBatches() {
 export async function getImportedMovements(options: {
   batchId?: string | null;
   status?: string | null;
-  limitCount?: number;
+  limitCount?: number | null;
 } = {}) {
-  const maxRows = Math.max(1, Math.min(Number(options.limitCount ?? 750) || 750, 1500));
+  const hasExplicitNoLimit = options.limitCount === null;
+  const maxRows = hasExplicitNoLimit
+    ? null
+    : Math.max(1, Math.min(Number(options.limitCount ?? 750) || 750, 1500));
   const snap = options.batchId
     ? options.status
-      ? await getDocs(query(
-          importedMovementsCol(),
-          where("batchId", "==", options.batchId),
-          where("status", "==", options.status),
-          limit(maxRows),
-        ))
-      : await getDocs(query(importedMovementsCol(), where("batchId", "==", options.batchId), limit(maxRows)))
+      ? await getDocs(maxRows === null
+          ? query(importedMovementsCol(), where("batchId", "==", options.batchId), where("status", "==", options.status))
+          : query(importedMovementsCol(), where("batchId", "==", options.batchId), where("status", "==", options.status), limit(maxRows)))
+      : await getDocs(maxRows === null
+          ? query(importedMovementsCol(), where("batchId", "==", options.batchId))
+          : query(importedMovementsCol(), where("batchId", "==", options.batchId), limit(maxRows)))
     : options.status
-      ? await getDocs(query(importedMovementsCol(), where("status", "==", options.status), limit(maxRows)))
-      : await getDocs(query(importedMovementsCol(), limit(maxRows)));
+      ? await getDocs(maxRows === null
+          ? query(importedMovementsCol(), where("status", "==", options.status))
+          : query(importedMovementsCol(), where("status", "==", options.status), limit(maxRows)))
+      : await getDocs(maxRows === null ? importedMovementsCol() : query(importedMovementsCol(), limit(maxRows)));
   return snapToArray<ImportedMovement>(snap).sort((a, b) => {
     if (a.status !== b.status) {
       const order: Record<string, number> = {
