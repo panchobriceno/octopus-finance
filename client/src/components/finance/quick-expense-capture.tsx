@@ -18,7 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getCreditCards } from "@/lib/credit-cards";
 import { extractReceiptFromImage, type ReceiptOcrResult } from "@/lib/receipt-ocr";
-import type { Workspace } from "@/lib/finance";
+import { getTodayLocalDateKey, type Workspace } from "@/lib/finance";
 import {
   buildQuickExpenseTransaction,
   inferQuickExpenseCategoryId,
@@ -60,7 +60,7 @@ const workspaceOptions: Array<{ value: Workspace; label: string }> = [
 ];
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return getTodayLocalDateKey();
 }
 
 function buildDefaultForm(cardNames: string[], defaultAccountId = ""): QuickExpenseForm {

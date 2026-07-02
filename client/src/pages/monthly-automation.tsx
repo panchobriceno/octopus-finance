@@ -28,6 +28,7 @@ import {
 import { buildCommitmentDashboard, getCurrentMonthKey } from "@/domain/commitments";
 import { isCardPaidCommitment } from "@/domain/cash-obligations";
 import { formatCLP } from "@/lib/utils";
+import { getTodayLocalDateKey } from "@/lib/finance";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -102,7 +103,7 @@ const defaultForm: TemplateForm = {
 };
 
 const defaultPaymentForm: PaymentForm = {
-  date: new Date().toISOString().slice(0, 10),
+  date: getTodayLocalDateKey(),
   amount: "",
   paymentMethod: "bank_account",
   accountId: "none",
@@ -140,7 +141,7 @@ function parseKeywords(value: string) {
 function getStatusTone(instance: CommitmentInstance) {
   if (instance.status === "paid") return "bg-[rgba(205,250,70,0.14)] text-[#cdfa46]";
   if (instance.status === "skipped") return "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]";
-  if (instance.dueDate < new Date().toISOString().slice(0, 10)) return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300";
+  if (instance.dueDate < getTodayLocalDateKey()) return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300";
   return "bg-[rgba(138,138,148,0.14)] text-[#8a8a94]";
 }
 
@@ -151,7 +152,7 @@ function transactionLabel(transaction: Transaction | null) {
 
 function buildPaymentForm(instance: CommitmentInstance): PaymentForm {
   return {
-    date: new Date().toISOString().slice(0, 10),
+    date: getTodayLocalDateKey(),
     amount: String(Number(instance.expectedAmount) || ""),
     paymentMethod: (instance.paymentMethod as PaymentForm["paymentMethod"]) || "bank_account",
     accountId: instance.accountId || "none",
@@ -415,7 +416,7 @@ export default function MonthlyAutomationPage() {
       id: instance.id,
       data: {
         status,
-        paidAt: status === "paid" ? instance.paidAt ?? new Date().toISOString().slice(0, 10) : null,
+        paidAt: status === "paid" ? instance.paidAt ?? getTodayLocalDateKey() : null,
       },
     });
   };

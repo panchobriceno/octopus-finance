@@ -583,7 +583,7 @@ function InternalMovementForm({
   const [destinationAccountId, setDestinationAccountId] = useState("");
   const [destinationCardName, setDestinationCardName] = useState("");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(getTodayLocalDateKey());
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -772,7 +772,7 @@ export function TransactionForm({
     categoryId: "",
     itemId: "",
     amount: "",
-    date: new Date().toISOString().split("T")[0],
+    date: getTodayLocalDateKey(),
     subtype: "actual" as const,
     status: "paid" as const,
     workspace: "business" as const,

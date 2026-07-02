@@ -35,6 +35,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { RecurringClientsSection } from "@/components/finance/recurring-clients-section";
 import { BriefcaseBusiness, Check, Pencil, Plus, Save, Trash2, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { getTodayLocalDateKey } from "@/lib/finance";
 
 type PaymentStatus = "projected" | "receivable" | "invoiced" | "paid" | "cancelled";
 
@@ -331,7 +332,7 @@ export default function ClientPaymentsPage() {
     if (form.status === "paid") {
       setMarkPaidDraft({
         netAmount: form.netAmount || "0",
-        paymentDate: new Date().toISOString().slice(0, 10),
+        paymentDate: getTodayLocalDateKey(),
         accountId: defaultSantanderOmAccount?.id ?? activeBankAccounts[0]?.id ?? "",
         context: {
           mode: "create",
@@ -411,7 +412,7 @@ export default function ClientPaymentsPage() {
     if (status === "paid" && payment.status !== "paid") {
       setMarkPaidDraft({
         netAmount: String(payment.netAmount ?? 0),
-        paymentDate: new Date().toISOString().slice(0, 10),
+        paymentDate: getTodayLocalDateKey(),
         accountId: defaultSantanderOmAccount?.id ?? activeBankAccounts[0]?.id ?? "",
         context: {
           mode: "update",
@@ -426,7 +427,7 @@ export default function ClientPaymentsPage() {
       id: payment.id,
       data: {
         status,
-        paymentDate: status === "paid" ? payment.paymentDate ?? new Date().toISOString().slice(0, 10) : null,
+        paymentDate: status === "paid" ? payment.paymentDate ?? getTodayLocalDateKey() : null,
       },
     });
 
@@ -434,7 +435,7 @@ export default function ClientPaymentsPage() {
       await syncSettlementForPayment({
         ...payment,
         status,
-        paymentDate: status === "paid" ? payment.paymentDate ?? new Date().toISOString().slice(0, 10) : null,
+        paymentDate: status === "paid" ? payment.paymentDate ?? getTodayLocalDateKey() : null,
       });
     }
   };
@@ -484,7 +485,7 @@ export default function ClientPaymentsPage() {
     if (editForm.status === "paid" && existingPayment && existingPayment.status !== "paid") {
       setMarkPaidDraft({
         netAmount: editForm.netAmount || "0",
-        paymentDate: new Date().toISOString().slice(0, 10),
+        paymentDate: getTodayLocalDateKey(),
         accountId: defaultSantanderOmAccount?.id ?? activeBankAccounts[0]?.id ?? "",
         context: {
           mode: "update",
@@ -521,7 +522,9 @@ export default function ClientPaymentsPage() {
       issueDate: editForm.issueDate || null,
       dueDate: editForm.dueDate || null,
       expectedDate: editForm.dueDate || null,
-      paymentDate: editForm.status === "paid" ? new Date().toISOString().slice(0, 10) : null,
+      paymentDate: editForm.status === "paid"
+        ? existingPayment?.paymentDate ?? getTodayLocalDateKey()
+        : null,
       netAmount: Number.parseFloat(editForm.netAmount || "0"),
       vatAmount: Number.parseFloat(editForm.vatAmount || "0"),
       totalAmount: Number.parseFloat(editForm.totalAmount || "0"),

@@ -7,6 +7,7 @@ import {
   buildDailyProjectionData,
   buildMonthlySummaries,
   getCurrentMonthKey,
+  getTodayLocalDateKey,
   getVatProjectionDateForMonth,
   summarizeClientPaymentsByMonth,
   summarizeWorkspaceTransactions,
@@ -187,8 +188,8 @@ export default function CashFlowPage() {
   const { balances: openingBalancesMap } = useMonthlyBalances();
   const { amount: openingBalance, update: updateOpeningBalance } = useOpeningBalance(selectedMonth);
   // Motor UNIFICADO con el asesor: mismas obligaciones (commitments + pago real de tarjeta de cartola),
-  // sin cuotas proyectadas (evita doble-conteo). asOf igual que el asesor (advisor.ts usa toISOString().slice(0,10)).
-  const asOf = new Date().toISOString().slice(0, 10);
+  // sin cuotas proyectadas (evita doble-conteo). asOf usa fecha local para no adelantarse de noche.
+  const asOf = getTodayLocalDateKey();
   const cardDebts = useMemo(
     () => buildCardDebt(creditCardStatements, transactions, accounts, { asOf }),
     [creditCardStatements, transactions, accounts, asOf],
