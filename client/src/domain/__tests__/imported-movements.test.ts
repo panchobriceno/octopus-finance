@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDeletedTransactionMovementPatch } from "../imported-movements";
+import { buildDeletedTransactionMovementPatch, buildRevertResolvedMovementPatch } from "../imported-movements";
 
 describe("imported movement cleanup", () => {
   it("returns a movement to pending review when its converted transaction is deleted", () => {
@@ -34,6 +34,17 @@ describe("imported movement cleanup", () => {
       status: "discarded",
       matchedTransactionId: null,
       notes: "Duplicado resuelto desde el asesor",
+      updatedAt: "2026-07-02T10:00:00.000Z",
+    });
+  });
+
+  it("returns converted or reconciled movements to pending review", () => {
+    expect(buildRevertResolvedMovementPatch("2026-07-02T10:00:00.000Z")).toEqual({
+      status: "pending",
+      matchedTransactionId: null,
+      duplicateTransactionId: null,
+      convertedAt: null,
+      notes: "Resolución deshecha; movimiento devuelto a revisión",
       updatedAt: "2026-07-02T10:00:00.000Z",
     });
   });

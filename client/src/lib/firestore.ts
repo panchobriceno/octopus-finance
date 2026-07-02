@@ -52,7 +52,11 @@ import {
   type ImportedMovementOverride,
   type MovementSeedInput,
 } from "@/domain/bank-imports";
-import { buildDeletedTransactionMovementPatch, type DeletedTransactionMovementReset } from "@/domain/imported-movements";
+import {
+  buildDeletedTransactionMovementPatch,
+  buildRevertResolvedMovementPatch,
+  type DeletedTransactionMovementReset,
+} from "@/domain/imported-movements";
 import { sanitizeRuleItemId } from "@/domain/movement-rules";
 import {
   buildTransactionFromCommitmentPayment,
@@ -1963,6 +1967,40 @@ export async function rollbackImportBatch(batchId: string) {
 
 export async function deleteImportedMovement(id: string) {
   await deleteDoc(doc(db, "importedMovements", id));
+}
+
+export async function revertImportedMovementResolution(id: string) {
+  const movementRef = doc(db, "importedMovements", id);
+  const movementSnapshot = await getDoc(movementRef);
+  if (!movementSnapshot.exists()) {
+    throw new Error("Movimiento importado no encontrado.");
+  }
+
+  const movement = { id: movementSnapshot.id, ...movementSnapshot.data() } as ImportedMovement;
+  if (!["converted", "reconciled"].includes(movement.status)) {
+    throw new Error("Solo los movimientos convertidos o conciliados se pueden deshacer.");
+  }
+  if (!movement.matchedTransactionId) {
+    throw new Error("El movimiento no tiene transaccion vinculada para deshacer.");
+  }
+
+  const now = nowIso();
+  const batch = writeBatch(db);
+  batch.update(movementRef, buildRevertResolvedMovementPatch(now));
+
+  if (movement.status === "converted") {
+    batch.delete(doc(db, "transactions", movement.matchedTransactionId));
+  }
+
+  await batch.commit();
+  await syncImportBatchLifecycle(movement.batchId, { reopenClosed: true });
+
+  return {
+    movementId: id,
+    transactionId: movement.matchedTransactionId,
+    transactionDeleted: movement.status === "converted",
+    batchId: movement.batchId,
+  };
 }
 
 export async function getMovementRules() {

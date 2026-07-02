@@ -16,3 +16,14 @@ export function buildDeletedTransactionMovementPatch(
     ...(reset.clearConvertedAt ? { convertedAt: null } : {}),
   };
 }
+
+export function buildRevertResolvedMovementPatch(updatedAt: string) {
+  return {
+    status: "pending",
+    matchedTransactionId: null,
+    duplicateTransactionId: null,
+    convertedAt: null,
+    notes: "Resolución deshecha; movimiento devuelto a revisión",
+    updatedAt,
+  };
+}
