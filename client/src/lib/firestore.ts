@@ -52,6 +52,7 @@ import {
   type ImportedMovementOverride,
   type MovementSeedInput,
 } from "@/domain/bank-imports";
+import { buildDeletedTransactionMovementPatch, type DeletedTransactionMovementReset } from "@/domain/imported-movements";
 import { sanitizeRuleItemId } from "@/domain/movement-rules";
 import {
   buildTransactionFromCommitmentPayment,
@@ -464,43 +465,62 @@ export async function updateTransaction(id: string, data: Record<string, any>) {
 }
 
 export async function deleteTransaction(id: string) {
-  await deleteDoc(doc(db, "transactions", id));
+  const batch = writeBatch(db);
+  const affected = await resetImportedMovementsForDeletedTransaction(batch, id, {
+    status: "pending",
+    notes: "Transacción eliminada; movimiento devuelto a revisión",
+    clearConvertedAt: true,
+  });
+  batch.delete(doc(db, "transactions", id));
+  await batch.commit();
+  await syncAffectedImportBatches(affected.affectedBatchIds, { reopenClosed: true });
+}
+
+async function resetImportedMovementsForDeletedTransaction(
+  batch: ReturnType<typeof writeBatch>,
+  txId: string,
+  options: DeletedTransactionMovementReset,
+) {
+  const snap = await getDocs(query(importedMovementsCol(), where("matchedTransactionId", "==", txId)));
+  const now = nowIso();
+  let revertedMovementId: string | null = null;
+  const affectedBatchIds = new Set<string>();
+
+  for (const d of snap.docs) {
+    const movement = { id: d.id, ...d.data() } as ImportedMovement;
+    batch.update(doc(db, "importedMovements", d.id), buildDeletedTransactionMovementPatch(options, now));
+    affectedBatchIds.add(movement.batchId);
+    revertedMovementId = d.id;
+  }
+
+  return { revertedMovementId, affectedBatchIds };
 }
 
 /**
  * Resuelve un duplicado desde el asesor: borra la transacción elegida y, si vino de un movimiento
  * importado (matchedTransactionId === id), lo deja "discarded" para no dejar un "converted" colgando
- * apuntando a una transacción borrada. No es bulk: una a la vez, con confirmación en la UI.
+ * apuntando a una transacción borrada. Es atómico: si falla la reversión, no borra la transacción.
  */
 export async function resolveDuplicateTransaction(
   txId: string,
 ): Promise<{ deletedTransactionId: string; revertedMovementId: string | null }> {
   let revertedMovementId: string | null = null;
-  try {
-    const snap = await getDocs(query(collection(db, "importedMovements"), where("matchedTransactionId", "==", txId)));
-    for (const d of snap.docs) {
-      await updateDoc(doc(db, "importedMovements", d.id), {
-        status: "discarded",
-        matchedTransactionId: null,
-        notes: "Duplicado resuelto desde el asesor",
-        updatedAt: nowIso(),
-      });
-      revertedMovementId = d.id;
-    }
-  } catch (e) {
-    // si falla la reversión del movimiento, igual borramos la transacción duplicada
-    console.error("resolveDuplicateTransaction: no se pudo revertir el movimiento de origen:", e);
-  }
-  await deleteDoc(doc(db, "transactions", txId));
+  const batch = writeBatch(db);
+  const affected = await resetImportedMovementsForDeletedTransaction(batch, txId, {
+    status: "discarded",
+    notes: "Duplicado resuelto desde el asesor",
+  });
+  revertedMovementId = affected.revertedMovementId;
+  batch.delete(doc(db, "transactions", txId));
+  await batch.commit();
+  await syncAffectedImportBatches(affected.affectedBatchIds);
   return { deletedTransactionId: txId, revertedMovementId };
 }
 
 export async function bulkDeleteTransactions(ids: string[]) {
-  const batch = writeBatch(db);
   for (const id of ids) {
-    batch.delete(doc(db, "transactions", id));
+    await deleteTransaction(id);
   }
-  await batch.commit();
   return { deleted: ids.length };
 }
 
@@ -1762,7 +1782,7 @@ async function getImportBatchMovements(batchId: string) {
   return snapToArray<ImportedMovement>(snap);
 }
 
-async function syncImportBatchLifecycle(batchId: string, options: { close?: boolean } = {}) {
+async function syncImportBatchLifecycle(batchId: string, options: { close?: boolean; reopenClosed?: boolean } = {}) {
   const batchRef = doc(db, "importBatches", batchId);
   const batchSnapshot = await getDoc(batchRef);
   if (!batchSnapshot.exists()) {
@@ -1794,11 +1814,12 @@ async function syncImportBatchLifecycle(batchId: string, options: { close?: bool
     return { batchId, status: "closed", summary, closedAt: batchData.closedAt ?? now };
   }
 
-  if (batchData.status === "closed") {
+  if (batchData.status === "closed" && !options.reopenClosed) {
     return { batchId, status: "closed", summary, closedAt: batchData.closedAt ?? null };
   }
 
-  const status = getImportBatchLifecycleStatus(summary, batchData.status);
+  const statusBase = options.reopenClosed && batchData.status === "closed" ? "reviewing" : batchData.status;
+  const status = getImportBatchLifecycleStatus(summary, statusBase);
   await updateDoc(batchRef, {
     status,
     closedAt: null,
@@ -1808,6 +1829,15 @@ async function syncImportBatchLifecycle(batchId: string, options: { close?: bool
   });
 
   return { batchId, status, summary, closedAt: null };
+}
+
+async function syncAffectedImportBatches(
+  batchIds: Set<string>,
+  options: { reopenClosed?: boolean } = {},
+) {
+  for (const batchId of Array.from(batchIds)) {
+    await syncImportBatchLifecycle(batchId, options);
+  }
 }
 
 export async function closeImportBatch(batchId: string) {
