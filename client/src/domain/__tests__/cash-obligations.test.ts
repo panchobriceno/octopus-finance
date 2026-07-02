@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildCashObligations, buildObligationProjectionTransactions, buildCashFlowFinancialTransactions } from "../cash-obligations";
+import { buildMonthlySummaries } from "@/lib/finance";
 import type { CommitmentInstance, Account } from "@shared/schema";
 import type { CardDebt } from "../debt";
 
@@ -153,5 +154,139 @@ describe("buildObligationProjectionTransactions / buildCashFlowFinancialTransact
     expect(income?.amount).toBe(100); // NETO, no 119
     expect(cf.some((t) => String(t.id).startsWith("vat-projection"))).toBe(false);
     expect(cf.some((t) => t.category === "IVA por pagar")).toBe(false);
+  });
+
+  it("monthly summaries canonicos no proyectan cuotas legacy ni doble-restan pagos reales de tarjeta", () => {
+    const cf = buildCashFlowFinancialTransactions({
+      transactions: [
+        {
+          id: "card-purchase",
+          name: "Notebook",
+          category: "Equipos",
+          amount: 120000,
+          type: "expense",
+          date: "2026-06-03",
+          subtype: "actual",
+          status: "paid",
+          movementType: "expense",
+          paymentMethod: "credit_card",
+          workspace: "business",
+          installmentCount: 3,
+        } as any,
+        {
+          id: "card-payment",
+          name: "Pago tarjeta",
+          category: "Pago tarjeta",
+          amount: 50000,
+          type: "expense",
+          date: "2026-06-20",
+          subtype: "actual",
+          status: "paid",
+          movementType: "credit_card_payment",
+          paymentMethod: "bank_account",
+          workspace: "business",
+        } as any,
+        {
+          id: "bank-expense",
+          name: "Hosting",
+          category: "Software",
+          amount: 10000,
+          type: "expense",
+          date: "2026-06-10",
+          subtype: "actual",
+          status: "paid",
+          movementType: "expense",
+          paymentMethod: "bank_account",
+          workspace: "business",
+        } as any,
+      ],
+      clientPayments: [],
+      commitments: [],
+      cardDebts: [],
+      asOf,
+    });
+
+    expect(cf.some((t) => String(t.id).includes("installment"))).toBe(false);
+
+    const june = buildMonthlySummaries(cf, { "2026-06": 0 }, "business")
+      .find((summary) => summary.monthKey === "2026-06");
+
+    expect(june?.realExpenses).toBe(60000);
+    expect(june?.plannedExpenses).toBe(0);
+    expect(june?.projectedEndingBalance).toBe(-60000);
+  });
+
+  it("P&L puede conservar planned manuales sin reintroducir IVA, cuotas ni pagos TC legacy", () => {
+    const cf = buildCashFlowFinancialTransactions({
+      transactions: [
+        {
+          id: "manual-planned",
+          name: "Campaña planificada",
+          category: "Marketing",
+          amount: 80000,
+          type: "expense",
+          date: "2026-06-12",
+          subtype: "planned",
+          status: "pending",
+          movementType: "expense",
+          paymentMethod: "bank_account",
+          workspace: "business",
+        } as any,
+        {
+          id: "legacy-vat",
+          name: "IVA por pagar 2026-06",
+          category: "IVA por pagar",
+          amount: 19000,
+          type: "expense",
+          date: "2026-07-20",
+          subtype: "planned",
+          status: "pending",
+          movementType: "expense",
+          paymentMethod: "bank_account",
+          workspace: "business",
+        } as any,
+        {
+          id: "legacy-installment",
+          name: "Cuota 1/3 - Banco",
+          category: "Cuota Tarjeta",
+          amount: 40000,
+          type: "expense",
+          date: "2026-07-03",
+          subtype: "planned",
+          status: "pending",
+          movementType: "credit_card_payment",
+          paymentMethod: "bank_account",
+          workspace: "business",
+        } as any,
+      ],
+      clientPayments: [],
+      commitments: [],
+      cardDebts: [],
+      asOf,
+      includeManualPlanned: true,
+    });
+
+    expect(cf.some((t) => t.id === "manual-planned")).toBe(true);
+    expect(cf.some((t) => t.id === "legacy-vat")).toBe(false);
+    expect(cf.some((t) => t.id === "legacy-installment")).toBe(false);
+  });
+
+  it("monthly summaries canonicos proyectan el pago real de tarjeta desde cartola", () => {
+    const cf = buildCashFlowFinancialTransactions({
+      transactions: [],
+      clientPayments: [],
+      commitments: [],
+      cardDebts: [debt({})],
+      cardAccounts: [
+        { id: "a7232", name: "T.C Pancho", bank: "Banco Edwards", type: "credit_card", accountNumber: "****7232", workspace: "family" } as Account,
+      ],
+      asOf,
+    });
+
+    const june = buildMonthlySummaries(cf, { "2026-06": 0 }, "family")
+      .find((summary) => summary.monthKey === "2026-06");
+
+    expect(june?.plannedExpenses).toBe(150000);
+    expect(june?.projectedEndingBalance).toBe(-150000);
   });
 });

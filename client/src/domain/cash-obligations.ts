@@ -9,7 +9,7 @@
  */
 import type { CommitmentInstance, Account, Transaction, ClientPayment } from "@shared/schema";
 import type { CardDebt } from "./debt";
-import { clientPaymentToIncomeTransaction } from "@/lib/finance";
+import { clientPaymentToIncomeTransaction, normalizeTransaction } from "@/lib/finance";
 
 const norm = (s: unknown) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 const digits = (s: unknown) => String(s ?? "").replace(/\D/g, "");
@@ -17,6 +17,14 @@ const cap = (n: unknown) => Number(n) || 0;
 
 // Placeholders legacy de "pago de tarjeta" (allowlist exacta; texto/categoría es frágil, pero es legacy).
 const PLACEHOLDER_CATEGORIES = new Set(["t.c pancho", "t.c javi"]);
+const LEGACY_PLANNED_CATEGORIES = new Set([
+  "iva por pagar",
+  "cuota tarjeta",
+  "pago tarjeta",
+  "pago tarjeta de credito",
+  "t.c pancho",
+  "t.c javi",
+]);
 
 function daysBetween(target: string, asOf: string): number {
   const a = new Date(`${target}T00:00:00Z`).getTime();
@@ -221,8 +229,12 @@ export function buildCashFlowFinancialTransactions(input: {
   cardAccounts?: Account[];
   asOf: string;
   monthsAhead?: number;
+  includeManualPlanned?: boolean;
 }): Transaction[] {
   const base = input.transactions.filter((t) => (t.subtype ?? "actual") !== "planned");
+  const manualPlanned = input.includeManualPlanned
+    ? input.transactions.filter(isManualPlannedReportingTransaction)
+    : [];
   const income = input.clientPayments
     .map(clientPaymentToIncomeTransaction)
     .filter((t): t is Transaction => t !== null);
@@ -233,5 +245,27 @@ export function buildCashFlowFinancialTransactions(input: {
     asOf: input.asOf,
     monthsAhead: input.monthsAhead,
   });
-  return [...base, ...income, ...obligations];
+  return [...base, ...manualPlanned, ...income, ...obligations];
+}
+
+function isManualPlannedReportingTransaction(tx: Transaction) {
+  const normalized = normalizeTransaction(tx);
+  if (normalized.subtype !== "planned" || normalized.status === "cancelled") return false;
+  if (
+    normalized.sourceClientPaymentId ||
+    normalized.sourceCommitmentInstanceId ||
+    normalized.sourceCommitmentTemplateId ||
+    normalized.importBatchId
+  ) {
+    return false;
+  }
+  if (String(normalized.id).startsWith("obligation-") || String(normalized.id).startsWith("client-payment-")) {
+    return false;
+  }
+  const category = norm(normalized.category);
+  const name = norm(normalized.name);
+  if (LEGACY_PLANNED_CATEGORIES.has(category)) return false;
+  if (/^cuota\s+\d+\s*\/\s*\d+/.test(name)) return false;
+  if (normalized.movementType === "credit_card_payment") return false;
+  return true;
 }
