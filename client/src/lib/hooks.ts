@@ -696,6 +696,17 @@ export function useDeleteImportedMovement() {
   });
 }
 
+export function useRevertImportedMovementResolution() {
+  return useMutation({
+    mutationFn: (id: string) => fs.revertImportedMovementResolution(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["import-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
+    },
+  });
+}
+
 export function useRollbackImportBatch() {
   return useMutation({
     mutationFn: (batchId: string) => fs.rollbackImportBatch(batchId),

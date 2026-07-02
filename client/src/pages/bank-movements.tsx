@@ -8,6 +8,7 @@ import {
   FileSearch,
   Inbox,
   ListChecks,
+  RotateCcw,
   RotateCw,
   Search,
   Sparkles,
@@ -29,6 +30,7 @@ import {
   useImportBatches,
   useImportedMovements,
   usePreviewBulkImportedMovementConversion,
+  useRevertImportedMovementResolution,
   useRollbackImportBatch,
   useSeedDemoImportedMovements,
 } from "@/lib/hooks";
@@ -214,6 +216,7 @@ export default function BankMovementsPage({
   const bulkConvertMutation = useBulkConvertImportedMovements();
   const bulkPreflightMutation = usePreviewBulkImportedMovementConversion();
   const discardMutation = useDiscardImportedMovement();
+  const revertResolutionMutation = useRevertImportedMovementResolution();
   const rollbackBatchMutation = useRollbackImportBatch();
   const closeBatchMutation = useCloseImportBatch();
 
@@ -444,6 +447,25 @@ export default function BankMovementsPage({
     } catch {
       toast({
         title: "No se pudo omitir",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRevertResolution = async (movement: ImportedMovement) => {
+    try {
+      const result = await revertResolutionMutation.mutateAsync(movement.id);
+      toast({
+        title: "Resolución deshecha",
+        description: result.transactionDeleted
+          ? "La transacción creada por la cartola fue eliminada y el movimiento volvió a revisión."
+          : "La conciliación fue deshecha y el movimiento volvió a revisión.",
+      });
+      setStatusFilter("pending");
+    } catch (error) {
+      toast({
+        title: "No se pudo deshacer",
+        description: error instanceof Error ? error.message : "El movimiento no cambió de estado.",
         variant: "destructive",
       });
     }
@@ -1059,9 +1081,20 @@ export default function BankMovementsPage({
                               </Button>
                             </div>
                             {["converted", "reconciled"].includes(movement.status) && movement.matchedTransactionId ? (
-                              <div className="mt-2 flex justify-end text-xs text-muted-foreground">
-                                <BadgeCheck className="mr-1 size-3" />
-                                {movement.status === "reconciled" ? "Transaccion conciliada" : "Transaccion creada"}
+                              <div className="mt-2 flex flex-col items-end gap-2">
+                                <div className="flex justify-end text-xs text-muted-foreground">
+                                  <BadgeCheck className="mr-1 size-3" />
+                                  {movement.status === "reconciled" ? "Transaccion conciliada" : "Transaccion creada"}
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleRevertResolution(movement)}
+                                  disabled={revertResolutionMutation.isPending}
+                                >
+                                  <RotateCcw className="mr-2 size-4" />
+                                  Deshacer
+                                </Button>
                               </div>
                             ) : null}
                           </TableCell>
