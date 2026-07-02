@@ -61,6 +61,10 @@ export type AccountReconciliationWorkspace = AccountReconciliationSummary & {
   unmatchedRegisteredTransactions: Transaction[];
 };
 
+export type MissingMonthlyStatementAccount = {
+  account: Account;
+};
+
 const STATUS_LABELS: Record<ReconciliationStatus, string> = {
   confident_match: "Match confiable",
   possible_match: "Posible match",
@@ -163,6 +167,30 @@ export function importedMovementBelongsToAccount(movement: ImportedMovement, acc
       textMentionsAccount(movement.sourceName, account)
     )
   );
+}
+
+function isReconcilableActiveAccount(account: Account) {
+  const isActive = ((account as Account & { isActive?: boolean }).isActive ?? true) === true;
+  return isActive && ["checking", "savings", "credit_card"].includes(account.type);
+}
+
+export function findAccountsMissingMonthlyStatements(input: {
+  accounts: Account[];
+  importedMovements: ImportedMovement[];
+  monthKey: string;
+}): MissingMonthlyStatementAccount[] {
+  const reconcilableAccounts = input.accounts.filter(isReconcilableActiveAccount);
+  const monthlyMovements = input.importedMovements.filter((movement) =>
+    String(movement.date ?? "").startsWith(input.monthKey),
+  );
+
+  return reconcilableAccounts
+    .filter((account) =>
+      !monthlyMovements.some((movement) =>
+        importedMovementBelongsToAccount(movement, account, input.accounts),
+      ),
+    )
+    .map((account) => ({ account }));
 }
 
 export function transactionTouchesAccount(transaction: Transaction, account: Account, accounts: Account[] = [account]) {

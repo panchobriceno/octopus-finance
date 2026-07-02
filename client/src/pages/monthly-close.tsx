@@ -24,7 +24,7 @@ import {
 } from "@/lib/hooks";
 import { getTransactionExpenseImpact, isExecutedTransaction, normalizeTransaction, summarizeClientPaymentsByMonth } from "@/lib/finance";
 import { getFamilyIncomeJaviMap } from "@/lib/family-income";
-import { buildAllAccountReconciliationSummaries } from "@/domain/reconciliation";
+import { buildAllAccountReconciliationSummaries, findAccountsMissingMonthlyStatements } from "@/domain/reconciliation";
 import { isActiveAccount } from "@/domain/accounts";
 import { useToast } from "@/hooks/use-toast";
 import type { Account, Budget, Category, MonthlyCloseChecklistItem, MonthlyCloseSummaryRow } from "@shared/schema";
@@ -141,6 +141,7 @@ const CHECKLIST_RESOLVE_ROUTE: Record<string, string> = {
   "pending-transactions": "/movements",
   "uncategorized-transactions": "/data-health",
   "client-payments": "/client-payments",
+  "monthly-statements": "/import",
   "import-batches": "/movements",
   "workspace-categories": "/categories",
   "family-income-source": "/budget",
@@ -325,6 +326,15 @@ export default function MonthlyClosePage() {
     summary.importedCount > 0 &&
     (summary.unresolvedCount > 0 || Math.abs(summary.difference) > 1),
   );
+  const missingStatementAccounts = useMemo(
+    () =>
+      findAccountsMissingMonthlyStatements({
+        accounts,
+        importedMovements,
+        monthKey: selectedMonthKey,
+      }),
+    [accounts, importedMovements, selectedMonthKey],
+  );
   const legacyExpenseCategories = categories.filter((category) =>
     category.type === "expense" && !category.workspace,
   );
@@ -356,6 +366,15 @@ export default function MonthlyClosePage() {
         : `${pendingClientPayments.length} cobros siguen abiertos o proyectados.`,
       status: pendingClientPayments.length === 0 ? "ready" : "warning",
       count: pendingClientPayments.length,
+    },
+    {
+      id: "monthly-statements",
+      label: "Cartolas del mes",
+      detail: missingStatementAccounts.length === 0
+        ? "Hay cartola importada para cada cuenta y tarjeta activa del mes."
+        : `${missingStatementAccounts.length} cuentas o tarjetas activas no tienen cartola importada en el mes.`,
+      status: missingStatementAccounts.length === 0 ? "ready" : "warning",
+      count: missingStatementAccounts.length,
     },
     {
       id: "account-reconciliation",
@@ -398,6 +417,7 @@ export default function MonthlyClosePage() {
   ], [
     familyIncomeJavi,
     legacyExpenseCategories.length,
+    missingStatementAccounts.length,
     openImportBatches.length,
     pendingClientPayments.length,
     pendingTransactions.length,

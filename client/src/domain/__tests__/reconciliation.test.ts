@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Account, ImportBatch, ImportedMovement, Transaction } from "@shared/schema";
 import {
   buildAccountReconciliationWorkspace,
+  findAccountsMissingMonthlyStatements,
   getImportedMovementImpact,
   getTransactionAccountImpact,
   scoreReconciliationCandidate,
@@ -177,5 +178,61 @@ describe("reconciliation domain", () => {
       accountId: account.id,
       amount: 9000,
     }), creditCard)).toBe(9000);
+  });
+
+  it("flags active accounts and cards without imported movements in the month", () => {
+    const creditCard: Account = {
+      ...account,
+      id: "card-1",
+      name: "Santander World 1234",
+      type: "credit_card",
+      currentBalance: -100000,
+    };
+    const savings: Account = {
+      ...account,
+      id: "savings-1",
+      name: "Ahorro Santander",
+      type: "savings",
+    };
+    const inactiveChecking: Account = {
+      ...account,
+      id: "inactive-1",
+      name: "Cuenta antigua",
+      isActive: false,
+    } as Account;
+    const creditLine: Account = {
+      ...account,
+      id: "credit-line-1",
+      name: "Línea de crédito",
+      type: "credit_line",
+    };
+
+    const missing = findAccountsMissingMonthlyStatements({
+      accounts: [account, creditCard, savings, inactiveChecking, creditLine],
+      monthKey: "2026-06",
+      importedMovements: [
+        movement({ id: "bank-row", accountId: account.id, date: "2026-06-04" }),
+        movement({
+          id: "card-row",
+          accountId: null,
+          cardAccountId: creditCard.id,
+          creditCardName: "Santander World 1234",
+          sourceType: "credit_card",
+          date: "2026-06-08",
+        }),
+        movement({ id: "old-savings-row", accountId: savings.id, date: "2026-05-31" }),
+        movement({ id: "next-month-savings-row", accountId: savings.id, date: "2026-07-01" }),
+      ],
+    });
+
+    expect(missing.map((entry) => entry.account.id)).toEqual(["savings-1"]);
+
+    const allMissing = findAccountsMissingMonthlyStatements({
+      accounts: [account, creditCard, savings, inactiveChecking, creditLine],
+      monthKey: "2026-06",
+      importedMovements: [],
+    });
+
+    expect(allMissing.map((entry) => entry.account.id)).toEqual(["santander-family", "card-1", "savings-1"]);
   });
 });
