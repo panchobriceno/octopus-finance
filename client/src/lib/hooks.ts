@@ -58,6 +58,8 @@ export function useDeleteTransaction() {
     mutationFn: (id: string) => fs.deleteTransaction(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["import-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
     },
   });
 }
@@ -77,6 +79,8 @@ export function useBulkDeleteTransactions() {
     mutationFn: (ids: string[]) => fs.bulkDeleteTransactions(ids),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["import-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["imported-movements"] });
     },
   });
 }
