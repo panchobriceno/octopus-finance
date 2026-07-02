@@ -28,6 +28,7 @@ import {
   useCommitmentInstances,
   useCommitmentTemplates,
   useCreditCardSettings,
+  useImportBatches,
   useImportedMovements,
   useItems,
   useMergeDuplicateCategories,
@@ -332,10 +333,11 @@ export default function DataHealthPage() {
   const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
   const { data: creditCardSettings = [], isLoading: creditCardSettingsLoading } = useCreditCardSettings();
   const { data: openingBalances = [], isLoading: openingBalancesLoading } = useOpeningBalances();
+  const { data: importBatches = [], isLoading: importBatchesLoading } = useImportBatches();
   const { data: commitmentTemplates = [], isLoading: commitmentTemplatesLoading } = useCommitmentTemplates();
   const { data: commitmentInstances = [], isLoading: commitmentInstancesLoading } = useCommitmentInstances();
   const { data: movementRules = [], isLoading: movementRulesLoading } = useMovementRules();
-  const { data: importedMovements = [], isLoading: importedMovementsLoading } = useImportedMovements({ limitCount: 1500 });
+  const { data: importedMovements = [], isLoading: importedMovementsLoading } = useImportedMovements({ limitCount: null });
   const mergeDuplicateCategoriesMutation = useMergeDuplicateCategories();
   const repairBrokenReferencesMutation = useRepairBrokenReferences();
 
@@ -349,6 +351,7 @@ export default function DataHealthPage() {
     accountsLoading ||
     creditCardSettingsLoading ||
     openingBalancesLoading ||
+    importBatchesLoading ||
     commitmentTemplatesLoading ||
     commitmentInstancesLoading ||
     movementRulesLoading ||
@@ -366,6 +369,11 @@ export default function DataHealthPage() {
         accounts,
         creditCardSettings,
         openingBalances,
+        importBatches,
+        importedMovements,
+        commitmentTemplates,
+        commitmentInstances,
+        movementRules,
       }),
     [
       accounts,
@@ -373,8 +381,13 @@ export default function DataHealthPage() {
       categories,
       clientPayments,
       clients,
+      commitmentInstances,
+      commitmentTemplates,
       creditCardSettings,
+      importBatches,
+      importedMovements,
       items,
+      movementRules,
       openingBalances,
       transactions,
     ],
@@ -398,6 +411,11 @@ export default function DataHealthPage() {
     accounts.forEach((record) => targets.set(record.id, { href: "/accounts", label: "Cuentas" }));
     creditCardSettings.forEach((record) => targets.set(record.id, { href: "/credit-cards", label: "Tarjetas" }));
     openingBalances.forEach((record) => targets.set(record.id, { href: "/settings", label: "Configuración" }));
+    importBatches.forEach((record) => targets.set(record.id, { href: `/movements?batch=${record.id}`, label: "Cartolas" }));
+    importedMovements.forEach((record) => targets.set(record.id, { href: `/movements?batch=${record.batchId}`, label: "Cartolas" }));
+    commitmentTemplates.forEach((record) => targets.set(record.id, { href: "/automation", label: "Automatización" }));
+    commitmentInstances.forEach((record) => targets.set(record.id, { href: "/automation", label: "Automatización" }));
+    movementRules.forEach((record) => targets.set(record.id, { href: "/data-health", label: "Reglas" }));
 
     return targets;
   }, [
@@ -406,8 +424,13 @@ export default function DataHealthPage() {
     categories,
     clientPayments,
     clients,
+    commitmentInstances,
+    commitmentTemplates,
     creditCardSettings,
+    importBatches,
+    importedMovements,
     items,
+    movementRules,
     openingBalances,
     transactions,
   ]);
@@ -495,6 +518,7 @@ export default function DataHealthPage() {
       ["accounts"],
       ["credit-card-settings"],
       ["opening-balances"],
+      ["import-batches"],
       ["commitment-templates"],
       ["commitment-instances"],
       ["movement-rules"],

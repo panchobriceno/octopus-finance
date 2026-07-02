@@ -4,8 +4,13 @@ import type {
   Category,
   Client,
   ClientPayment,
+  CommitmentInstance,
+  CommitmentTemplate,
   CreditCardSetting,
+  ImportBatch,
+  ImportedMovement,
   Item,
+  MovementRule,
   OpeningBalance,
   Transaction,
 } from "@shared/schema";
@@ -18,6 +23,10 @@ import {
   getAccountBalanceBreakdowns,
   getAvailableCashBalance,
 } from "@/domain/accounts";
+import {
+  isRuleItemConsistent,
+  resolveRuleCategoryId,
+} from "@/domain/movement-rules";
 
 export type AuditSeverity = "critical" | "high" | "medium" | "low";
 
@@ -41,6 +50,11 @@ export type FinanceAuditInput = {
   accounts: Account[];
   creditCardSettings: CreditCardSetting[];
   openingBalances: OpeningBalance[];
+  importBatches?: ImportBatch[];
+  importedMovements?: ImportedMovement[];
+  commitmentTemplates?: CommitmentTemplate[];
+  commitmentInstances?: CommitmentInstance[];
+  movementRules?: MovementRule[];
 };
 
 export type FinanceAuditResult = {
@@ -125,6 +139,7 @@ export function auditFinanceData(input: FinanceAuditInput): FinanceAuditResult {
   const categoryNames = new Set(input.categories.map((category) => normalizeText(category.name)));
   const categoryById = new Map(input.categories.map((category) => [category.id, category]));
   const itemById = new Map(input.items.map((item) => [item.id, item]));
+  const transactionIds = new Set(input.transactions.map((transaction) => transaction.id));
   const clientIds = new Set(input.clients.map((client) => client.id));
   const transactionsByClientPaymentId = new Map<string, Transaction[]>();
   const importFingerprintCounts = new Map<string, Transaction[]>();
@@ -534,6 +549,74 @@ export function auditFinanceData(input: FinanceAuditInput): FinanceAuditResult {
     }
   }
 
+  for (const movement of input.importedMovements ?? []) {
+    if (
+      ["converted", "reconciled"].includes(movement.status) &&
+      (!movement.matchedTransactionId || !transactionIds.has(movement.matchedTransactionId))
+    ) {
+      pushIssue(issues, {
+        severity: "high",
+        area: "import-pipeline",
+        title: "Cartola resuelta apunta a transaccion inexistente",
+        detail: `${movement.description} esta ${movement.status}, pero matchedTransactionId=${movement.matchedTransactionId ?? "null"} no existe.`,
+        recordId: movement.id,
+        recommendation: "Deshacer la conversion/conciliacion o devolver el movimiento a revision.",
+      });
+    }
+  }
+
+  const now = Date.now();
+  const STALE_REVIEW_DAYS = 14;
+  for (const batch of input.importBatches ?? []) {
+    const createdAt = Date.parse(batch.createdAt ?? "");
+    const ageDays = Number.isFinite(createdAt) ? Math.floor((now - createdAt) / 86400000) : 0;
+    if (["reviewing", "partially_converted"].includes(batch.status) && ageDays > STALE_REVIEW_DAYS) {
+      pushIssue(issues, {
+        severity: "medium",
+        area: "import-pipeline",
+        title: "Lote de importacion viejo en revision",
+        detail: `${batch.label} lleva ${ageDays} dias sin cerrarse.`,
+        recordId: batch.id,
+        recommendation: "Cerrar, convertir u omitir el lote para que el cierre mensual no dependa de pendientes antiguos.",
+      });
+    }
+  }
+
+  for (const rule of input.movementRules ?? []) {
+    const expectedType = rule.movementType === "income" ? "income" : "expense";
+    const categoryId = resolveRuleCategoryId(input.categories, rule.category, rule.movementType, rule.workspace);
+    if (!categoryId) {
+      pushIssue(issues, {
+        severity: "medium",
+        area: "import-pipeline",
+        title: "Regla apunta a categoria inexistente",
+        detail: `${rule.name} usa categoria ${rule.category} (${expectedType}/${rule.workspace ?? "business"}).`,
+        recordId: rule.id,
+        recommendation: "Editar o desactivar la regla antes de importar nuevas cartolas.",
+      });
+      continue;
+    }
+    if (
+      !isRuleItemConsistent(
+        input.categories,
+        input.items,
+        rule.category,
+        rule.movementType,
+        rule.workspace,
+        rule.itemId,
+      )
+    ) {
+      pushIssue(issues, {
+        severity: "medium",
+        area: "import-pipeline",
+        title: "Regla apunta a subcategoria incompatible",
+        detail: `${rule.name} usa itemId=${rule.itemId}, pero no pertenece a ${rule.category}.`,
+        recordId: rule.id,
+        recommendation: "Limpiar la subcategoria de la regla o moverla a la categoria correcta.",
+      });
+    }
+  }
+
   const budgetKeyCounts = new Map<string, Budget[]>();
   for (const budget of input.budgets) {
     const key = `${budget.year}-${budget.month}::${budget.workspace ?? "business"}::${budget.categoryGroup}`;
@@ -663,6 +746,11 @@ export function auditFinanceData(input: FinanceAuditInput): FinanceAuditResult {
       accounts: input.accounts.length,
       creditCardSettings: input.creditCardSettings.length,
       openingBalances: input.openingBalances.length,
+      importBatches: input.importBatches?.length ?? 0,
+      importedMovements: input.importedMovements?.length ?? 0,
+      commitmentTemplates: input.commitmentTemplates?.length ?? 0,
+      commitmentInstances: input.commitmentInstances?.length ?? 0,
+      movementRules: input.movementRules?.length ?? 0,
     },
     metrics: {
       availableCash: {

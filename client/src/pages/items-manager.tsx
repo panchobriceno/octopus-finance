@@ -1,12 +1,19 @@
 import { useMemo, useState } from "react";
 import {
+  useBudgets,
   useItems,
   useCategories,
+  useCommitmentInstances,
+  useCommitmentTemplates,
   useCreateItem,
   useUpdateItem,
   useDeleteItem,
+  useImportedMovements,
+  useMovementRules,
+  useTransactions,
 } from "@/lib/hooks";
 import type { Item } from "@shared/schema";
+import { countItemDeleteImpact, sumDeleteImpact } from "@/domain/delete-impact";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +34,21 @@ import {
 import { Settings, Plus, Pencil, Trash2, Check, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+const DELETE_IMPACT_LABELS: Record<string, string> = {
+  transactions: "movimientos",
+  budgets: "presupuestos",
+  commitmentTemplates: "automatizaciones",
+  commitmentInstances: "compromisos",
+  movementRules: "reglas",
+  importedMovements: "cartolas",
+};
+
+function describeDeleteImpact(counts: Record<string, number>) {
+  return Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .map(([key, count]) => `${count} ${DELETE_IMPACT_LABELS[key] ?? key}`);
+}
+
 export default function ItemsManagerPage() {
   const [newName, setNewName] = useState("");
   const [newCategoryId, setNewCategoryId] = useState("");
@@ -39,11 +61,35 @@ export default function ItemsManagerPage() {
 
   const { data: items = [] } = useItems();
   const { data: categories = [] } = useCategories();
+  const { data: transactions = [] } = useTransactions();
+  const { data: budgets = [] } = useBudgets();
+  const { data: commitmentTemplates = [] } = useCommitmentTemplates();
+  const { data: commitmentInstances = [] } = useCommitmentInstances();
+  const { data: movementRules = [] } = useMovementRules();
+  const { data: importedMovements = [] } = useImportedMovements({ limitCount: null });
   const createMutation = useCreateItem();
   const updateMutation = useUpdateItem();
   const deleteMutation = useDeleteItem();
 
   const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c]));
+  const itemDeleteImpacts = useMemo(
+    () =>
+      new Map(
+        items.map((item) => {
+          const counts = countItemDeleteImpact({
+            item,
+            transactions,
+            budgets,
+            commitmentTemplates,
+            commitmentInstances,
+            movementRules,
+            importedMovements,
+          });
+          return [item.id, { counts, total: sumDeleteImpact(counts), labels: describeDeleteImpact(counts) }];
+        }),
+      ),
+    [budgets, commitmentInstances, commitmentTemplates, importedMovements, items, movementRules, transactions],
+  );
 
   const sortedItems = useMemo(
     () =>
@@ -185,7 +231,9 @@ export default function ItemsManagerPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedItems.map((item) => (
+              {sortedItems.map((item) => {
+                const deleteImpact = itemDeleteImpacts.get(item.id);
+                return (
                 <TableRow key={item.id}>
                   <TableCell className="pl-5">
                     {editingId === item.id ? (
@@ -257,9 +305,20 @@ export default function ItemsManagerPage() {
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>¿Eliminar este elemento?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Se eliminará el item "{item.name}" y ya no aparecerá en las selecciones.
+                            <AlertDialogTitle>¿Eliminar este elemento?</AlertDialogTitle>
+                              <AlertDialogDescription className="space-y-2">
+                                <span className="block">
+                                  Se eliminará el item "{item.name}" y ya no aparecerá en las selecciones.
+                                </span>
+                                {deleteImpact && deleteImpact.total > 0 ? (
+                                  <span className="block rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                                    Referencias encontradas: {deleteImpact.labels.join(", ")}. Revísalas antes de borrar para no dejar presupuestos, reglas o cartolas sin subcategoría.
+                                  </span>
+                                ) : (
+                                  <span className="block rounded-md border border-border bg-muted/40 p-3">
+                                    No se encontraron referencias directas en movimientos, presupuesto, automatizaciones, reglas ni cartolas cargadas.
+                                  </span>
+                                )}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -280,7 +339,8 @@ export default function ItemsManagerPage() {
                     )}
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
               {items.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={3} className="py-8">
